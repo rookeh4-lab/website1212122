@@ -134,6 +134,27 @@ export default function Dashboard() {
         setRedeemStatus({ text: data.message || 'Key activated successfully!', type: 'success' });
         setRedeemKey('');
         await loadLicenses(token);
+      } else if (res.status === 401) {
+        // Attempt session refresh and retry
+        const freshToken = await auth.getAsyncToken?.();
+        if (freshToken && freshToken !== token) {
+          const retryRes = await fetch(`${API_BASE}/licenses/claim`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${freshToken}`,
+            },
+            body: JSON.stringify({ key: clean }),
+          });
+          const retryData = await retryRes.json();
+          if (retryRes.ok && retryData.success) {
+            setRedeemStatus({ text: retryData.message || 'Key activated successfully!', type: 'success' });
+            setRedeemKey('');
+            await loadLicenses(freshToken);
+            return;
+          }
+        }
+        setRedeemStatus({ text: 'Session expired. Please log out and log back in.', type: 'danger' });
       } else {
         setRedeemStatus({ text: data.error || 'Failed to activate key.', type: 'danger' });
       }

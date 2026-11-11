@@ -2,6 +2,19 @@ import { supabase } from '../lib/supabaseClient';
 
 export const API_BASE = '/api';
 
+export function isTokenExpired(token) {
+  if (!token || typeof token !== 'string') return true;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return true;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    // Expired or expiring within 60 seconds
+    return payload.exp * 1000 < (Date.now() + 60000);
+  } catch {
+    return true;
+  }
+}
+
 export const auth = {
   supabase,
 
@@ -10,16 +23,22 @@ export const auth = {
    */
   getToken() {
     try {
-      const stored = localStorage.getItem('plutora_token');
-      if (stored && stored !== 'undefined' && stored !== 'null') return stored;
-
+      // 1. Check Supabase client persistent storage
       const raw = localStorage.getItem('555_supabase_auth_token');
       if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed?.access_token) {
-          localStorage.setItem('plutora_token', parsed.access_token);
-          return parsed.access_token;
-        }
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed?.access_token && !isTokenExpired(parsed.access_token)) {
+            localStorage.setItem('plutora_token', parsed.access_token);
+            return parsed.access_token;
+          }
+        } catch {}
+      }
+
+      // 2. Check cached plutora_token
+      const stored = localStorage.getItem('plutora_token');
+      if (stored && stored !== 'undefined' && stored !== 'null' && !isTokenExpired(stored)) {
+        return stored;
       }
     } catch {
       // Fallback
@@ -28,14 +47,28 @@ export const auth = {
   },
 
   /**
-   * Asynchronous token getter ensuring active session
+   * Asynchronous token getter ensuring an active, unexpired session
    */
   async getAsyncToken() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
-        localStorage.setItem('plutora_token', session.access_token);
-        return session.access_token;
+        if (!isTokenExpired(session.access_token)) {
+          localStorage.setItem('plutora_token', session.access_token);
+          return session.access_token;
+        }
+        // Token is expired: perform active refresh
+        const { data: refData, error: refErr } = await supabase.auth.refreshSession();
+        if (!refErr && refData?.session?.access_token) {
+          localStorage.setItem('plutora_token', refData.session.access_token);
+          return refData.session.access_token;
+        }
+      } else {
+        const { data: refData, error: refErr } = await supabase.auth.refreshSession();
+        if (!refErr && refData?.session?.access_token) {
+          localStorage.setItem('plutora_token', refData.session.access_token);
+          return refData.session.access_token;
+        }
       }
     } catch {
       // ignore
