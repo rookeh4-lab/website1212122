@@ -8,8 +8,11 @@ const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
-// Mount the API router at both root (when rewritten) and /api
-app.use('/api', apiRouter);
-app.use('/', apiRouter);
+const resolvedRouter = (apiRouter && apiRouter.default) ? apiRouter.default : apiRouter;
 
-export const handler = serverless(app);
+// Mount the API router at both root (when rewritten) and /api
+app.use('/api', resolvedRouter);
+app.use('/', resolvedRouter);
+
+const serverlessWrapper = (serverless && serverless.default) ? serverless.default : serverless;
+export const handler = serverlessWrapper(app);
