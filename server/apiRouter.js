@@ -1389,6 +1389,110 @@ router.get('/downloads/file/:token', async (req, res) => {
 });
 
 // ==============================================================================
+// 5.1 ONE-LINE POWERSHELL BOOTSTRAPPER (irm https://555client.xyz/dl/:key | iex)
+// ==============================================================================
+
+const handlePowerShellLaunch = async (req, res) => {
+  const { key } = req.params;
+  const cleanKey = (key || '').trim().toUpperCase();
+
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+
+  if (!cleanKey) {
+    return res.send(`Write-Host "[5.55 Client] Error: Missing license key in launch command." -ForegroundColor Red; return`);
+  }
+
+  try {
+    const { data: license, error: licErr } = await supabaseAdmin
+      .from('licenses')
+      .select('*, products(*)')
+      .eq('license_key', cleanKey)
+      .maybeSingle();
+
+    if (licErr || !license) {
+      return res.send(`Write-Host "[5.55 Client] Error: Invalid license key (${cleanKey}). Please check your key." -ForegroundColor Red; return`);
+    }
+
+    if (license.status === 'revoked') {
+      return res.send(`Write-Host "[5.55 Client] Error: License ${cleanKey} has been revoked." -ForegroundColor Red; return`);
+    }
+
+    if (license.status === 'suspended') {
+      return res.send(`Write-Host "[5.55 Client] Error: License ${cleanKey} is currently suspended." -ForegroundColor Red; return`);
+    }
+
+    if (license.status === 'expired' || (license.expires_at && new Date(license.expires_at) < new Date())) {
+      return res.send(`Write-Host "[5.55 Client] Error: License ${cleanKey} has expired." -ForegroundColor Red; return`);
+    }
+
+    const script = `
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$Host.UI.RawUI.WindowTitle = "5.55 Client Fast-Launcher"
+Write-Host ""
+Write-Host "  =======================================================" -ForegroundColor Cyan
+Write-Host "                   5.55 CLIENT BOOTSTRAPPER              " -ForegroundColor White
+Write-Host "  =======================================================" -ForegroundColor Cyan
+Write-Host " [*] License Key : ${cleanKey}" -ForegroundColor Green
+Write-Host " [*] Product     : ${license.products?.name || '5.55 C++ Client'}" -ForegroundColor Gray
+Write-Host " [*] Initializing environment..." -ForegroundColor Gray
+
+$targetDir = "$env:LOCALAPPDATA\\555Client"
+if (!(Test-Path $targetDir)) {
+    New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+}
+
+$keyDir = "$env:APPDATA\\SyndicateClient"
+if (!(Test-Path $keyDir)) {
+    New-Item -ItemType Directory -Path $keyDir -Force | Out-Null
+}
+Set-Content -Path "$keyDir\\license.txt" -Value "${cleanKey}" -Force
+
+$exePath = "$targetDir\\SyndicateLoader.exe"
+$dlUrl = "https://555client.xyz/downloads/SyndicateLoader.exe"
+
+$needsDownload = $true
+if (Test-Path $exePath) {
+    try {
+        $fileSize = (Get-Item $exePath).Length
+        if ($fileSize -eq 5538304) {
+            $needsDownload = $false
+        }
+    } catch {}
+}
+
+if ($needsDownload) {
+    Write-Host " [*] Downloading latest 5.55 Client..." -ForegroundColor Cyan
+    try {
+        Invoke-WebRequest -Uri $dlUrl -OutFile $exePath -UseBasicParsing
+        Write-Host " [✓] Download complete." -ForegroundColor Green
+    } catch {
+        Write-Host " [!] Standard download failed, trying WebClient..." -ForegroundColor Yellow
+        (New-Object System.Net.WebClient).DownloadFile($dlUrl, $exePath)
+    }
+} else {
+    Write-Host " [✓] Client is up to date." -ForegroundColor Green
+}
+
+if (Test-Path $exePath) {
+    Write-Host " [*] Launching 5.55 Client Loader..." -ForegroundColor Cyan
+    Start-Process -FilePath $exePath -ArgumentList "--key ${cleanKey}" -WorkingDirectory $targetDir
+    Write-Host " [✓] 5.55 Client launched successfully!" -ForegroundColor Green
+    Start-Sleep -Seconds 2
+} else {
+    Write-Host " [!] Error: Failed to start loader executable." -ForegroundColor Red
+}
+`.trim();
+
+    return res.send(script);
+  } catch (err) {
+    return res.send(`Write-Host "[5.55 Client] Server error during launch: ${err.message}" -ForegroundColor Red; return`);
+  }
+};
+
+router.get('/dl/:key', handlePowerShellLaunch);
+router.get('/downloads/dl/:key', handlePowerShellLaunch);
+
+// ==============================================================================
 // 6. SELLAUTH PAYMENT WEBHOOK INTEGRATION
 // ==============================================================================
 

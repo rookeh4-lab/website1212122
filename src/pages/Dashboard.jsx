@@ -1073,7 +1073,7 @@ export default function Dashboard() {
                 marginBottom: '16px',
               }}
             >
-              powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://555client.com/dl/{launchModal.licenseKey} | iex"
+              powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://555client.xyz/dl/{launchModal.licenseKey} | iex"
             </div>
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
@@ -1085,7 +1085,7 @@ export default function Dashboard() {
               </button>
               <button
                 onClick={() => {
-                  const cmd = `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://555client.com/dl/${launchModal.licenseKey} | iex"`;
+                  const cmd = `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://555client.xyz/dl/${launchModal.licenseKey} | iex"`;
                   copyText(cmd);
                   setCopiedCommand(true);
                   setTimeout(() => setCopiedCommand(false), 1600);
