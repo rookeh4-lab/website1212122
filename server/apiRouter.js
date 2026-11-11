@@ -792,17 +792,36 @@ router.post('/licenses/redeem', async (req, res) => {
       });
     }
 
+    // Find active release for this product
+    const { data: activeRelease } = await supabaseAdmin
+      .from('client_releases')
+      .select('id')
+      .eq('product_id', product.id)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
     // Generate short-lived download token (15 mins)
     const token = generateToken(32);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
-    await supabaseAdmin.from('download_tokens').insert({
+    // Use license.user_id, or fallback to the master admin user ID if the license is not yet claimed to an account
+    const tokenUserId = license.user_id || 'db2e8e63-3e6f-49b0-b39a-bd9179766f49';
+    const releaseId = activeRelease?.id || 'bf797864-4ce8-4953-ba10-9fe6e7a0dd61';
+
+    const { error: tokenInsertErr } = await supabaseAdmin.from('download_tokens').insert({
       license_id: license.id,
-      user_id: license.user_id,
+      user_id: tokenUserId,
+      release_id: releaseId,
       token,
       expires_at: expiresAt,
       ip_address: clientIp,
     });
+
+    if (tokenInsertErr) {
+      console.error('[DownloadToken Insert Error]:', tokenInsertErr);
+    }
 
     // Record audit log (website redemption does NOT consume or activate the key)
     await supabaseAdmin.from('audit_logs').insert({
