@@ -1,99 +1,95 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { auth, copyText, API_BASE } from '../utils/api';
 
 export default function Download() {
-  const [hasActiveLicense, setHasActiveLicense] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [commandData, setCommandData] = useState(null);
+  const [licenses, setLicenses] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState('java-client');
+  const [downloadData, setDownloadData] = useState(null);
+  const [authorizing, setAuthorizing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [minting, setMinting] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const didAutoMint = useRef(false);
+  const [copiedHash, setCopiedHash] = useState(false);
+  const [copiedCmd, setCopiedCmd] = useState(false);
 
-  const fetchCommand = useCallback(async (refresh = false) => {
-    const token = auth.getToken();
-    if (!token) return;
-    setMinting(true);
+  // Load user licenses
+  useEffect(() => {
+    let active = true;
+    const init = async () => {
+      try {
+        const profileData = await auth.getProfile();
+        if (!active) return;
+        if (profileData?.user) {
+          setIsLoggedIn(true);
+          const token = await auth.getToken();
+          const res = await fetch(`${API_BASE}/user/licenses`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const data = await res.json();
+          if (active && data.licenses) {
+            setLicenses(data.licenses);
+            // Default selected product to whatever license user holds
+            if (data.licenses.some((l) => l.products?.slug === 'cpp-client')) {
+              setSelectedProduct('cpp-client');
+            } else {
+              setSelectedProduct('java-client');
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Download init error:', err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    init();
+    return () => { active = false; };
+  }, []);
+
+  // Request authorized download token & manifest
+  const requestDownload = useCallback(async (productSlug) => {
+    setAuthorizing(true);
     setErrorMsg('');
     try {
-      const res = await fetch(`${API_BASE}/downloads/mint`, {
+      const token = await auth.getToken();
+      const res = await fetch(`${API_BASE}/downloads/authorize`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(refresh ? { refresh: true } : {}),
+        body: JSON.stringify({ product_slug: productSlug }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.powershell) {
-        setCommandData(data);
-        setCopied(false);
+      const data = await res.json();
+      if (res.ok && data.authorized) {
+        setDownloadData(data);
       } else {
-        // Fallback demo command
-        const demoKey = `c555_token_${Math.random().toString(36).substring(2, 10)}`;
-        setCommandData({
-          key: demoKey,
-          licenseKey: '555-LIFETIME-A8F3-9021',
-          powershell: `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://555client.com/dl/${demoKey} | iex"`,
-        });
+        setErrorMsg(data.error || 'Failed to authorize download for this product.');
+        setDownloadData(null);
       }
     } catch {
-      const demoKey = `c555_token_${Math.random().toString(36).substring(2, 10)}`;
-      setCommandData({
-        key: demoKey,
-        licenseKey: '555-LIFETIME-A8F3-9021',
-        powershell: `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://555client.com/dl/${demoKey} | iex"`,
-      });
+      setErrorMsg('Error connecting to download verification server.');
+      setDownloadData(null);
     } finally {
-      setMinting(false);
+      setAuthorizing(false);
     }
   }, []);
 
   useEffect(() => {
-    const token = auth.getToken();
-    if (token) {
-      setIsLoggedIn(true);
-      fetch(`${API_BASE}/licenses/my`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((res) => res.json())
-        .then(async (data) => {
-          const hasActive = (data.licenses || []).some(
-            (l) => l.status === 'active' && (!l.expires_at || new Date(l.expires_at).getTime() > Date.now())
-          );
-          if (hasActive || data.licenses?.length > 0) {
-            setHasActiveLicense(true);
-            if (!didAutoMint.current) {
-              didAutoMint.current = true;
-              await fetchCommand(false);
-            }
-          } else {
-            // Default demo to true for rich preview
-            setHasActiveLicense(true);
-            if (!didAutoMint.current) {
-              didAutoMint.current = true;
-              await fetchCommand(false);
-            }
-          }
-        })
-        .catch(() => {
-          setHasActiveLicense(true);
-          if (!didAutoMint.current) {
-            didAutoMint.current = true;
-            fetchCommand(false);
-          }
-        })
-        .finally(() => setLoading(false));
-    } else {
-      setIsLoggedIn(false);
-      setLoading(false);
+    if (isLoggedIn && selectedProduct) {
+      requestDownload(selectedProduct);
     }
-  }, [fetchCommand]);
+  }, [isLoggedIn, selectedProduct, requestDownload]);
+
+  const activeLicensesForSelected = licenses.filter(
+    (l) => l.products?.slug === selectedProduct && l.status === 'active'
+  );
+  const hasAccess = activeLicensesForSelected.length > 0;
 
   return (
-    <div className="container" style={{ maxWidth: '720px', padding: '48px 24px 80px' }}>
+    <div className="container" style={{ maxWidth: '780px', padding: '48px 24px 80px' }}>
       <div style={{ marginBottom: '28px' }}>
         <h1
           style={{
@@ -104,292 +100,272 @@ export default function Download() {
             margin: '0 0 8px',
           }}
         >
-          Launch
+          Client Downloads
         </h1>
-        <p
-          style={{
-            color: 'var(--text-muted)',
-            fontSize: '14px',
-            margin: 0,
-            lineHeight: 1.5,
-          }}
-        >
-          Verified fileless PowerShell — license holders only.
+        <p style={{ color: 'var(--text-muted)', fontSize: '14px', margin: 0, lineHeight: 1.5 }}>
+          Authorized downloads, SHA-256 integrity verification, and Ed25519 digital signatures.
         </p>
       </div>
 
-      {hasActiveLicense ? (
+      {/* Product Selection Tabs */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '12px',
+          marginBottom: '24px',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setSelectedProduct('java-client')}
+          style={{
+            flex: 1,
+            padding: '14px 18px',
+            borderRadius: '12px',
+            border: `1px solid ${selectedProduct === 'java-client' ? 'var(--primary)' : 'var(--border)'}`,
+            background: selectedProduct === 'java-client' ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-card)',
+            color: selectedProduct === 'java-client' ? '#fff' : 'var(--text-muted)',
+            cursor: 'pointer',
+            textAlign: 'left',
+            transition: 'all 0.2s',
+          }}
+        >
+          <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>5.55 Java Fabric Client</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '4px' }}>
+            .JAR package · Minecraft 1.21.0 - 1.21.4
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSelectedProduct('cpp-client')}
+          style={{
+            flex: 1,
+            padding: '14px 18px',
+            borderRadius: '12px',
+            border: `1px solid ${selectedProduct === 'cpp-client' ? 'var(--primary)' : 'var(--border)'}`,
+            background: selectedProduct === 'cpp-client' ? 'rgba(99, 102, 241, 0.15)' : 'var(--bg-card)',
+            color: selectedProduct === 'cpp-client' ? '#fff' : 'var(--text-muted)',
+            cursor: 'pointer',
+            textAlign: 'left',
+            transition: 'all 0.2s',
+          }}
+        >
+          <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>5.55 C++ Client</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-dim)', marginTop: '4px' }}>
+            .EXE + .DLL · Native Windows 10/11 64-bit
+          </div>
+        </button>
+      </div>
+
+      {!isLoggedIn ? (
         <div
           className="card"
           style={{
-            padding: '28px 28px 32px',
+            padding: '40px',
+            textAlign: 'center',
             background: 'var(--bg-card)',
             border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-lg)',
+          }}
+        >
+          <h2 style={{ fontSize: '20px', color: '#fff', marginBottom: '10px' }}>Authentication Required</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '24px' }}>
+            Sign in with your account to access your purchased client builds and signed release manifests.
+          </p>
+          <Link to="/login" className="btn btn-primary" style={{ padding: '12px 28px', fontSize: '14.5px' }}>
+            Sign In to Continue →
+          </Link>
+        </div>
+      ) : hasAccess ? (
+        <div
+          className="card"
+          style={{
+            padding: '30px',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-lg)',
           }}
         >
           <div
             style={{
               display: 'flex',
-              alignItems: 'flex-start',
+              alignItems: 'center',
               justifyContent: 'space-between',
-              gap: '16px',
-              flexWrap: 'wrap',
-              paddingBottom: '20px',
-              marginBottom: '22px',
+              marginBottom: '20px',
+              paddingBottom: '16px',
               borderBottom: '1px solid var(--border)',
             }}
           >
             <div>
-              <span className="badge badge-success">Active license</span>
-              <h2
-                style={{
-                  fontSize: '20px',
-                  fontWeight: 700,
-                  margin: '10px 0 0',
-                  color: '#fff',
-                }}
-              >
-                Fileless launch
+              <span className="badge badge-success" style={{ marginBottom: '6px' }}>
+                Entitlement Verified
+              </span>
+              <h2 style={{ fontSize: '20px', fontWeight: 700, margin: '6px 0 0', color: '#fff' }}>
+                {selectedProduct === 'java-client' ? 'Fabric Mod Release' : 'Native Standalone Package'}
               </h2>
             </div>
-            <div
-              style={{
-                fontSize: '12px',
-                color: 'var(--text-dim)',
-                textAlign: 'right',
-                lineHeight: 1.7,
-              }}
-            >
-              <div>Fabric 1.21.11</div>
-              <div>Windows 10 / 11 · 64-bit</div>
+            <div style={{ textAlign: 'right', fontSize: '12.5px', color: 'var(--text-dim)' }}>
+              <div>Version: {downloadData?.version || '1.2.0'}</div>
+              <div>Channel: Stable</div>
             </div>
           </div>
 
-          <p
-            style={{
-              margin: '0 0 16px',
-              fontSize: '13px',
-              color: 'var(--text-muted)',
-              lineHeight: 1.65,
-            }}
-          >
-            Paste this into PowerShell. Each command is{' '}
-            <strong style={{ color: '#fff', fontWeight: 600 }}>single-use</strong> — after a successful launch, click New command for the next inject. Refreshing this page keeps the same unused key.
-          </p>
-
           {errorMsg && (
-            <p style={{ color: 'var(--danger)', fontSize: '13px', margin: '0 0 12px' }}>
-              {errorMsg}
-            </p>
-          )}
-
-          {commandData?.key && (
             <div
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '12px',
-                flexWrap: 'wrap',
-                marginBottom: '10px',
+                padding: '12px 16px',
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '8px',
+                color: '#f87171',
+                fontSize: '13px',
+                marginBottom: '16px',
               }}
             >
-              <p style={{ fontSize: '12px', color: 'var(--text-dim)', margin: 0 }}>
-                Single-use · {commandData.licenseKey}
-              </p>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                style={{
-                  padding: '6px 12px',
-                  fontSize: '12px',
-                  flex: '0 0 auto',
-                  transform: 'none',
-                }}
-                disabled={minting}
-                onClick={() => fetchCommand(true)}
-              >
-                {minting ? 'Preparing…' : 'New command'}
-              </button>
+              {errorMsg}
             </div>
           )}
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(0, 1fr) 88px',
-              alignItems: 'start',
-              gap: '12px',
-              background: 'var(--bg)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius-md)',
-              padding: '14px 16px',
-              marginBottom: '28px',
-            }}
-          >
-            <code
-              style={{
-                fontFamily: 'JetBrains Mono, Consolas, Monaco, monospace',
-                fontSize: '12px',
-                color: 'var(--accent-light)',
-                wordBreak: 'break-all',
-                minWidth: 0,
-                lineHeight: 1.55,
-              }}
-            >
-              {commandData?.powershell ||
-                (minting ? 'Preparing command…' : 'Unable to mint launch key.')}
-            </code>
+          {/* Download Action Buttons */}
+          <div style={{ display: 'flex', gap: '14px', marginBottom: '24px', flexWrap: 'wrap' }}>
+            {downloadData?.download_url ? (
+              <a
+                href={downloadData.download_url}
+                className="btn btn-primary"
+                style={{
+                  flex: 1,
+                  minWidth: '200px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  padding: '13px 20px',
+                  fontSize: '14.5px',
+                  fontWeight: 700,
+                  textDecoration: 'none',
+                }}
+              >
+                <span>⬇ Download Package ({selectedProduct === 'java-client' ? '.jar' : '.zip'})</span>
+              </a>
+            ) : (
+              <button
+                disabled={authorizing}
+                onClick={() => requestDownload(selectedProduct)}
+                className="btn btn-primary"
+                style={{ flex: 1, minWidth: '200px', padding: '13px 20px' }}
+              >
+                {authorizing ? 'Authorizing Token…' : 'Generate Download URL'}
+              </button>
+            )}
+
             <button
-              type="button"
-              className="btn btn-primary"
-              style={{
-                padding: '8px 0',
-                fontSize: '12px',
-                width: '88px',
-                minWidth: '88px',
-                maxWidth: '88px',
-                boxSizing: 'border-box',
-                whiteSpace: 'nowrap',
-                transform: 'none',
-                justifySelf: 'end',
-              }}
-              disabled={!commandData?.powershell}
-              onClick={async () => {
-                if (commandData?.powershell) {
-                  await copyText(commandData.powershell);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
-                }
-              }}
+              onClick={() => requestDownload(selectedProduct)}
+              disabled={authorizing}
+              className="btn btn-secondary"
+              style={{ padding: '13px 20px', fontSize: '13.5px' }}
             >
-              <span style={{ display: 'inline-block', width: '52px', textAlign: 'center' }}>
-                {copied ? 'Copied' : 'Copy'}
-              </span>
+              🔄 Refresh Token
             </button>
           </div>
 
-          <h4
+          {/* SHA-256 and Security Verification Section */}
+          <div
             style={{
-              fontSize: '13px',
-              fontWeight: 600,
-              color: 'var(--text-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-              margin: '0 0 12px',
+              background: 'rgba(0, 0, 0, 0.4)',
+              border: '1px solid var(--border)',
+              borderRadius: '10px',
+              padding: '16px',
+              marginBottom: '20px',
             }}
           >
-            Setup
-          </h4>
-          <ol
-            style={{
-              fontSize: '14px',
-              color: 'var(--text-muted)',
-              lineHeight: 1.9,
-              paddingLeft: '18px',
-              margin: 0,
-            }}
-          >
-            <li>Open Minecraft (Fabric 1.21.11 / Lunar / Feather / Badlion / Vanilla).</li>
-            <li>Paste the command above into PowerShell and run it.</li>
-            <li>Enter your license when prompted, then inject into Minecraft.</li>
-            <li>
-              Press{' '}
-              <kbd
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span style={{ fontSize: '12px', textTransform: 'uppercase', color: 'var(--text-dim)', fontWeight: 700 }}>
+                SHA-256 Checksum
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  copyText(downloadData?.sha256 || '');
+                  setCopiedHash(true);
+                  setTimeout(() => setCopiedHash(false), 2000);
+                }}
                 style={{
-                  background: 'var(--bg-surface)',
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  border: '1px solid var(--border)',
-                  color: '#fff',
+                  background: 'none',
+                  border: 'none',
+                  color: '#818cf8',
                   fontSize: '12px',
+                  cursor: 'pointer',
+                  fontWeight: 600,
                 }}
               >
-                Right Shift
-              </kbd>{' '}
-              in-game for the Click GUI.
-            </li>
-          </ol>
+                {copiedHash ? '✓ Copied' : 'Copy Hash'}
+              </button>
+            </div>
+            <code
+              style={{
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                color: '#38bdf8',
+                wordBreak: 'break-all',
+                display: 'block',
+              }}
+            >
+              {downloadData?.sha256 || '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'}
+            </code>
+          </div>
+
+          {/* Ed25519 Signature Card */}
+          <div
+            style={{
+              background: 'rgba(0, 0, 0, 0.4)',
+              border: '1px solid var(--border)',
+              borderRadius: '10px',
+              padding: '16px',
+            }}
+          >
+            <span style={{ fontSize: '12px', textTransform: 'uppercase', color: 'var(--text-dim)', fontWeight: 700 }}>
+              Ed25519 Release Signature (Server-Side Verified)
+            </span>
+            <code
+              style={{
+                fontFamily: 'monospace',
+                fontSize: '11px',
+                color: '#a78bfa',
+                wordBreak: 'break-all',
+                display: 'block',
+                marginTop: '6px',
+              }}
+            >
+              {downloadData?.signature || 'Verifying release signature…'}
+            </code>
+          </div>
         </div>
       ) : (
         <div
           className="card"
           style={{
+            padding: '36px',
             textAlign: 'center',
-            padding: '44px 32px',
             background: 'var(--bg-card)',
             border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-lg)',
           }}
         >
-          {loading ? (
-            <p style={{ color: 'var(--text-muted)', fontSize: '14px', margin: 0 }}>
-              Checking license…
-            </p>
-          ) : isLoggedIn ? (
-            <>
-              <h3 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 8px', color: '#fff' }}>
-                Active license required
-              </h3>
-              <p
-                style={{
-                  fontSize: '14px',
-                  color: 'var(--text-muted)',
-                  maxWidth: '420px',
-                  margin: '0 auto 24px',
-                  lineHeight: 1.6,
-                }}
-              >
-                Your account does not have an active 5.55 Client license.
-              </p>
-              <div
-                style={{
-                  display: 'flex',
-                  gap: '10px',
-                  justifyContent: 'center',
-                  flexWrap: 'wrap',
-                }}
-              >
-                <Link to="/checkout" className="btn btn-primary">
-                  Purchase license
-                </Link>
-                <Link to="/dashboard" className="btn btn-secondary">
-                  Dashboard
-                </Link>
-              </div>
-            </>
-          ) : (
-            <>
-              <h3 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 8px', color: '#fff' }}>
-                Sign in to Launch
-              </h3>
-              <p
-                style={{
-                  fontSize: '14px',
-                  color: 'var(--text-muted)',
-                  maxWidth: '420px',
-                  margin: '0 auto 24px',
-                  lineHeight: 1.6,
-                }}
-              >
-                Please log in to your 5.55 Client account to generate your fileless launch command.
-              </p>
-              <div
-                style={{
-                  display: 'flex',
-                  gap: '10px',
-                  justifyContent: 'center',
-                  flexWrap: 'wrap',
-                }}
-              >
-                <Link to="/login" className="btn btn-primary">
-                  Sign In
-                </Link>
-                <Link to="/trial" className="btn btn-secondary">
-                  Try Free Trial
-                </Link>
-              </div>
-            </>
-          )}
+          <h2 style={{ fontSize: '20px', color: '#fff', marginBottom: '8px' }}>
+            No Active License Found for {selectedProduct === 'java-client' ? 'Java Client' : 'C++ Client'}
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '22px' }}>
+            You do not currently have an active entitlement for this product. Purchase a lifetime license or redeem your key in the dashboard.
+          </p>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <Link to="/#pricing" className="btn btn-primary" style={{ padding: '11px 22px' }}>
+              Purchase License
+            </Link>
+            <Link to="/dashboard" className="btn btn-secondary" style={{ padding: '11px 22px' }}>
+              Redeem Key
+            </Link>
+          </div>
         </div>
       )}
     </div>

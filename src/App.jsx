@@ -7,6 +7,8 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Trial from './pages/Trial';
 import Dashboard from './pages/Dashboard';
+import Launcher from './pages/Launcher';
+import Admin from './pages/Admin';
 import Checkout from './pages/Checkout';
 import CheckoutSuccess from './pages/CheckoutSuccess';
 import Download from './pages/Download';
@@ -65,6 +67,10 @@ export default function App() {
           <Route path="/trial" element={<Trial />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/dashboard.html" element={<Dashboard />} />
+          <Route path="/launcher" element={<Launcher />} />
+          <Route path="/launcher.html" element={<Launcher />} />
+          <Route path="/admin" element={<Admin />} />
+          <Route path="/admin.html" element={<Admin />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/checkout.html" element={<Checkout />} />
           <Route path="/checkout-success" element={<CheckoutSuccess />} />

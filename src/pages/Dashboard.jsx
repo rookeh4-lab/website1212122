@@ -48,36 +48,35 @@ export default function Dashboard() {
   const [buyHwidModal, setBuyHwidModal] = useState({ open: false, licenseKey: '' });
 
   useEffect(() => {
-    const token = searchParams.get('token');
-    if (token) {
-      auth.setToken(token);
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-
-    const currentToken = auth.getToken();
-    if (currentToken) {
-      loadProfile(currentToken);
-    } else {
-      navigate('/login');
-    }
-  }, [searchParams, navigate]);
-
-  const loadProfile = async (token) => {
-    try {
-      const data = await auth.getProfile();
-      if (!data?.user) {
-        auth.clear();
-        navigate('/login');
-        return;
+    let active = true;
+    const init = async () => {
+      const token = searchParams.get('token');
+      if (token) {
+        auth.setToken(token);
+        window.history.replaceState({}, document.title, window.location.pathname);
       }
-      setUser(data.user);
-      await loadLicenses(token);
-    } catch {
-      navigate('/login');
-    } finally {
-      setLoading(false);
-    }
-  };
+
+      try {
+        const data = await auth.getProfile();
+        if (!active) return;
+        if (!data?.user) {
+          await auth.clear();
+          navigate('/login', { replace: true });
+          return;
+        }
+        setUser(data.user);
+        const currentToken = await auth.getToken();
+        await loadLicenses(currentToken);
+      } catch {
+        if (active) navigate('/login', { replace: true });
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    init();
+    return () => { active = false; };
+  }, [searchParams, navigate]);
 
   const loadLicenses = async (token) => {
     try {
@@ -212,8 +211,8 @@ export default function Dashboard() {
     }
   };
 
-  const handleLogout = () => {
-    auth.clear();
+  const handleLogout = async () => {
+    await auth.clear();
     navigate('/login');
   };
 

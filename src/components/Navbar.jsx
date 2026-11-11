@@ -9,23 +9,21 @@ export default function Navbar() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    let active = true;
     async function loadUser() {
-      if (auth.getToken()) {
-        const data = await auth.getProfile();
-        setUser(data?.user || null);
-      } else {
-        setUser(null);
-      }
+      const data = await auth.getProfile();
+      if (active) setUser(data?.user || null);
     }
     loadUser();
+    return () => { active = false; };
   }, [location.pathname]);
 
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname, location.hash]);
 
-  const handleLogout = () => {
-    auth.clear();
+  const handleLogout = async () => {
+    await auth.clear();
     setUser(null);
     setMobileOpen(false);
     navigate('/login');
@@ -167,6 +165,20 @@ export default function Navbar() {
           >
             Discord
           </a>
+          {user?.role === 'admin' && (
+            <Link
+              to="/admin"
+              style={{
+                color: '#f43f5e',
+                textDecoration: 'none',
+                fontSize: '14px',
+                fontWeight: 700,
+                transition: 'color 0.15s',
+              }}
+            >
+              Admin
+            </Link>
+          )}
         </nav>
 
         <div className="navbar-desktop-user">

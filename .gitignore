@@ -7,3 +7,6 @@ website-src.zip
 test_png.js
 discord-bot-src/
 repo-clone/
+.env
+.env.local
+.env.*.local
