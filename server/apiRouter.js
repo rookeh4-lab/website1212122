@@ -582,8 +582,8 @@ router.get('/auth/me', requireAuth, (req, res) => {
   });
 });
 
-// POST /api/licenses/redeem (Claim unassigned key)
-router.post('/licenses/redeem', requireAuth, async (req, res) => {
+// POST /api/licenses/claim (Logged-in user claims/binds an unassigned key to their account)
+router.post('/licenses/claim', requireAuth, async (req, res) => {
   const { key } = req.body;
   if (!key) return res.status(400).json({ success: false, error: 'License key is required' });
 
