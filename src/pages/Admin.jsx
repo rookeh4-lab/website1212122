@@ -6,25 +6,41 @@ export default function Admin() {
   const navigate = useNavigate();
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('users');
+  const [activeTab, setActiveTab] = useState('license-mgmt');
 
   // Data states
   const [users, setUsers] = useState([]);
+  const [licenses, setLicenses] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [token, setToken] = useState('');
   const [statusMsg, setStatusMsg] = useState({ text: '', type: '' });
 
-  // Create license form state
-  const [newLicProduct, setNewLicProduct] = useState('java-client');
-  const [newLicUserId, setNewLicUserId] = useState('');
+  // License search & filter states
+  const [licSearchQuery, setLicSearchQuery] = useState('');
+  const [licStatusFilter, setLicStatusFilter] = useState('ALL');
+  const [licProductFilter, setLicProductFilter] = useState('ALL');
+  const [loadingLicenses, setLoadingLicenses] = useState(false);
+
+  // Single key form state
+  const [newLicProduct, setNewLicProduct] = useState('cpp-client');
+  const [newLicEmail, setNewLicEmail] = useState('');
   const [newLicDevices, setNewLicDevices] = useState(1);
+  const [newLicTier, setNewLicTier] = useState('lifetime');
+  const [newLicExpireDays, setNewLicExpireDays] = useState('');
   const [licCreating, setLicCreating] = useState(false);
   const [createdKey, setCreatedKey] = useState('');
 
+  // Bulk generation state
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkCount, setBulkCount] = useState(5);
+  const [bulkCreating, setBulkCreating] = useState(false);
+  const [bulkCreatedKeys, setBulkCreatedKeys] = useState([]);
+  const [copiedBulk, setCopiedBulk] = useState(false);
+
   // Release upload state
-  const [relProduct, setRelProduct] = useState('java-client');
+  const [relProduct, setRelProduct] = useState('cpp-client');
   const [relVersion, setRelVersion] = useState('1.2.0');
-  const [relFileType, setRelFileType] = useState('jar');
+  const [relFileType, setRelFileType] = useState('exe');
   const [relSha256, setRelSha256] = useState('');
   const [relChangelog, setRelChangelog] = useState('');
   const [relUploading, setRelUploading] = useState(false);
@@ -47,7 +63,10 @@ export default function Admin() {
         setIsAdmin(true);
         const curToken = await auth.getToken();
         setToken(curToken);
-        await loadAdminData(curToken);
+        await Promise.all([
+          loadAdminData(curToken),
+          loadLicenses(curToken),
+        ]);
       } catch (err) {
         console.error('Admin check failed:', err);
       } finally {
@@ -72,11 +91,38 @@ export default function Admin() {
     }
   };
 
+  const loadLicenses = async (t, query = licSearchQuery, status = licStatusFilter, prod = licProductFilter) => {
+    setLoadingLicenses(true);
+    try {
+      const params = new URLSearchParams();
+      if (query) params.set('q', query);
+      if (status && status !== 'ALL') params.set('status', status);
+      if (prod && prod !== 'ALL') params.set('product', prod);
+
+      const res = await fetch(`${API_BASE}/admin/licenses?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${t || token}` },
+      });
+      const data = await res.json();
+      if (data.success && data.licenses) {
+        setLicenses(data.licenses);
+      }
+    } catch (err) {
+      console.error('Failed to load licenses:', err);
+    } finally {
+      setLoadingLicenses(false);
+    }
+  };
+
   const handleCreateLicense = async (e) => {
     e.preventDefault();
     setLicCreating(true);
     setStatusMsg({ text: '', type: '' });
     try {
+      let expires_at = null;
+      if (newLicExpireDays && parseInt(newLicExpireDays, 10) > 0) {
+        expires_at = new Date(Date.now() + parseInt(newLicExpireDays, 10) * 86400000).toISOString();
+      }
+
       const res = await fetch(`${API_BASE}/admin/licenses/create`, {
         method: 'POST',
         headers: {
@@ -85,15 +131,17 @@ export default function Admin() {
         },
         body: JSON.stringify({
           product_slug: newLicProduct,
-          user_id: newLicUserId.trim() || null,
+          customer_email: newLicEmail.trim() || null,
           max_devices: parseInt(newLicDevices, 10),
+          license_type: newLicTier,
+          expires_at,
         }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
         setCreatedKey(data.license.license_key);
-        setStatusMsg({ text: `License created: ${data.license.license_key}`, type: 'success' });
-        await loadAdminData(token);
+        setStatusMsg({ text: `Generated Key: ${data.license.license_key}`, type: 'success' });
+        await loadLicenses(token);
       } else {
         setStatusMsg({ text: data.error || 'Failed to create license', type: 'danger' });
       }
@@ -104,22 +152,61 @@ export default function Admin() {
     }
   };
 
-  const handleRevokeLicense = async (licenseId) => {
-    if (!window.confirm('Are you sure you want to revoke this license permanently?')) return;
+  const handleBulkGenerate = async (e) => {
+    e.preventDefault();
+    setBulkCreating(true);
+    setStatusMsg({ text: '', type: '' });
+    setBulkCreatedKeys([]);
+
     try {
-      const res = await fetch(`${API_BASE}/admin/licenses/${licenseId}/revoke`, {
+      const res = await fetch(`${API_BASE}/admin/licenses/bulk`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          count: parseInt(bulkCount, 10),
+          product_slug: newLicProduct,
+          max_devices: parseInt(newLicDevices, 10),
+          license_type: newLicTier,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.keys) {
+        setBulkCreatedKeys(data.keys);
+        setStatusMsg({ text: `Successfully generated ${data.count} keys in bulk!`, type: 'success' });
+        await loadLicenses(token);
+      } else {
+        setStatusMsg({ text: data.error || 'Failed to generate bulk keys', type: 'danger' });
+      }
+    } catch {
+      setStatusMsg({ text: 'Error executing bulk generation', type: 'danger' });
+    } finally {
+      setBulkCreating(false);
+    }
+  };
+
+  const handleLicenseAction = async (licenseId, action, confirmPrompt = '') => {
+    if (confirmPrompt && !window.confirm(confirmPrompt)) return;
+    try {
+      const res = await fetch(`${API_BASE}/admin/licenses/action`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ license_id: licenseId, action }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setStatusMsg({ text: 'License revoked successfully', type: 'success' });
-        await loadAdminData(token);
+        setStatusMsg({ text: data.message || 'Action executed successfully', type: 'success' });
+        await loadLicenses(token);
       } else {
-        setStatusMsg({ text: data.error || 'Failed to revoke license', type: 'danger' });
+        setStatusMsg({ text: data.error || 'Action failed', type: 'danger' });
       }
     } catch {
-      setStatusMsg({ text: 'Error contacting revocation endpoint', type: 'danger' });
+      setStatusMsg({ text: 'Network error executing action', type: 'danger' });
     }
   };
 
@@ -181,6 +268,12 @@ export default function Admin() {
     }
   };
 
+  const copyBulkKeys = () => {
+    copyText(bulkCreatedKeys.join('\n'));
+    setCopiedBulk(true);
+    setTimeout(() => setCopiedBulk(false), 2000);
+  };
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: '100px 20px', color: 'var(--text-muted)' }}>
@@ -206,25 +299,26 @@ export default function Admin() {
   }
 
   return (
-    <div className="container" style={{ maxWidth: '1100px', padding: '40px 20px 80px' }}>
+    <div className="container" style={{ maxWidth: '1180px', padding: '40px 20px 80px' }}>
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <span className="badge badge-primary" style={{ marginBottom: '8px' }}>
-            Super Admin
+            Super Admin Portal
           </span>
           <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#fff', margin: '4px 0 0' }}>
-            5.55 Administration Center
+            5.55 License & Platform Management
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '13px', margin: '4px 0 0' }}>
-            Manage Supabase profiles, licenses, HWID devices, signed releases, and audit logs.
+            Generate keys, manage customer entitlements, inspect HWID devices, and revoke licenses.
           </p>
         </div>
         <button
-          onClick={() => loadAdminData(token)}
+          onClick={() => { loadAdminData(token); loadLicenses(token); }}
           className="btn btn-secondary btn-sm"
           style={{ padding: '8px 16px' }}
         >
-          🔄 Refresh Database
+          🔄 Refresh Live Data
         </button>
       </div>
 
@@ -256,8 +350,8 @@ export default function Admin() {
         }}
       >
         {[
+          { id: 'license-mgmt', label: `License Management (${licenses.length})` },
           { id: 'users', label: `Users (${users.length})` },
-          { id: 'licenses', label: 'Create License' },
           { id: 'releases', label: 'Releases & Signing' },
           { id: 'audit', label: `Audit Trail (${auditLogs.length})` },
         ].map((tab) => (
@@ -265,7 +359,7 @@ export default function Admin() {
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             style={{
-              padding: '8px 16px',
+              padding: '8px 18px',
               borderRadius: '8px',
               fontSize: '13px',
               fontWeight: 700,
@@ -281,10 +375,501 @@ export default function Admin() {
         ))}
       </div>
 
-      {/* 1. USERS TAB */}
+      {/* 1. LICENSE MANAGEMENT TAB */}
+      {activeTab === 'license-mgmt' && (
+        <div>
+          {/* Key Generator Accordion Card */}
+          <div
+            className="card"
+            style={{
+              padding: '24px 28px',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              borderRadius: '16px',
+              marginBottom: '28px',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#fff', margin: 0 }}>
+                  Generate License Keys
+                </h2>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  Create authentic Base32 keys in standard format (555C-XXXX-XXXX-XXXX for C++, 555J-XXXX-XXXX-XXXX for Java).
+                </div>
+              </div>
+
+              {/* Mode Toggle */}
+              <div style={{ display: 'flex', gap: '6px', background: 'rgba(0, 0, 0, 0.4)', padding: '4px', borderRadius: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setBulkMode(false)}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    background: !bulkMode ? 'var(--primary)' : 'transparent',
+                    color: '#fff',
+                  }}
+                >
+                  Single Key
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBulkMode(true)}
+                  style={{
+                    padding: '6px 14px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    background: bulkMode ? 'var(--primary)' : 'transparent',
+                    color: '#fff',
+                  }}
+                >
+                  Bulk Generation
+                </button>
+              </div>
+            </div>
+
+            {/* Single Key Form */}
+            {!bulkMode ? (
+              <form onSubmit={handleCreateLicense}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '11.5px' }}>Product Type</label>
+                    <select
+                      value={newLicProduct}
+                      onChange={(e) => setNewLicProduct(e.target.value)}
+                      className="form-control"
+                      style={{ padding: '10px' }}
+                    >
+                      <option value="cpp-client">555_CPP — 5.55 C++ Client (555C-XXXX...)</option>
+                      <option value="java-client">555_JAVA — 5.55 Java Client (555J-XXXX...)</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '11.5px' }}>Assign Customer Email (Optional)</label>
+                    <input
+                      type="email"
+                      value={newLicEmail}
+                      onChange={(e) => setNewLicEmail(e.target.value)}
+                      className="form-control"
+                      placeholder="buyer@example.com"
+                      style={{ padding: '10px' }}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '11.5px' }}>Max Devices (HWID limit)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={newLicDevices}
+                      onChange={(e) => setNewLicDevices(e.target.value)}
+                      className="form-control"
+                      style={{ padding: '10px' }}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '11.5px' }}>License Tier</label>
+                    <select
+                      value={newLicTier}
+                      onChange={(e) => setNewLicTier(e.target.value)}
+                      className="form-control"
+                      style={{ padding: '10px' }}
+                    >
+                      <option value="lifetime">Lifetime</option>
+                      <option value="subscription">Subscription</option>
+                      <option value="trial">Trial</option>
+                    </select>
+                  </div>
+
+                  {newLicTier === 'subscription' && (
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontSize: '11.5px' }}>Expire in Days</label>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="30"
+                        value={newLicExpireDays}
+                        onChange={(e) => setNewLicExpireDays(e.target.value)}
+                        className="form-control"
+                        style={{ padding: '10px' }}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <button
+                    type="submit"
+                    disabled={licCreating}
+                    className="btn btn-primary"
+                    style={{ padding: '11px 24px', fontWeight: 700 }}
+                  >
+                    {licCreating ? 'Generating Key…' : 'Generate License Key →'}
+                  </button>
+
+                  {createdKey && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.5)', padding: '8px 14px', borderRadius: '8px', border: '1px solid #10b981' }}>
+                      <span style={{ fontFamily: 'monospace', color: '#6ee7b7', fontWeight: 700 }}>{createdKey}</span>
+                      <button
+                        type="button"
+                        onClick={() => copyText(createdKey)}
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '2px 8px', fontSize: '11px' }}
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </form>
+            ) : (
+              /* Bulk Generation Form */
+              <form onSubmit={handleBulkGenerate}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '11.5px' }}>Product Type</label>
+                    <select
+                      value={newLicProduct}
+                      onChange={(e) => setNewLicProduct(e.target.value)}
+                      className="form-control"
+                      style={{ padding: '10px' }}
+                    >
+                      <option value="cpp-client">555_CPP — 5.55 C++ Client (555C-XXXX...)</option>
+                      <option value="java-client">555_JAVA — 5.55 Java Client (555J-XXXX...)</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '11.5px' }}>Quantity to Generate (1 to 50)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="50"
+                      value={bulkCount}
+                      onChange={(e) => setBulkCount(e.target.value)}
+                      className="form-control"
+                      style={{ padding: '10px' }}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '11.5px' }}>Max Devices per Key</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={newLicDevices}
+                      onChange={(e) => setNewLicDevices(e.target.value)}
+                      className="form-control"
+                      style={{ padding: '10px' }}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '11.5px' }}>Tier</label>
+                    <select
+                      value={newLicTier}
+                      onChange={(e) => setNewLicTier(e.target.value)}
+                      className="form-control"
+                      style={{ padding: '10px' }}
+                    >
+                      <option value="lifetime">Lifetime</option>
+                      <option value="subscription">Subscription</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <button
+                    type="submit"
+                    disabled={bulkCreating}
+                    className="btn btn-primary"
+                    style={{ padding: '11px 24px', fontWeight: 700 }}
+                  >
+                    {bulkCreating ? `Generating ${bulkCount} Keys…` : `Generate ${bulkCount} Keys in Bulk →`}
+                  </button>
+
+                  {bulkCreatedKeys.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={copyBulkKeys}
+                      className="btn btn-secondary btn-sm"
+                      style={{ padding: '10px 16px', fontWeight: 700 }}
+                    >
+                      {copiedBulk ? '✓ All Keys Copied!' : `📋 Copy All (${bulkCreatedKeys.length}) Keys`}
+                    </button>
+                  )}
+                </div>
+
+                {bulkCreatedKeys.length > 0 && (
+                  <div
+                    style={{
+                      marginTop: '16px',
+                      background: 'rgba(0, 0, 0, 0.6)',
+                      borderRadius: '10px',
+                      padding: '14px',
+                      maxHeight: '140px',
+                      overflowY: 'auto',
+                      fontFamily: 'monospace',
+                      fontSize: '12px',
+                      color: '#a5f3fc',
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {bulkCreatedKeys.map((k, i) => (
+                      <div key={i}>{k}</div>
+                    ))}
+                  </div>
+                )}
+              </form>
+            )}
+          </div>
+
+          {/* Search, Filter & Live License Directory */}
+          <div
+            className="card"
+            style={{
+              padding: '24px 28px',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              borderRadius: '16px',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '14px' }}>
+              <div>
+                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#fff', margin: 0 }}>
+                  Active License Database ({licenses.length})
+                </h2>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  Inspect registered hardware, key states, customer bindings, and execute administrative actions.
+                </div>
+              </div>
+
+              {/* Status Filter Pills */}
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {['ALL', 'ACTIVE', 'UNUSED', 'EXPIRED', 'REVOKED', 'SUSPENDED'].map((st) => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => {
+                      setLicStatusFilter(st);
+                      loadLicenses(token, licSearchQuery, st, licProductFilter);
+                    }}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      background: licStatusFilter === st ? 'var(--primary)' : 'rgba(255, 255, 255, 0.06)',
+                      color: licStatusFilter === st ? '#fff' : 'var(--text-muted)',
+                    }}
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Search Input Bar */}
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '20px' }}>
+              <input
+                type="text"
+                value={licSearchQuery}
+                onChange={(e) => setLicSearchQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') loadLicenses(token, licSearchQuery, licStatusFilter, licProductFilter); }}
+                placeholder="Search by license key (555C-...), customer email, or SellAuth invoice ID..."
+                className="form-control"
+                style={{ flex: 1, padding: '10px 14px', fontSize: '13px' }}
+              />
+              <button
+                type="button"
+                onClick={() => loadLicenses(token, licSearchQuery, licStatusFilter, licProductFilter)}
+                className="btn btn-secondary btn-sm"
+                style={{ padding: '10px 18px' }}
+              >
+                Search
+              </button>
+            </div>
+
+            {/* License Table */}
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-dim)', fontSize: '11.5px', textTransform: 'uppercase' }}>
+                    <th style={{ padding: '10px 12px' }}>License Key</th>
+                    <th style={{ padding: '10px 12px' }}>Product</th>
+                    <th style={{ padding: '10px 12px' }}>State</th>
+                    <th style={{ padding: '10px 12px' }}>Devices</th>
+                    <th style={{ padding: '10px 12px' }}>Customer / Order</th>
+                    <th style={{ padding: '10px 12px' }}>Created</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {licenses.map((lic) => {
+                    const st = lic.key_state || (lic.status === 'active' ? 'ACTIVE' : lic.status.toUpperCase());
+                    const stateColor =
+                      st === 'ACTIVE' ? '#10b981' :
+                      st === 'UNUSED' ? '#38bdf8' :
+                      st === 'SUSPENDED' ? '#f59e0b' :
+                      st === 'EXPIRED' ? '#94a3b8' : '#ef4444';
+
+                    const isCpp = lic.products?.slug === 'cpp-client';
+
+                    return (
+                      <tr key={lic.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                        <td style={{ padding: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontFamily: 'monospace', color: '#ffffff', fontWeight: 700, fontSize: '13.5px' }}>
+                              {lic.license_key}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => copyText(lic.license_key)}
+                              style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px', fontSize: '11px' }}
+                              title="Copy Key"
+                            >
+                              📋
+                            </button>
+                          </div>
+                        </td>
+
+                        <td style={{ padding: '12px' }}>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              background: isCpp ? 'rgba(6, 182, 212, 0.15)' : 'rgba(168, 85, 247, 0.15)',
+                              color: isCpp ? '#22d3ee' : '#c084fc',
+                              border: `1px solid ${isCpp ? 'rgba(6, 182, 212, 0.3)' : 'rgba(168, 85, 247, 0.3)'}`,
+                            }}
+                          >
+                            {isCpp ? '555 C++ Client' : '555 Java Client'}
+                          </span>
+                        </td>
+
+                        <td style={{ padding: '12px' }}>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              background: `${stateColor}22`,
+                              color: stateColor,
+                              border: `1px solid ${stateColor}44`,
+                            }}
+                          >
+                            {st}
+                          </span>
+                        </td>
+
+                        <td style={{ padding: '12px' }}>
+                          <span style={{ color: lic.device_count > 0 ? '#10b981' : 'var(--text-muted)' }}>
+                            {lic.device_count} / {lic.max_devices || 1}
+                          </span>
+                        </td>
+
+                        <td style={{ padding: '12px' }}>
+                          <div style={{ color: '#e2e8f0', fontSize: '12px' }}>{lic.customer_email}</div>
+                          {lic.metadata?.sellauth_invoice_id && (
+                            <div style={{ fontSize: '10.5px', color: 'var(--text-muted)' }}>
+                              Invoice: {lic.metadata.sellauth_invoice_id}
+                            </div>
+                          )}
+                        </td>
+
+                        <td style={{ padding: '12px', color: 'var(--text-muted)', fontSize: '11.5px' }}>
+                          {new Date(lic.created_at).toLocaleDateString()}
+                        </td>
+
+                        <td style={{ padding: '12px', textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', gap: '6px', justifyContent: 'flex-end' }}>
+                            {/* Reset Devices Button */}
+                            {lic.device_count > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => handleLicenseAction(lic.id, 'reset-devices', `Reset all registered hardware devices for ${lic.license_key}?`)}
+                                className="btn btn-secondary btn-sm"
+                                style={{ padding: '4px 8px', fontSize: '11px', color: '#38bdf8' }}
+                                title="Unbind all registered devices"
+                              >
+                                Reset HWID
+                              </button>
+                            )}
+
+                            {/* Suspend / Reactivate */}
+                            {st === 'SUSPENDED' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleLicenseAction(lic.id, 'unsuspend')}
+                                className="btn btn-secondary btn-sm"
+                                style={{ padding: '4px 8px', fontSize: '11px', color: '#10b981' }}
+                              >
+                                Unsuspend
+                              </button>
+                            ) : st !== 'REVOKED' && (
+                              <button
+                                type="button"
+                                onClick={() => handleLicenseAction(lic.id, 'suspend')}
+                                className="btn btn-secondary btn-sm"
+                                style={{ padding: '4px 8px', fontSize: '11px', color: '#f59e0b' }}
+                              >
+                                Suspend
+                              </button>
+                            )}
+
+                            {/* Revoke */}
+                            {st !== 'REVOKED' && (
+                              <button
+                                type="button"
+                                onClick={() => handleLicenseAction(lic.id, 'revoke', `Permanently revoke license ${lic.license_key}? This cannot be undone.`)}
+                                className="btn btn-secondary btn-sm"
+                                style={{ padding: '4px 8px', fontSize: '11px', color: '#ef4444' }}
+                              >
+                                Revoke
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {licenses.length === 0 && (
+                    <tr>
+                      <td colSpan="7" style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+                        {loadingLicenses ? 'Searching database...' : 'No licenses found matching your filters.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. USERS TAB */}
       {activeTab === 'users' && (
         <div className="card" style={{ padding: '24px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-          <h2 style={{ fontSize: '18px', color: '#fff', marginBottom: '16px' }}>Registered Accounts</h2>
+          <h2 style={{ fontSize: '18px', color: '#fff', marginBottom: '16px' }}>Registered Website Accounts</h2>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
               <thead>
@@ -292,7 +877,6 @@ export default function Admin() {
                   <th style={{ padding: '10px 12px' }}>Email / Username</th>
                   <th style={{ padding: '10px 12px' }}>Role</th>
                   <th style={{ padding: '10px 12px' }}>Licenses</th>
-                  <th style={{ padding: '10px 12px' }}>Devices</th>
                   <th style={{ padding: '10px 12px' }}>Status</th>
                   <th style={{ padding: '10px 12px', textAlign: 'right' }}>Actions</th>
                 </tr>
@@ -314,23 +898,18 @@ export default function Admin() {
                         {u.licenses?.length || 0} active
                       </span>
                     </td>
-                    <td style={{ padding: '12px', color: 'var(--text-dim)' }}>
-                      {u.devices?.length || 0} HWIDs
-                    </td>
                     <td style={{ padding: '12px' }}>
-                      {u.banned_at ? (
-                        <span style={{ color: '#f87171', fontWeight: 600 }}>Suspended</span>
-                      ) : (
-                        <span style={{ color: '#4ade80' }}>Active</span>
-                      )}
+                      <span className={`badge ${u.banned_at ? 'badge-danger' : 'badge-success'}`}>
+                        {u.banned_at ? 'Suspended' : 'Active'}
+                      </span>
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right' }}>
                       <button
                         onClick={() => handleBanUser(u.id, !!u.banned_at)}
                         className={`btn btn-sm ${u.banned_at ? 'btn-secondary' : 'btn-danger'}`}
-                        style={{ padding: '4px 10px', fontSize: '11.5px' }}
+                        style={{ padding: '4px 10px', fontSize: '11px' }}
                       >
-                        {u.banned_at ? 'Unsuspend' : 'Suspend'}
+                        {u.banned_at ? 'Reactivate' : 'Suspend'}
                       </button>
                     </td>
                   </tr>
@@ -338,102 +917,6 @@ export default function Admin() {
               </tbody>
             </table>
           </div>
-        </div>
-      )}
-
-      {/* 2. CREATE LICENSE TAB */}
-      {activeTab === 'licenses' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
-          <div className="card" style={{ padding: '24px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-            <h2 style={{ fontSize: '18px', color: '#fff', marginBottom: '8px' }}>Mint Product License</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '20px' }}>
-              Generate genuine, cryptographically authenticated 5.55 license keys.
-            </p>
-
-            <form onSubmit={handleCreateLicense}>
-              <div className="form-group" style={{ marginBottom: '14px' }}>
-                <label className="form-label" style={{ fontSize: '11.5px' }}>Product</label>
-                <select
-                  value={newLicProduct}
-                  onChange={(e) => setNewLicProduct(e.target.value)}
-                  className="form-control"
-                  style={{ fontSize: '13.5px', padding: '10px' }}
-                >
-                  <option value="java-client">5.55 Java Fabric Client</option>
-                  <option value="cpp-client">5.55 C++ Native Client</option>
-                </select>
-              </div>
-
-              <div className="form-group" style={{ marginBottom: '14px' }}>
-                <label className="form-label" style={{ fontSize: '11.5px' }}>Bind to User ID (Optional)</label>
-                <input
-                  type="text"
-                  value={newLicUserId}
-                  onChange={(e) => setNewLicUserId(e.target.value)}
-                  className="form-control"
-                  placeholder="UUID or leave blank for unassigned"
-                  style={{ fontSize: '13.5px', padding: '10px' }}
-                />
-              </div>
-
-              <div className="form-group" style={{ marginBottom: '18px' }}>
-                <label className="form-label" style={{ fontSize: '11.5px' }}>Max Devices (HWID limit)</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="5"
-                  value={newLicDevices}
-                  onChange={(e) => setNewLicDevices(e.target.value)}
-                  className="form-control"
-                  style={{ fontSize: '13.5px', padding: '10px' }}
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={licCreating}
-                className="btn btn-primary"
-                style={{ width: '100%', padding: '11px', fontWeight: 700 }}
-              >
-                {licCreating ? 'Minting License…' : 'Mint License Key →'}
-              </button>
-            </form>
-          </div>
-
-          {createdKey && (
-            <div className="card" style={{ padding: '24px', background: 'rgba(99, 102, 241, 0.08)', border: '1px solid var(--primary)' }}>
-              <span className="badge badge-success">Newly Minted Key</span>
-              <h3 style={{ fontSize: '16px', color: '#fff', margin: '12px 0 6px' }}>Ready for Redemption</h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '16px' }}>
-                This key can be redeemed on any account or provided to the buyer:
-              </p>
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  background: 'rgba(0, 0, 0, 0.6)',
-                  padding: '12px 14px',
-                  borderRadius: '8px',
-                  fontFamily: 'monospace',
-                  fontSize: '15px',
-                  color: '#38bdf8',
-                  fontWeight: 700,
-                  letterSpacing: '0.05em',
-                }}
-              >
-                <span>{createdKey}</span>
-                <button
-                  type="button"
-                  onClick={() => copyText(createdKey)}
-                  className="btn btn-secondary btn-sm"
-                  style={{ padding: '4px 10px', fontSize: '11.5px' }}
-                >
-                  Copy
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -448,68 +931,67 @@ export default function Admin() {
           <form onSubmit={handleUploadRelease}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '14px' }}>
               <div className="form-group">
-                <label className="form-label" style={{ fontSize: '11.5px' }}>Product</label>
+                <label className="form-label" style={{ fontSize: '11.5px' }}>Target Product</label>
                 <select
                   value={relProduct}
                   onChange={(e) => setRelProduct(e.target.value)}
                   className="form-control"
                   style={{ fontSize: '13.5px', padding: '10px' }}
                 >
-                  <option value="java-client">Java Fabric Client</option>
-                  <option value="cpp-client">C++ Client</option>
+                  <option value="cpp-client">5.55 C++ Native Client (.EXE loader)</option>
+                  <option value="java-client">5.55 Java Fabric Client (.JAR package)</option>
                 </select>
               </div>
 
               <div className="form-group">
-                <label className="form-label" style={{ fontSize: '11.5px' }}>Version String</label>
+                <label className="form-label" style={{ fontSize: '11.5px' }}>Version Tag</label>
                 <input
                   type="text"
                   value={relVersion}
                   onChange={(e) => setRelVersion(e.target.value)}
                   className="form-control"
-                  placeholder="e.g. 1.2.1"
-                  required
+                  placeholder="e.g. 1.2.0"
                   style={{ fontSize: '13.5px', padding: '10px' }}
+                  required
                 />
               </div>
 
               <div className="form-group">
-                <label className="form-label" style={{ fontSize: '11.5px' }}>File Type</label>
+                <label className="form-label" style={{ fontSize: '11.5px' }}>Binary Type</label>
                 <select
                   value={relFileType}
                   onChange={(e) => setRelFileType(e.target.value)}
                   className="form-control"
                   style={{ fontSize: '13.5px', padding: '10px' }}
                 >
-                  <option value="jar">.jar (Fabric mod)</option>
-                  <option value="exe">.exe (Launcher/Injector)</option>
-                  <option value="dll">.dll (Native internal)</option>
-                  <option value="zip">.zip (Bundle)</option>
+                  <option value="exe">EXE Executable (Loader)</option>
+                  <option value="dll">DLL Dynamic Library</option>
+                  <option value="jar">JAR Archive</option>
                 </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ fontSize: '11.5px' }}>SHA-256 Hash</label>
+                <input
+                  type="text"
+                  value={relSha256}
+                  onChange={(e) => setRelSha256(e.target.value)}
+                  className="form-control"
+                  placeholder="64-char hexadecimal hash"
+                  style={{ fontSize: '13.5px', padding: '10px' }}
+                />
               </div>
             </div>
 
-            <div className="form-group" style={{ marginBottom: '14px' }}>
-              <label className="form-label" style={{ fontSize: '11.5px' }}>Binary SHA-256 Checksum</label>
-              <input
-                type="text"
-                value={relSha256}
-                onChange={(e) => setRelSha256(e.target.value)}
-                className="form-control"
-                placeholder="64-character SHA-256 hash"
-                style={{ fontSize: '13px', padding: '10px', fontFamily: 'monospace' }}
-              />
-            </div>
-
-            <div className="form-group" style={{ marginBottom: '18px' }}>
-              <label className="form-label" style={{ fontSize: '11.5px' }}>Release Changelog</label>
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label className="form-label" style={{ fontSize: '11.5px' }}>Changelog / Release Notes</label>
               <textarea
                 value={relChangelog}
                 onChange={(e) => setRelChangelog(e.target.value)}
                 className="form-control"
                 rows="3"
-                placeholder="What's new in this build..."
-                style={{ fontSize: '13px', padding: '10px' }}
+                placeholder="List bypass improvements, feature additions, or bug fixes…"
+                style={{ fontSize: '13px', padding: '10px', resize: 'vertical' }}
               />
             </div>
 
@@ -519,7 +1001,7 @@ export default function Admin() {
               className="btn btn-primary"
               style={{ padding: '11px 24px', fontWeight: 700 }}
             >
-              {relUploading ? 'Signing & Publishing…' : 'Publish & Sign Release →'}
+              {relUploading ? 'Signing & Publishing…' : 'Sign & Publish Release →'}
             </button>
           </form>
         </div>
@@ -528,36 +1010,36 @@ export default function Admin() {
       {/* 4. AUDIT TRAIL TAB */}
       {activeTab === 'audit' && (
         <div className="card" style={{ padding: '24px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-          <h2 style={{ fontSize: '18px', color: '#fff', marginBottom: '16px' }}>System Audit Trail</h2>
+          <h2 style={{ fontSize: '18px', color: '#fff', marginBottom: '16px' }}>Platform Security Audit Trail</h2>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-dim)' }}>
                   <th style={{ padding: '10px 12px' }}>Timestamp</th>
                   <th style={{ padding: '10px 12px' }}>Action</th>
-                  <th style={{ padding: '10px 12px' }}>User</th>
+                  <th style={{ padding: '10px 12px' }}>Entity</th>
                   <th style={{ padding: '10px 12px' }}>IP Address</th>
-                  <th style={{ padding: '10px 12px' }}>Details</th>
+                  <th style={{ padding: '10px 12px' }}>Metadata</th>
                 </tr>
               </thead>
               <tbody>
                 {auditLogs.map((log) => (
                   <tr key={log.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>
-                      {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>
+                      {new Date(log.created_at).toLocaleString()}
                     </td>
                     <td style={{ padding: '10px 12px' }}>
-                      <span className="badge badge-secondary" style={{ fontSize: '11px' }}>
+                      <span className="badge badge-primary" style={{ fontSize: '11px' }}>
                         {log.action}
                       </span>
                     </td>
-                    <td style={{ padding: '10px 12px', color: '#fff' }}>
-                      {log.profiles?.username || log.profiles?.email || log.user_id?.substring(0, 8) || 'System'}
+                    <td style={{ padding: '10px 12px', color: '#cbd5e1' }}>
+                      {log.entity_type} {log.entity_id ? `(${log.entity_id.substring(0, 8)}…)` : ''}
                     </td>
                     <td style={{ padding: '10px 12px', color: 'var(--text-dim)', fontFamily: 'monospace' }}>
                       {log.ip_address || '—'}
                     </td>
-                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-dim)', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {JSON.stringify(log.metadata || {})}
                     </td>
                   </tr>

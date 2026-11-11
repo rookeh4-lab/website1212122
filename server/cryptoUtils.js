@@ -52,11 +52,11 @@ export function sha256(data) {
 }
 
 /**
- * Generate formatted 5.55 license key: 555XX-XXXXX-XXXXX-XXXXX
- * @param {string} prefix
+ * Generate formatted 5.55 license key: 555C-XXXX-XXXX-XXXX or 555J-XXXX-XXXX-XXXX
+ * @param {string} productSlugOrPrefix - 'cpp-client' | 'java-client' | '555C' | '555J'
  * @returns {string}
  */
-export function generateLicenseKey(prefix = '555') {
+export function generateLicenseKey(productSlugOrPrefix = '555C') {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Base32 unambiguous
   const getRandomChunk = (len) => {
     let res = '';
@@ -67,10 +67,19 @@ export function generateLicenseKey(prefix = '555') {
     return res;
   };
 
-  const c1 = (prefix + getRandomChunk(2)).slice(0, 5);
-  const c2 = getRandomChunk(5);
-  const c3 = getRandomChunk(5);
-  const c4 = getRandomChunk(5);
+  let prefix = '555C';
+  if (productSlugOrPrefix === 'java-client' || productSlugOrPrefix === '555_JAVA' || productSlugOrPrefix === '555J') {
+    prefix = '555J';
+  } else if (productSlugOrPrefix === 'cpp-client' || productSlugOrPrefix === '555_CPP' || productSlugOrPrefix === '555C') {
+    prefix = '555C';
+  } else if (typeof productSlugOrPrefix === 'string' && productSlugOrPrefix.length > 0) {
+    prefix = productSlugOrPrefix.slice(0, 4).toUpperCase();
+  }
+
+  const c1 = prefix.padEnd(4, 'C');
+  const c2 = getRandomChunk(4);
+  const c3 = getRandomChunk(4);
+  const c4 = getRandomChunk(4);
 
   return `${c1}-${c2}-${c3}-${c4}`;
 }

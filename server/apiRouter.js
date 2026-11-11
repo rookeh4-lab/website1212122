@@ -1,4 +1,6 @@
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
 import { supabaseAdmin, requireAuth, requireAdmin } from './supabaseAdmin.js';
 import {
   signEd25519,
@@ -724,9 +726,112 @@ router.get('/user/devices', requireAuth, async (req, res) => {
 });
 
 // ==============================================================================
-// 3. CENTRAL LICENSE & HWID VALIDATION API
-// Used by Java Fabric Client, C++ Client, and Desktop Launcher
+// 3. CENTRAL LICENSE REDEMPTION & HWID VALIDATION API
+// Used by Website Download Page, Java Fabric Client, and C++ Client Loader
 // ==============================================================================
+
+// POST /api/licenses/redeem (Public website redemption for download authorization)
+router.post('/licenses/redeem', async (req, res) => {
+  const { license_key } = req.body;
+  if (!license_key) {
+    return res.status(400).json({
+      valid: false,
+      error: 'MISSING_KEY',
+      message: 'Please enter your license key.',
+    });
+  }
+
+  const cleanKey = license_key.trim().toUpperCase();
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+  try {
+    const { data: license, error: licErr } = await supabaseAdmin
+      .from('licenses')
+      .select('*, products(*)')
+      .eq('license_key', cleanKey)
+      .maybeSingle();
+
+    if (licErr || !license) {
+      return res.status(404).json({
+        valid: false,
+        error: 'INVALID_KEY',
+        message: 'Invalid license key. Please check your key and try again.',
+      });
+    }
+
+    if (license.status === 'revoked') {
+      return res.status(403).json({
+        valid: false,
+        error: 'LICENSE_REVOKED',
+        message: 'This license has been revoked.',
+      });
+    }
+
+    if (license.status === 'suspended') {
+      return res.status(403).json({
+        valid: false,
+        error: 'LICENSE_SUSPENDED',
+        message: 'This license is currently suspended.',
+      });
+    }
+
+    if (license.status === 'expired' || (license.expires_at && new Date(license.expires_at) < new Date())) {
+      return res.status(403).json({
+        valid: false,
+        error: 'LICENSE_EXPIRED',
+        message: 'Your license has expired.',
+      });
+    }
+
+    const product = license.products;
+    if (product.platform === 'fabric' || product.slug === 'java-client') {
+      return res.status(403).json({
+        valid: false,
+        error: 'PRODUCT_MISMATCH',
+        message: 'This license is for 5.55 Java Fabric Client. Please visit the Java download section.',
+      });
+    }
+
+    // Generate short-lived download token (15 mins)
+    const token = generateToken(32);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+    await supabaseAdmin.from('download_tokens').insert({
+      license_id: license.id,
+      user_id: license.user_id,
+      token,
+      expires_at: expiresAt,
+      ip_address: clientIp,
+    });
+
+    // Record audit log (website redemption does NOT consume or activate the key)
+    await supabaseAdmin.from('audit_logs').insert({
+      user_id: license.user_id,
+      action: 'KEY_REDEEMED_FOR_DOWNLOAD',
+      entity_type: 'license',
+      entity_id: license.id,
+      ip_address: clientIp,
+      metadata: { license_key: cleanKey, product: product.slug },
+    });
+
+    return res.json({
+      valid: true,
+      authorized: true,
+      message: 'License verified successfully.',
+      key: cleanKey,
+      product_name: product.name,
+      product_slug: product.slug,
+      download_url: `/api/downloads/file/${token}`,
+      token,
+      file_name: 'SyndicateLoader.exe',
+      version: '1.2.0',
+      expires_at: expiresAt,
+    });
+  } catch (err) {
+    console.error('[RedeemKey Error]:', err);
+    return res.status(500).json({ valid: false, error: 'SERVER_ERROR', message: err.message });
+  }
+});
 
 // POST /api/licenses/validate
 router.post('/licenses/validate', async (req, res) => {
@@ -749,23 +854,35 @@ router.post('/licenses/validate', async (req, res) => {
       .from('licenses')
       .select('*, products(*)')
       .eq('license_key', cleanKey)
-      .single();
+      .maybeSingle();
 
     if (licErr || !license) {
-      return res.status(404).json({ valid: false, error: 'Invalid license key' });
+      return res.status(404).json({
+        valid: false,
+        error: 'INVALID_KEY',
+        message: 'Invalid license key. Please check your key and try again.',
+      });
     }
 
-    // 2. Status check
-    if (license.status !== 'active') {
+    // 2. Status checks
+    if (license.status === 'revoked') {
       return res.status(403).json({
         valid: false,
-        error: `License is ${license.status}`,
-        status: license.status,
+        error: 'LICENSE_REVOKED',
+        message: 'This license has been revoked.',
+      });
+    }
+
+    if (license.status === 'suspended') {
+      return res.status(403).json({
+        valid: false,
+        error: 'LICENSE_SUSPENDED',
+        message: 'This license is currently suspended.',
       });
     }
 
     // 3. Expiration check
-    if (license.expires_at && new Date(license.expires_at) < new Date()) {
+    if (license.status === 'expired' || (license.expires_at && new Date(license.expires_at) < new Date())) {
       await supabaseAdmin
         .from('licenses')
         .update({ status: 'expired' })
@@ -773,7 +890,8 @@ router.post('/licenses/validate', async (req, res) => {
 
       return res.status(403).json({
         valid: false,
-        error: 'License has expired',
+        error: 'LICENSE_EXPIRED',
+        message: 'Your license has expired.',
         expired_at: license.expires_at,
       });
     }
@@ -783,17 +901,33 @@ router.post('/licenses/validate', async (req, res) => {
     if (client_type === 'java' && product.platform === 'native') {
       return res.status(403).json({
         valid: false,
-        error: 'This license is for the C++ Client only, not Java Fabric',
+        error: 'PRODUCT_MISMATCH',
+        message: 'This license is for the C++ Client only, not Java Fabric',
       });
     }
     if (client_type === 'cpp' && product.platform === 'fabric') {
       return res.status(403).json({
         valid: false,
-        error: 'This license is for the Java Client only, not C++ Native',
+        error: 'PRODUCT_MISMATCH',
+        message: 'This license is for the Java Client only, not C++ Native',
       });
     }
 
-    // 5. Device check & registration
+    // 5. First activation transition from UNUSED to ACTIVE
+    if (license.metadata?.key_state === 'UNUSED' || !license.metadata?.first_activated_at) {
+      await supabaseAdmin
+        .from('licenses')
+        .update({
+          metadata: {
+            ...license.metadata,
+            key_state: 'ACTIVE',
+            first_activated_at: new Date().toISOString(),
+          },
+        })
+        .eq('id', license.id);
+    }
+
+    // 6. Device check & registration
     const { data: existingDevice } = await supabaseAdmin
       .from('devices')
       .select('*')
@@ -1189,6 +1323,19 @@ router.get('/downloads/file/:token', async (req, res) => {
       await supabaseAdmin.rpc('increment_download_count', { release_id: tokenRecord.release_id }).catch(() => {});
     }
 
+    // Check local executable path
+    const candidatePaths = [
+      'c:\\Users\\devim\\Downloads\\syndicate injectable\\release\\SyndicateLoader.exe',
+      path.resolve(process.cwd(), 'public', 'downloads', 'SyndicateLoader.exe'),
+      path.resolve(process.cwd(), 'dist', 'SyndicateLoader.exe'),
+    ];
+
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        return res.download(p, 'SyndicateLoader.exe');
+      }
+    }
+
     // Redirect to secure signed Supabase storage URL or serve file
     const storagePath = tokenRecord.client_releases?.storage_path;
     if (storagePath) {
@@ -1202,6 +1349,8 @@ router.get('/downloads/file/:token', async (req, res) => {
     }
 
     // Fallback release file placeholder
+    res.setHeader('Content-Disposition', 'attachment; filename="SyndicateLoader.exe"');
+    res.setHeader('Content-Type', 'application/octet-stream');
     return res.send(`5.55 Client Binary Package (${tokenRecord.client_releases?.version || '1.2.0'}). Authenticated download verified.`);
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -1279,10 +1428,10 @@ router.post('/webhooks/sellauth', async (req, res) => {
         userId = profile?.id || null;
       }
 
-      // Generate a new 5.55 license key
-      const newLicenseKey = generateLicenseKey();
+      // Generate a new 5.55 license key (555C-XXXX-XXXX-XXXX for C++, 555J-XXXX-XXXX-XXXX for Java)
+      const newLicenseKey = generateLicenseKey(targetSlug);
 
-      // Create license in database
+      // Create license in database with initial UNUSED state
       const { data: createdLic, error: licErr } = await supabaseAdmin
         .from('licenses')
         .insert({
@@ -1293,6 +1442,7 @@ router.post('/webhooks/sellauth', async (req, res) => {
           license_type: 'lifetime',
           max_devices: 1,
           metadata: {
+            key_state: 'UNUSED',
             sellauth_invoice_id: eventIdentifier,
             buyer_email: buyerEmail,
             purchased_at: new Date().toISOString(),
@@ -1428,20 +1578,109 @@ router.post('/admin/users/:id/ban', requireAdmin, async (req, res) => {
   }
 });
 
-// POST /api/admin/licenses/create
+// GET /api/admin/licenses
+router.get('/admin/licenses', requireAdmin, async (req, res) => {
+  const { q, status, product } = req.query;
+
+  try {
+    let query = supabaseAdmin
+      .from('licenses')
+      .select(`
+        id,
+        license_key,
+        status,
+        license_type,
+        expires_at,
+        max_devices,
+        metadata,
+        created_at,
+        updated_at,
+        products ( id, slug, name, platform ),
+        profiles ( id, email, username, display_name ),
+        devices ( id, hwid, device_name, client_type, last_seen_at )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (status && status !== 'ALL') {
+      if (status === 'UNUSED') {
+        // Unused keys have status active but no devices or metadata key_state == UNUSED
+        query = query.eq('status', 'active');
+      } else {
+        query = query.eq('status', status.toLowerCase());
+      }
+    }
+
+    if (product && product !== 'ALL') {
+      query = query.eq('products.slug', product);
+    }
+
+    const { data: rawLicenses, error } = await query;
+    if (error) throw error;
+
+    let licenses = (rawLicenses || []).map(l => {
+      const now = new Date();
+      const isExpired = l.status === 'expired' || (l.expires_at && new Date(l.expires_at) < now);
+      let keyState = 'ACTIVE';
+
+      if (l.status === 'revoked') {
+        keyState = 'REVOKED';
+      } else if (l.status === 'suspended') {
+        keyState = 'SUSPENDED';
+      } else if (isExpired) {
+        keyState = 'EXPIRED';
+      } else if (l.metadata?.key_state === 'UNUSED' || !l.devices || l.devices.length === 0) {
+        keyState = 'UNUSED';
+      }
+
+      return {
+        ...l,
+        key_state: keyState,
+        device_count: l.devices ? l.devices.length : 0,
+        customer_email: l.profiles?.email || l.metadata?.buyer_email || 'Unassigned',
+      };
+    });
+
+    if (q) {
+      const term = q.trim().toLowerCase();
+      licenses = licenses.filter(l =>
+        l.license_key.toLowerCase().includes(term) ||
+        l.customer_email.toLowerCase().includes(term) ||
+        (l.metadata?.sellauth_invoice_id && String(l.metadata.sellauth_invoice_id).toLowerCase().includes(term))
+      );
+    }
+
+    if (status === 'UNUSED') {
+      licenses = licenses.filter(l => l.key_state === 'UNUSED');
+    }
+
+    return res.json({ success: true, licenses });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/licenses/create (Single key creation)
 router.post('/admin/licenses/create', requireAdmin, async (req, res) => {
-  const { product_slug, user_id, max_devices = 1, license_type = 'lifetime' } = req.body;
+  const {
+    product_slug = 'cpp-client',
+    user_id,
+    customer_email,
+    max_devices = 1,
+    license_type = 'lifetime',
+    expires_at,
+  } = req.body;
 
   try {
     const { data: product } = await supabaseAdmin
       .from('products')
-      .select('id, slug')
+      .select('id, slug, name')
       .eq('slug', product_slug)
       .single();
 
     if (!product) return res.status(404).json({ error: 'Product not found' });
 
-    const key = generateLicenseKey();
+    // Generate formatted key: 555C-XXXX-XXXX-XXXX or 555J-XXXX-XXXX-XXXX
+    const key = generateLicenseKey(product_slug);
     const { data: license, error } = await supabaseAdmin
       .from('licenses')
       .insert({
@@ -1450,7 +1689,13 @@ router.post('/admin/licenses/create', requireAdmin, async (req, res) => {
         license_key: key,
         status: 'active',
         license_type,
-        max_devices,
+        max_devices: parseInt(max_devices, 10) || 1,
+        expires_at: expires_at || null,
+        metadata: {
+          key_state: 'UNUSED',
+          buyer_email: customer_email || null,
+          created_by: req.user.email,
+        },
       })
       .select()
       .single();
@@ -1462,10 +1707,142 @@ router.post('/admin/licenses/create', requireAdmin, async (req, res) => {
       action: 'ADMIN_CREATE_LICENSE',
       entity_type: 'license',
       entity_id: license.id,
-      metadata: { key, product_slug },
+      metadata: { key, product_slug, customer_email },
     });
 
     return res.json({ success: true, license });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/licenses/bulk (Bulk key generation up to 50 keys)
+router.post('/admin/licenses/bulk', requireAdmin, async (req, res) => {
+  const {
+    count = 5,
+    product_slug = 'cpp-client',
+    max_devices = 1,
+    license_type = 'lifetime',
+    expires_at,
+  } = req.body;
+
+  const numKeys = Math.min(Math.max(parseInt(count, 10) || 1, 1), 50);
+
+  try {
+    const { data: product } = await supabaseAdmin
+      .from('products')
+      .select('id, slug, name')
+      .eq('slug', product_slug)
+      .single();
+
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+
+    const rowsToInsert = [];
+    const generatedKeys = [];
+
+    for (let i = 0; i < numKeys; i++) {
+      const key = generateLicenseKey(product_slug);
+      generatedKeys.push(key);
+      rowsToInsert.push({
+        product_id: product.id,
+        license_key: key,
+        status: 'active',
+        license_type,
+        max_devices: parseInt(max_devices, 10) || 1,
+        expires_at: expires_at || null,
+        metadata: {
+          key_state: 'UNUSED',
+          bulk_batch: true,
+          created_by: req.user.email,
+        },
+      });
+    }
+
+    const { data: created, error } = await supabaseAdmin
+      .from('licenses')
+      .insert(rowsToInsert)
+      .select();
+
+    if (error) throw error;
+
+    await supabaseAdmin.from('audit_logs').insert({
+      user_id: req.user.id,
+      action: 'ADMIN_BULK_CREATE_LICENSES',
+      entity_type: 'license',
+      metadata: { count: numKeys, product_slug, keys: generatedKeys },
+    });
+
+    return res.json({
+      success: true,
+      count: numKeys,
+      keys: generatedKeys,
+      licenses: created,
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/licenses/action (Revoke, Suspend, Unsuspend, Reset Devices)
+router.post('/admin/licenses/action', requireAdmin, async (req, res) => {
+  const { license_id, action } = req.body;
+  if (!license_id || !action) {
+    return res.status(400).json({ error: 'license_id and action are required' });
+  }
+
+  try {
+    if (action === 'revoke') {
+      await supabaseAdmin.from('licenses').update({ status: 'revoked' }).eq('id', license_id);
+      await supabaseAdmin.from('devices').delete().eq('license_id', license_id);
+      await supabaseAdmin.from('audit_logs').insert({
+        user_id: req.user.id,
+        action: 'ADMIN_REVOKE_LICENSE',
+        entity_type: 'license',
+        entity_id: license_id,
+      });
+      return res.json({ success: true, message: 'License revoked and devices cleared.' });
+    }
+
+    if (action === 'suspend') {
+      await supabaseAdmin.from('licenses').update({ status: 'suspended' }).eq('id', license_id);
+      await supabaseAdmin.from('audit_logs').insert({
+        user_id: req.user.id,
+        action: 'ADMIN_SUSPEND_LICENSE',
+        entity_type: 'license',
+        entity_id: license_id,
+      });
+      return res.json({ success: true, message: 'License suspended.' });
+    }
+
+    if (action === 'unsuspend' || action === 'reactivate') {
+      await supabaseAdmin.from('licenses').update({ status: 'active' }).eq('id', license_id);
+      await supabaseAdmin.from('audit_logs').insert({
+        user_id: req.user.id,
+        action: 'ADMIN_REACTIVATE_LICENSE',
+        entity_type: 'license',
+        entity_id: license_id,
+      });
+      return res.json({ success: true, message: 'License reactivated.' });
+    }
+
+    if (action === 'reset-devices') {
+      const { data: deletedDevices } = await supabaseAdmin
+        .from('devices')
+        .delete()
+        .eq('license_id', license_id)
+        .select();
+
+      await supabaseAdmin.from('audit_logs').insert({
+        user_id: req.user.id,
+        action: 'ADMIN_RESET_DEVICES',
+        entity_type: 'license',
+        entity_id: license_id,
+        metadata: { deletedCount: deletedDevices?.length || 0 },
+      });
+      return res.json({ success: true, message: `Device activations reset (${deletedDevices?.length || 0} removed).` });
+    }
+
+    return res.status(400).json({ error: `Unknown action '${action}'` });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
