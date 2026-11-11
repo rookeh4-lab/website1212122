@@ -45,6 +45,14 @@ export default function Admin() {
   const [relChangelog, setRelChangelog] = useState('');
   const [relUploading, setRelUploading] = useState(false);
 
+  // HWID Reset Keys state
+  const [resetKeys, setResetKeys] = useState([]);
+  const [loadingResetKeys, setLoadingResetKeys] = useState(false);
+  const [genResetCount, setGenResetCount] = useState(1);
+  const [genResetNote, setGenResetNote] = useState('');
+  const [generatingResetKey, setGeneratingResetKey] = useState(false);
+  const [copiedResetKey, setCopiedResetKey] = useState('');
+
   useEffect(() => {
     let active = true;
     const checkAdmin = async () => {
@@ -55,7 +63,8 @@ export default function Admin() {
           navigate('/login');
           return;
         }
-        if (profileData.role !== 'admin' && profileData.user.role !== 'admin') {
+        const isOwner = profileData.user?.email === 'rookeh4@gmail.com';
+        if (profileData.role !== 'admin' && profileData.user.role !== 'admin' && !isOwner) {
           setIsAdmin(false);
           setLoading(false);
           return;
@@ -66,6 +75,7 @@ export default function Admin() {
         await Promise.all([
           loadAdminData(curToken),
           loadLicenses(curToken),
+          loadResetKeys(curToken),
         ]);
       } catch (err) {
         console.error('Admin check failed:', err);
@@ -88,6 +98,74 @@ export default function Admin() {
       if (aData.logs) setAuditLogs(aData.logs);
     } catch (err) {
       console.error('Failed to load admin data:', err);
+    }
+  };
+
+  const loadResetKeys = async (t) => {
+    setLoadingResetKeys(true);
+    try {
+      const res = await fetch(`${API_BASE}/admin/hwid-reset-keys`, {
+        headers: { Authorization: `Bearer ${t || token}` },
+      });
+      const data = await res.json();
+      if (data.success && data.keys) {
+        setResetKeys(data.keys);
+      }
+    } catch (err) {
+      console.error('Failed to load reset keys:', err);
+    } finally {
+      setLoadingResetKeys(false);
+    }
+  };
+
+  const handleGenerateResetKeys = async (e) => {
+    e?.preventDefault();
+    setGeneratingResetKey(true);
+    setStatusMsg({ text: '', type: '' });
+    try {
+      const res = await fetch(`${API_BASE}/admin/hwid-reset-keys/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ count: genResetCount, note: genResetNote }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setStatusMsg({ text: `Successfully generated ${data.count} HWID Reset Key(s)!`, type: 'success' });
+        loadResetKeys(token);
+        setGenResetNote('');
+      } else {
+        setStatusMsg({ text: data.error || 'Failed to generate reset keys', type: 'danger' });
+      }
+    } catch {
+      setStatusMsg({ text: 'Error generating reset keys', type: 'danger' });
+    } finally {
+      setGeneratingResetKey(false);
+    }
+  };
+
+  const handleRevokeResetKey = async (id, key) => {
+    if (!window.confirm(`Are you sure you want to revoke reset key ${key}?`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/admin/hwid-reset-keys/revoke`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ id, resetKey: key }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setStatusMsg({ text: `Revoked reset key ${key}`, type: 'success' });
+        loadResetKeys(token);
+      } else {
+        setStatusMsg({ text: data.error || 'Failed to revoke key', type: 'danger' });
+      }
+    } catch {
+      setStatusMsg({ text: 'Error revoking key', type: 'danger' });
     }
   };
 
@@ -314,7 +392,7 @@ export default function Admin() {
           </p>
         </div>
         <button
-          onClick={() => { loadAdminData(token); loadLicenses(token); }}
+          onClick={() => { loadAdminData(token); loadLicenses(token); loadResetKeys(token); }}
           className="btn btn-secondary btn-sm"
           style={{ padding: '8px 16px' }}
         >
@@ -351,6 +429,7 @@ export default function Admin() {
       >
         {[
           { id: 'license-mgmt', label: `License Management (${licenses.length})` },
+          { id: 'hwid-keys', label: `HWID Reset Keys (${resetKeys.length})` },
           { id: 'users', label: `Users (${users.length})` },
           { id: 'releases', label: 'Releases & Signing' },
           { id: 'audit', label: `Audit Trail (${auditLogs.length})` },
@@ -1004,6 +1083,170 @@ export default function Admin() {
               {relUploading ? 'Signing & Publishing…' : 'Sign & Publish Release →'}
             </button>
           </form>
+        </div>
+      )}
+
+      {/* HWID RESET KEYS MANAGEMENT TAB */}
+      {activeTab === 'hwid-keys' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {/* Generator Card */}
+          <div className="card" style={{ padding: '24px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+            <h2 style={{ fontSize: '18px', color: '#fff', marginBottom: '8px' }}>
+              🔑 Generate Single-Use HWID Reset Keys
+            </h2>
+            <p style={{ fontSize: '13.5px', color: 'var(--text-muted)', marginBottom: '20px', lineHeight: 1.5 }}>
+              Issue single-use HWID reset keys for users requesting a PC transfer. When the user enters this key in their dashboard, their hardware unbinds instantly and allows activation on a new machine.
+            </p>
+
+            <form onSubmit={handleGenerateResetKeys} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', alignItems: 'flex-end' }}>
+              <div>
+                <label className="form-label" style={{ fontSize: '12px', fontWeight: 600 }}>Quantity</label>
+                <select
+                  value={genResetCount}
+                  onChange={(e) => setGenResetCount(parseInt(e.target.value, 10))}
+                  className="form-control"
+                  style={{ padding: '9px 12px', fontSize: '13px' }}
+                >
+                  <option value={1}>1 Key</option>
+                  <option value={3}>3 Keys</option>
+                  <option value={5}>5 Keys</option>
+                  <option value={10}>10 Keys</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="form-label" style={{ fontSize: '12px', fontWeight: 600 }}>Internal Note (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Discord Ticket #1042 / Staff issue"
+                  value={genResetNote}
+                  onChange={(e) => setGenResetNote(e.target.value)}
+                  className="form-control"
+                  style={{ padding: '9px 12px', fontSize: '13px' }}
+                />
+              </div>
+
+              <div>
+                <button
+                  type="submit"
+                  disabled={generatingResetKey}
+                  className="btn btn-primary"
+                  style={{ padding: '10px 20px', fontWeight: 700, width: '100%' }}
+                >
+                  {generatingResetKey ? 'Generating...' : '+ Generate Reset Key(s)'}
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Reset Keys Table Card */}
+          <div className="card" style={{ padding: '24px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+              <h2 style={{ fontSize: '18px', color: '#fff', margin: 0 }}>
+                Issued Reset Keys Database ({resetKeys.length})
+              </h2>
+              <button
+                onClick={() => loadResetKeys(token)}
+                className="btn btn-secondary btn-sm"
+              >
+                🔄 Refresh Keys
+              </button>
+            </div>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12.5px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-dim)' }}>
+                    <th style={{ padding: '10px 12px' }}>Reset Key</th>
+                    <th style={{ padding: '10px 12px' }}>Status</th>
+                    <th style={{ padding: '10px 12px' }}>Created Date</th>
+                    <th style={{ padding: '10px 12px' }}>Created By</th>
+                    <th style={{ padding: '10px 12px' }}>Redeemed By</th>
+                    <th style={{ padding: '10px 12px' }}>Redeemed At</th>
+                    <th style={{ padding: '10px 12px' }}>Note</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loadingResetKeys ? (
+                    <tr>
+                      <td colSpan={8} style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                        Loading issued reset keys...
+                      </td>
+                    </tr>
+                  ) : resetKeys.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                        No HWID reset keys created yet. Generate one above to issue to a user.
+                      </td>
+                    </tr>
+                  ) : (
+                    resetKeys.map((k) => (
+                      <tr key={k.id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                        <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontWeight: 700, color: '#fff' }}>
+                          <span style={{ background: 'rgba(255,255,255,0.06)', padding: '4px 8px', borderRadius: '6px' }}>
+                            {k.reset_key}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 12px' }}>
+                          <span
+                            className="badge"
+                            style={{
+                              fontSize: '11px',
+                              background: k.status === 'active' ? 'rgba(34, 197, 94, 0.15)' : (k.status === 'used' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(239, 68, 68, 0.15)'),
+                              color: k.status === 'active' ? '#4ade80' : (k.status === 'used' ? '#38bdf8' : '#f87171'),
+                              border: `1px solid ${k.status === 'active' ? 'rgba(34, 197, 94, 0.3)' : (k.status === 'used' ? 'rgba(56, 189, 248, 0.3)' : 'rgba(239, 68, 68, 0.3)')}`,
+                            }}
+                          >
+                            {k.status.toUpperCase()}
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>
+                          {new Date(k.created_at).toLocaleDateString()}
+                        </td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>
+                          {k.created_by}
+                        </td>
+                        <td style={{ padding: '10px 12px', color: '#cbd5e1' }}>
+                          {k.used_by_email || '—'}
+                        </td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-dim)' }}>
+                          {k.used_at ? new Date(k.used_at).toLocaleDateString() : '—'}
+                        </td>
+                        <td style={{ padding: '10px 12px', color: 'var(--text-muted)' }}>
+                          {k.note || '—'}
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                          <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                            <button
+                              onClick={() => {
+                                copyText(k.reset_key);
+                                setCopiedResetKey(k.reset_key);
+                                setTimeout(() => setCopiedResetKey(''), 1500);
+                              }}
+                              className="btn btn-secondary btn-sm"
+                              style={{ padding: '4px 10px', fontSize: '11px' }}
+                            >
+                              {copiedResetKey === k.reset_key ? '✓ Copied' : 'Copy'}
+                            </button>
+                            {k.status === 'active' && (
+                              <button
+                                onClick={() => handleRevokeResetKey(k.id, k.reset_key)}
+                                className="btn btn-sm"
+                                style={{ padding: '4px 10px', fontSize: '11px', background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+                              >
+                                Revoke
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 

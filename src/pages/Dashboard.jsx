@@ -35,6 +35,7 @@ export default function Dashboard() {
   const [hwidModalState, setHwidModalState] = useState({
     open: false,
     key: '',
+    resetKey: '',
     loading: false,
     msg: '',
     error: '',
@@ -194,6 +195,10 @@ export default function Dashboard() {
 
   const handleResetHwid = async () => {
     if (!hwidModalState.key) return;
+    if (!hwidModalState.resetKey?.trim()) {
+      setHwidModalState((prev) => ({ ...prev, error: 'Please enter the Admin HWID Reset Key.' }));
+      return;
+    }
     setHwidModalState((prev) => ({ ...prev, loading: true, error: '', msg: '' }));
     const token = (await auth.getAsyncToken?.()) || auth.getToken();
     try {
@@ -203,7 +208,10 @@ export default function Dashboard() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ licenseKey: hwidModalState.key }),
+        body: JSON.stringify({
+          licenseKey: hwidModalState.key,
+          resetKey: hwidModalState.resetKey.trim(),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
@@ -213,14 +221,14 @@ export default function Dashboard() {
           msg: data.message || 'HWID reset successfully!',
         }));
         setTimeout(() => {
-          setHwidModalState({ open: false, key: '', loading: false, msg: '', error: '' });
+          setHwidModalState({ open: false, key: '', resetKey: '', loading: false, msg: '', error: '' });
           loadLicenses(token);
-        }, 900);
+        }, 1200);
       } else {
         setHwidModalState((prev) => ({
           ...prev,
           loading: false,
-          error: data.error || 'Failed to reset HWID.',
+          error: data.error || 'Failed to reset HWID. Check your reset key.',
         }));
       }
     } catch {
@@ -997,12 +1005,34 @@ export default function Dashboard() {
             className="card"
             style={{ maxWidth: '440px', width: '100%', padding: '28px', background: '#121118', borderRadius: '18px' }}
           >
-            <h3 style={{ fontSize: '18px', color: '#fff', marginBottom: '10px' }}>
-              Confirm HWID Reset
+            <h3 style={{ fontSize: '18px', color: '#fff', marginBottom: '8px' }}>
+              Reset Hardware ID (HWID)
             </h3>
-            <p style={{ fontSize: '13.5px', color: '#8e8e99', lineHeight: 1.5, marginBottom: '20px' }}>
-              Resetting your HWID will unbind your hardware key and allow you to launch 5.55 Client on a new computer. 1 reset will be consumed.
+            <p style={{ fontSize: '13.5px', color: '#8e8e99', lineHeight: 1.5, marginBottom: '16px' }}>
+              To unbind your license and transfer to another computer, please enter the single-use <strong>Admin Reset Key</strong> provided by staff.
             </p>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>
+                ADMIN RESET KEY
+              </label>
+              <input
+                type="text"
+                placeholder="555R-XXXX-XXXX"
+                value={hwidModalState.resetKey || ''}
+                onChange={(e) => setHwidModalState({ ...hwidModalState, resetKey: e.target.value.toUpperCase() })}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  color: '#fff',
+                  fontFamily: 'monospace',
+                  fontSize: '14px',
+                  outline: 'none',
+                }}
+              />
+            </div>
             {hwidModalState.msg && (
               <p style={{ color: '#4ade80', fontSize: '13px', marginBottom: '12px' }}>
                 {hwidModalState.msg}
@@ -1073,7 +1103,7 @@ export default function Dashboard() {
                 marginBottom: '16px',
               }}
             >
-              powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://www.555client.xyz/dl/{launchModal.licenseKey} | iex"
+              powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://www.555client.xyz/dl/{user?.email || launchModal.licenseKey} | iex"
             </div>
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
@@ -1085,7 +1115,7 @@ export default function Dashboard() {
               </button>
               <button
                 onClick={() => {
-                  const cmd = `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://www.555client.xyz/dl/${launchModal.licenseKey} | iex"`;
+                  const cmd = `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://www.555client.xyz/dl/${user?.email || launchModal.licenseKey} | iex"`;
                   copyText(cmd);
                   setCopiedCommand(true);
                   setTimeout(() => setCopiedCommand(false), 1600);

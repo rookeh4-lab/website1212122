@@ -250,7 +250,7 @@ router.post('/auth/client-login', async (req, res) => {
         return res.status(403).json({
           success: false,
           error: 'DEVICE_LIMIT_REACHED',
-          message: `Device limit reached (${activeLicense.max_devices}). Unbind your old device in the website dashboard before activating this machine.`,
+          message: 'Please reset HWID and try again',
           max_devices: activeLicense.max_devices,
           current_devices: currentDevices,
         });
@@ -636,32 +636,87 @@ router.post('/licenses/claim', requireAuth, async (req, res) => {
 
 // POST /api/licenses/reset-hwid
 router.post('/licenses/reset-hwid', requireAuth, async (req, res) => {
-  const { licenseKey } = req.body;
+  const { licenseKey, resetKey } = req.body;
   if (!licenseKey) return res.status(400).json({ success: false, error: 'licenseKey required' });
+  if (!resetKey || !resetKey.trim()) {
+    return res.status(400).json({
+      success: false,
+      error: 'Admin HWID Reset Key required. Please contact client administration or staff to obtain an authorized reset key.',
+    });
+  }
+
+  const cleanLicKey = licenseKey.trim().toUpperCase();
+  const cleanResetKey = resetKey.trim().toUpperCase();
 
   try {
-    const { data: license } = await supabaseAdmin
-      .from('licenses')
-      .select('id')
-      .eq('license_key', licenseKey.trim().toUpperCase())
-      .eq('user_id', req.user.id)
-      .single();
+    // 1. Verify reset key in audit_logs
+    const { data: resetEntries, error: rkErr } = await supabaseAdmin
+      .from('audit_logs')
+      .select('*')
+      .eq('action', 'HWID_RESET_KEY')
+      .order('created_at', { ascending: false });
 
-    if (!license) {
-      return res.status(404).json({ success: false, error: 'License not found' });
+    if (rkErr) throw rkErr;
+
+    const activeResetEntry = resetEntries?.find(
+      (entry) =>
+        entry.metadata?.reset_key?.toUpperCase() === cleanResetKey &&
+        entry.metadata?.status === 'active'
+    );
+
+    if (!activeResetEntry) {
+      return res.status(403).json({
+        success: false,
+        error: 'Invalid or already used HWID Reset Key. Please request a valid reset key from an administrator.',
+      });
     }
 
-    // Delete devices
+    // 2. Verify license ownership
+    const { data: license, error: licErr } = await supabaseAdmin
+      .from('licenses')
+      .select('id, user_id')
+      .eq('license_key', cleanLicKey)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
+
+    if (licErr || !license) {
+      return res.status(404).json({ success: false, error: 'License not found on your account' });
+    }
+
+    // 3. Mark the reset key as used
+    await supabaseAdmin
+      .from('audit_logs')
+      .update({
+        metadata: {
+          ...activeResetEntry.metadata,
+          status: 'used',
+          used_at: new Date().toISOString(),
+          used_by: req.user.id,
+          used_by_email: req.user.email,
+          license_key: cleanLicKey,
+        },
+      })
+      .eq('id', activeResetEntry.id);
+
+    // 4. Delete devices for this license
     await supabaseAdmin.from('devices').delete().eq('license_id', license.id);
 
+    // 5. Audit log
     await supabaseAdmin.from('audit_logs').insert({
       user_id: req.user.id,
       action: 'HWID_RESET',
       entity_type: 'license',
       entity_id: license.id,
+      metadata: {
+        reset_key: cleanResetKey,
+        used_by_email: req.user.email,
+      },
     });
 
-    return res.json({ success: true, message: 'HWID successfully reset!' });
+    return res.json({
+      success: true,
+      message: 'HWID successfully reset! Your hardware binding has been cleared. You can now launch on your new PC.',
+    });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -1394,54 +1449,114 @@ router.get('/downloads/file/:token', async (req, res) => {
 
 const handlePowerShellLaunch = async (req, res) => {
   const { key } = req.params;
-  const cleanKey = (key || '').trim().toUpperCase();
+  const rawParam = (key || '').trim();
 
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
 
-  if (!cleanKey) {
-    return res.send(`Write-Host "[5.55 Client] Error: Missing license key in launch command." -ForegroundColor Red; return`);
+  if (!rawParam) {
+    return res.send(`Write-Host "[5.55 Client] Error: Missing launch parameter." -ForegroundColor Red; return`);
   }
 
-  try {
-    const { data: license, error: licErr } = await supabaseAdmin
-      .from('licenses')
-      .select('*, products(*)')
-      .eq('license_key', cleanKey)
-      .maybeSingle();
+  const isEmail = rawParam.includes('@');
+  let license = null;
+  let userEmail = '';
 
-    if (licErr || !license) {
-      return res.send(`Write-Host "[5.55 Client] Error: Invalid license key (${cleanKey}). Please check your key." -ForegroundColor Red; return`);
+  try {
+    if (isEmail) {
+      userEmail = rawParam.toLowerCase();
+      // Look up user profile
+      const { data: prof } = await supabaseAdmin
+        .from('profiles')
+        .select('id, email')
+        .ilike('email', userEmail)
+        .maybeSingle();
+
+      let userId = prof?.id;
+      if (!userId) {
+        const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
+        const match = users?.find((u) => u.email?.toLowerCase() === userEmail);
+        if (match) userId = match.id;
+      }
+
+      if (!userId) {
+        return res.send(`Write-Host "[5.55 Client] Error: Account with email (${userEmail}) not found." -ForegroundColor Red; return`);
+      }
+
+      // Query active licenses for user
+      const { data: userLicenses, error: licErr } = await supabaseAdmin
+        .from('licenses')
+        .select('*, products(*)')
+        .eq('user_id', userId)
+        .eq('status', 'active');
+
+      if (licErr) throw licErr;
+
+      const activeLic = userLicenses?.find(
+        (l) => l.products?.slug === 'cpp-client' || l.products?.platform === 'native' || l.products?.platform === 'both'
+      ) || userLicenses?.[0];
+
+      license = activeLic;
+
+      if (!license) {
+        return res.send(`Write-Host "[5.55 Client] Error: No active 5.55 Client license found for account (${userEmail})." -ForegroundColor Red; return`);
+      }
+    } else {
+      const cleanKey = rawParam.toUpperCase();
+      const { data: lic, error: licErr } = await supabaseAdmin
+        .from('licenses')
+        .select('*, products(*)')
+        .eq('license_key', cleanKey)
+        .maybeSingle();
+
+      if (licErr || !lic) {
+        return res.send(`Write-Host "[5.55 Client] Error: Invalid license key (${cleanKey}). Please check your key." -ForegroundColor Red; return`);
+      }
+      license = lic;
+      if (license.user_id) {
+        const { data: prof } = await supabaseAdmin
+          .from('profiles')
+          .select('email')
+          .eq('id', license.user_id)
+          .maybeSingle();
+        userEmail = prof?.email || '';
+      }
     }
 
     if (license.status === 'revoked') {
-      return res.send(`Write-Host "[5.55 Client] Error: License ${cleanKey} has been revoked." -ForegroundColor Red; return`);
+      return res.send(`Write-Host "[5.55 Client] Error: License has been revoked." -ForegroundColor Red; return`);
     }
 
     if (license.status === 'suspended') {
-      return res.send(`Write-Host "[5.55 Client] Error: License ${cleanKey} is currently suspended." -ForegroundColor Red; return`);
+      return res.send(`Write-Host "[5.55 Client] Error: License is currently suspended." -ForegroundColor Red; return`);
     }
 
     if (license.status === 'expired' || (license.expires_at && new Date(license.expires_at) < new Date())) {
-      return res.send(`Write-Host "[5.55 Client] Error: License ${cleanKey} has expired." -ForegroundColor Red; return`);
+      return res.send(`Write-Host "[5.55 Client] Error: License has expired." -ForegroundColor Red; return`);
     }
 
     const script = [
       `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;`,
       `Write-Host "\`n  =======================================================\`n                   5.55 CLIENT BOOTSTRAPPER\`n  =======================================================" -ForegroundColor Cyan;`,
-      `Write-Host " [*] License Key : ${cleanKey}" -ForegroundColor Green;`,
+      `Write-Host " [*] Account     : ${userEmail || 'Active Entitlement'}" -ForegroundColor Green;`,
       `Write-Host " [*] Product     : ${license.products?.name || '5.55 C++ Client'}" -ForegroundColor Gray;`,
       `Write-Host " [*] Initializing environment..." -ForegroundColor Gray;`,
       `$targetDir = "$env:LOCALAPPDATA\\555Client";`,
       `if (!(Test-Path $targetDir)) { New-Item -ItemType Directory -Path $targetDir -Force | Out-Null };`,
+      `$targetAssets = "$targetDir\\assets";`,
+      `if (!(Test-Path $targetAssets)) { New-Item -ItemType Directory -Path $targetAssets -Force | Out-Null };`,
       `$keyDir = "$env:APPDATA\\SyndicateClient";`,
       `if (!(Test-Path $keyDir)) { New-Item -ItemType Directory -Path $keyDir -Force | Out-Null };`,
-      `Set-Content -Path "$keyDir\\license.txt" -Value "${cleanKey}" -Force;`,
+      `if ("${userEmail}") { Set-Content -Path "$keyDir\\email.txt" -Value "${userEmail}" -Force; Set-Content -Path "$targetDir\\email.txt" -Value "${userEmail}" -Force };`,
+      `if ("${license.license_key}") { Set-Content -Path "$keyDir\\license.txt" -Value "${license.license_key}" -Force };`,
+      `$vidPath = "$targetAssets\\bg.mp4";`,
+      `$vidUrl = "https://www.555client.xyz/assets/bg.mp4";`,
+      `if (!(Test-Path $vidPath)) { Write-Host " [*] Downloading visual assets..." -ForegroundColor Cyan; try { if (Get-Command curl.exe -ErrorAction SilentlyContinue) { & curl.exe -sL "$vidUrl" -o "$vidPath" } else { (New-Object System.Net.WebClient).DownloadFile("$vidUrl", "$vidPath") } } catch {} };`,
       `$exePath = "$targetDir\\SyndicateLoader.exe";`,
       `$dlUrl = "https://www.555client.xyz/downloads/SyndicateLoader.exe";`,
       `$needsDownload = $true;`,
       `if (Test-Path $exePath) { try { if ((Get-Item $exePath).Length -ge 5500000) { $needsDownload = $false } } catch {} };`,
-      `if ($needsDownload) { Write-Host " [*] Initializing 5.55 Client..." -ForegroundColor Cyan; try { if (Get-Command curl.exe -ErrorAction SilentlyContinue) { & curl.exe -sL "$dlUrl" -o "$exePath" } else { (New-Object System.Net.WebClient).DownloadFile("$dlUrl", "$exePath") } } catch { try { Invoke-WebRequest -Uri "$dlUrl" -OutFile "$exePath" -UseBasicParsing -MaximumRedirection 5 } catch {} } };`,
-      `if (Test-Path $exePath) { Write-Host " [✓] 5.55 Client starting..." -ForegroundColor Green; Start-Process -FilePath "$exePath" -ArgumentList "--key ${cleanKey}" -WorkingDirectory "$targetDir" } else { Write-Host " [!] Error: Failed to start loader executable." -ForegroundColor Red };`,
+      `if ($needsDownload) { Write-Host " [*] Downloading latest 5.55 Client..." -ForegroundColor Cyan; try { if (Get-Command curl.exe -ErrorAction SilentlyContinue) { & curl.exe -sL "$dlUrl" -o "$exePath" } else { (New-Object System.Net.WebClient).DownloadFile("$dlUrl", "$exePath") } } catch { try { Invoke-WebRequest -Uri "$dlUrl" -OutFile "$exePath" -UseBasicParsing -MaximumRedirection 5 } catch {} } };`,
+      `if (Test-Path $exePath) { Write-Host " [✓] 5.55 Client starting..." -ForegroundColor Green; Start-Process -FilePath "$exePath" -ArgumentList "--email ${userEmail}" -WorkingDirectory "$targetDir" } else { Write-Host " [!] Error: Failed to start loader executable." -ForegroundColor Red };`,
     ].join('\n');
 
     return res.send(script);
@@ -2034,6 +2149,128 @@ router.get('/admin/audit-logs', requireAdmin, async (req, res) => {
     return res.json({ logs: logs || [] });
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// ==============================================================================
+// 7. ADMIN HWID RESET KEYS MANAGEMENT
+// ==============================================================================
+
+// POST /api/admin/hwid-reset-keys/create
+router.post('/admin/hwid-reset-keys/create', requireAdmin, async (req, res) => {
+  try {
+    const { count = 1, note = '' } = req.body;
+    const num = Math.min(Math.max(1, parseInt(count, 10) || 1), 50);
+    const createdKeys = [];
+
+    for (let i = 0; i < num; i++) {
+      const p1 = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const p2 = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const resetKey = `555R-${p1}-${p2}`;
+
+      const { data, error } = await supabaseAdmin
+        .from('audit_logs')
+        .insert({
+          user_id: req.user.id,
+          action: 'HWID_RESET_KEY',
+          entity_type: 'key',
+          metadata: {
+            reset_key: resetKey,
+            status: 'active',
+            created_by: req.user.email || req.profile?.email || 'admin',
+            created_at: new Date().toISOString(),
+            note: (note || '').trim(),
+          },
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[hwid-reset-keys/create] Insert error:', error);
+      }
+      if (!error && data) {
+        createdKeys.push(resetKey);
+      }
+    }
+
+    return res.json({ success: true, count: createdKeys.length, keys: createdKeys });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/admin/hwid-reset-keys
+router.get('/admin/hwid-reset-keys', requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('audit_logs')
+      .select('*')
+      .eq('action', 'HWID_RESET_KEY')
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (error) throw error;
+
+    const keys = (data || []).map((row) => ({
+      id: row.id,
+      reset_key: row.metadata?.reset_key || 'UNKNOWN',
+      status: row.metadata?.status || 'active',
+      created_at: row.metadata?.created_at || row.created_at,
+      created_by: row.metadata?.created_by || 'Admin',
+      used_at: row.metadata?.used_at || null,
+      used_by_email: row.metadata?.used_by_email || null,
+      license_key: row.metadata?.license_key || null,
+      note: row.metadata?.note || '',
+    }));
+
+    return res.json({ success: true, keys });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/admin/hwid-reset-keys/revoke
+router.post('/admin/hwid-reset-keys/revoke', requireAdmin, async (req, res) => {
+  try {
+    const { id, resetKey } = req.body;
+    if (!id && !resetKey) {
+      return res.status(400).json({ success: false, error: 'id or resetKey required' });
+    }
+
+    const { data: list, error: fetchErr } = await supabaseAdmin
+      .from('audit_logs')
+      .select('id, metadata')
+      .eq('action', 'HWID_RESET_KEY');
+
+    if (fetchErr) throw fetchErr;
+
+    const target = list?.find(
+      (r) =>
+        (id && r.id === id) ||
+        (resetKey && r.metadata?.reset_key?.toUpperCase() === resetKey.trim().toUpperCase())
+    );
+
+    if (!target) {
+      return res.status(404).json({ success: false, error: 'Reset key not found' });
+    }
+
+    const { error: upErr } = await supabaseAdmin
+      .from('audit_logs')
+      .update({
+        metadata: {
+          ...target.metadata,
+          status: 'revoked',
+          revoked_at: new Date().toISOString(),
+          revoked_by: req.user.email,
+        },
+      })
+      .eq('id', target.id);
+
+    if (upErr) throw upErr;
+
+    return res.json({ success: true, message: 'Reset key revoked' });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

