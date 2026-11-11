@@ -3,16 +3,26 @@ import cors from 'cors';
 import serverless from 'serverless-http';
 import apiRouter from '../../server/apiRouter.js';
 
+function unwrap(mod) {
+  let target = mod;
+  while (target && typeof target !== 'function' && target.default) {
+    target = target.default;
+  }
+  return target;
+}
+
 const app = express();
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 
-const resolvedRouter = (apiRouter && apiRouter.default) ? apiRouter.default : apiRouter;
+const router = unwrap(apiRouter);
+if (typeof router === 'function') {
+  app.use('/api', router);
+  app.use('/', router);
+} else {
+  console.error('[Netlify Function] Failed to resolve router function from apiRouter module');
+}
 
-// Mount the API router at both root (when rewritten) and /api
-app.use('/api', resolvedRouter);
-app.use('/', resolvedRouter);
-
-const serverlessWrapper = (serverless && serverless.default) ? serverless.default : serverless;
-export const handler = serverlessWrapper(app);
+const serverlessWrapper = unwrap(serverless);
+export const handler = typeof serverlessWrapper === 'function' ? serverlessWrapper(app) : (event, context, cb) => cb(new Error('serverless is not a function'));
