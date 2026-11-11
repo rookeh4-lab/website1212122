@@ -11,6 +11,9 @@ import {
 const router = express.Router();
 router.use(express.json());
 
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://thmpaozerfhoykqxwrlz.supabase.co';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_obBunwnFtclwda77bynVZw_1jsL_pnx';
+
 // ==============================================================================
 // 1. HEALTH & INTROSPECTION
 // ==============================================================================
@@ -108,17 +111,22 @@ router.post('/auth/client-login', async (req, res) => {
   const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
   try {
-    // 1. Authenticate with Supabase Auth
-    const { data: authData, error: authErr } = await supabaseAdmin.auth.signInWithPassword({
-      email: cleanEmail,
-      password,
+    // 1. Authenticate with Supabase Auth endpoint directly (preserves supabaseAdmin service-role session)
+    const authRes = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: {
+        'apikey': supabaseAnonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email: cleanEmail, password }),
     });
 
-    if (authErr || !authData?.user) {
+    const authData = await authRes.json();
+    if (!authRes.ok || !authData?.user) {
       return res.status(401).json({
         success: false,
         error: 'INVALID_CREDENTIALS',
-        message: 'Invalid email or password',
+        message: authData?.error_description || authData?.msg || 'Invalid email or password',
       });
     }
 
@@ -304,9 +312,9 @@ router.post('/auth/client-login', async (req, res) => {
     return res.json({
       success: true,
       session_token: sessionToken,
-      access_token: authData.session.access_token,
-      refresh_token: authData.session.refresh_token,
-      expires_in: authData.session.expires_in,
+      access_token: authData.access_token || authData.session?.access_token,
+      refresh_token: authData.refresh_token || authData.session?.refresh_token,
+      expires_in: authData.expires_in || authData.session?.expires_in || 3600,
       user: {
         id: user.id,
         email: user.email,
@@ -346,11 +354,17 @@ router.post('/auth/client-refresh', async (req, res) => {
   const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
   try {
-    const { data: refreshData, error: refreshErr } = await supabaseAdmin.auth.refreshSession({
-      refresh_token,
+    const refreshRes = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: {
+        'apikey': supabaseAnonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refresh_token }),
     });
 
-    if (refreshErr || !refreshData?.user) {
+    const refreshData = await refreshRes.json();
+    if (!refreshRes.ok || !refreshData?.user) {
       return res.status(401).json({ success: false, error: 'INVALID_REFRESH_TOKEN', message: 'Session expired, please log in again' });
     }
 
@@ -409,9 +423,9 @@ router.post('/auth/client-refresh', async (req, res) => {
     return res.json({
       success: true,
       session_token: sessionToken,
-      access_token: refreshData.session.access_token,
-      refresh_token: refreshData.session.refresh_token,
-      expires_in: refreshData.session.expires_in,
+      access_token: refreshData.access_token || refreshData.session?.access_token,
+      refresh_token: refreshData.refresh_token || refreshData.session?.refresh_token,
+      expires_in: refreshData.expires_in || refreshData.session?.expires_in || 3600,
       user: {
         id: user.id,
         email: user.email,
