@@ -79,6 +79,366 @@ router.post('/auth/verify', async (req, res) => {
   }
 });
 
+// ==============================================================================
+// 2B. C++ CLIENT UNIFIED LOGIN & REFRESH ENDPOINTS
+// ==============================================================================
+
+// POST /api/auth/client-login
+router.post('/auth/client-login', async (req, res) => {
+  const { email, password, hwid, device_name, client_type = 'cpp', mc_version = '1.21.11' } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({
+      success: false,
+      error: 'MISSING_CREDENTIALS',
+      message: 'Email and password are required',
+    });
+  }
+
+  if (!hwid) {
+    return res.status(400).json({
+      success: false,
+      error: 'MISSING_HWID',
+      message: 'Hardware ID (HWID) is required',
+    });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanHwid = hwid.trim();
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+  try {
+    // 1. Authenticate with Supabase Auth
+    const { data: authData, error: authErr } = await supabaseAdmin.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
+    });
+
+    if (authErr || !authData?.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'INVALID_CREDENTIALS',
+        message: 'Invalid email or password',
+      });
+    }
+
+    const user = authData.user;
+
+    // 2. Check ban status in profiles
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (profile?.banned_at) {
+      return res.status(403).json({
+        success: false,
+        error: 'ACCOUNT_BANNED',
+        message: `Account suspended: ${profile.ban_reason || 'Terms violation'}`,
+      });
+    }
+
+    // 3. Query all user licenses with product details
+    const { data: licenses, error: licErr } = await supabaseAdmin
+      .from('licenses')
+      .select('*, products(*)')
+      .eq('user_id', user.id);
+
+    if (licErr) throw licErr;
+
+    if (!licenses || licenses.length === 0) {
+      return res.status(403).json({
+        success: false,
+        error: 'NO_LICENSE',
+        message: 'No client license found on this account. Please purchase the 5.55 C++ Client first.',
+      });
+    }
+
+    // Separate C++ vs Java licenses
+    const cppLicenses = licenses.filter(
+      (l) => l.products?.slug === 'cpp-client' || l.products?.platform === 'native' || l.products?.platform === 'both'
+    );
+    const javaLicenses = licenses.filter(
+      (l) => l.products?.slug === 'java-client' || l.products?.platform === 'fabric'
+    );
+
+    if (cppLicenses.length === 0 && javaLicenses.length > 0) {
+      return res.status(403).json({
+        success: false,
+        error: 'PRODUCT_MISMATCH',
+        message: 'You own a Java Fabric client license, but do NOT have a C++ Client license. Each client requires its own entitlement.',
+      });
+    }
+
+    if (cppLicenses.length === 0) {
+      return res.status(403).json({
+        success: false,
+        error: 'NO_CPP_LICENSE',
+        message: 'No active C++ Client license found on this account.',
+      });
+    }
+
+    // Find active C++ license
+    const activeLicense = cppLicenses.find((l) => l.status === 'active');
+    if (!activeLicense) {
+      const revoked = cppLicenses.find((l) => l.status === 'revoked');
+      if (revoked) {
+        return res.status(403).json({
+          success: false,
+          error: 'LICENSE_REVOKED',
+          message: 'Your C++ client license has been revoked.',
+        });
+      }
+      return res.status(403).json({
+        success: false,
+        error: 'LICENSE_INACTIVE',
+        message: `Your C++ client license is ${cppLicenses[0].status}.`,
+      });
+    }
+
+    // Check expiration
+    if (activeLicense.expires_at && new Date(activeLicense.expires_at) < new Date()) {
+      await supabaseAdmin
+        .from('licenses')
+        .update({ status: 'expired' })
+        .eq('id', activeLicense.id);
+
+      return res.status(403).json({
+        success: false,
+        error: 'LICENSE_EXPIRED',
+        message: 'Your C++ client license has expired.',
+      });
+    }
+
+    // 4. Device check & registration
+    const { data: existingDevice } = await supabaseAdmin
+      .from('devices')
+      .select('*')
+      .eq('license_id', activeLicense.id)
+      .eq('hwid', cleanHwid)
+      .maybeSingle();
+
+    let deviceRecordId = null;
+    if (existingDevice) {
+      deviceRecordId = existingDevice.id;
+      await supabaseAdmin
+        .from('devices')
+        .update({
+          last_seen_at: new Date().toISOString(),
+          ip_address: clientIp,
+        })
+        .eq('id', existingDevice.id);
+    } else {
+      // Check device count limit
+      const { count: currentDevices } = await supabaseAdmin
+        .from('devices')
+        .select('*', { count: 'exact', head: true })
+        .eq('license_id', activeLicense.id);
+
+      if ((currentDevices || 0) >= (activeLicense.max_devices || 1)) {
+        return res.status(403).json({
+          success: false,
+          error: 'DEVICE_LIMIT_REACHED',
+          message: `Device limit reached (${activeLicense.max_devices}). Unbind your old device in the website dashboard before activating this machine.`,
+          max_devices: activeLicense.max_devices,
+          current_devices: currentDevices,
+        });
+      }
+
+      // Register new device
+      const { data: newDev, error: devErr } = await supabaseAdmin
+        .from('devices')
+        .insert({
+          license_id: activeLicense.id,
+          user_id: user.id,
+          hwid: cleanHwid,
+          client_type: 'cpp',
+          ip_address: clientIp,
+          device_name: device_name || `PC-${cleanHwid.substring(0, 8)}`,
+        })
+        .select()
+        .single();
+
+      if (devErr) throw devErr;
+      deviceRecordId = newDev.id;
+    }
+
+    // 5. Create session token
+    const sessionToken = generateToken(16);
+    const sessionExpiry = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+
+    await supabaseAdmin.from('sessions').insert({
+      user_id: user.id,
+      license_id: activeLicense.id,
+      device_id: deviceRecordId,
+      session_token: sessionToken,
+      client_type: 'cpp',
+      mc_version,
+      ip_address: clientIp,
+      expires_at: sessionExpiry,
+    });
+
+    // 6. Cryptographically sign grant payload with Ed25519
+    const timestamp = Date.now();
+    const grantPayload = JSON.stringify({
+      license_id: activeLicense.id,
+      user_id: user.id,
+      product: 'cpp-client',
+      hwid: cleanHwid,
+      timestamp,
+      expires_at: activeLicense.expires_at,
+    });
+    const signature = signEd25519(grantPayload);
+
+    // 7. Audit log
+    await supabaseAdmin.from('audit_logs').insert({
+      user_id: user.id,
+      action: 'CLIENT_LOGIN_SUCCESS',
+      entity_type: 'license',
+      entity_id: activeLicense.id,
+      ip_address: clientIp,
+      metadata: { hwid: cleanHwid, client_type: 'cpp', mc_version },
+    });
+
+    return res.json({
+      success: true,
+      session_token: sessionToken,
+      access_token: authData.session.access_token,
+      refresh_token: authData.session.refresh_token,
+      expires_in: authData.session.expires_in,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: profile?.username || user.email.split('@')[0],
+        displayName: profile?.display_name || user.email.split('@')[0],
+        role: profile?.role || 'user',
+      },
+      license: {
+        id: activeLicense.id,
+        key: activeLicense.license_key,
+        tier: activeLicense.license_type,
+        status: activeLicense.status,
+        expires_at: activeLicense.expires_at,
+        max_devices: activeLicense.max_devices,
+        product: '5.55 C++ Client',
+      },
+      grant: {
+        signature,
+        timestamp,
+        hwid: cleanHwid,
+      },
+    });
+  } catch (err) {
+    console.error('[ClientLogin Error]:', err);
+    return res.status(500).json({ success: false, error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
+// POST /api/auth/client-refresh (Refresh session using stored refresh_token)
+router.post('/auth/client-refresh', async (req, res) => {
+  const { refresh_token, hwid, client_type = 'cpp' } = req.body;
+  if (!refresh_token || !hwid) {
+    return res.status(400).json({ success: false, error: 'refresh_token and hwid are required' });
+  }
+
+  const cleanHwid = hwid.trim();
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+  try {
+    const { data: refreshData, error: refreshErr } = await supabaseAdmin.auth.refreshSession({
+      refresh_token,
+    });
+
+    if (refreshErr || !refreshData?.user) {
+      return res.status(401).json({ success: false, error: 'INVALID_REFRESH_TOKEN', message: 'Session expired, please log in again' });
+    }
+
+    const user = refreshData.user;
+
+    // Check ban
+    const { data: profile } = await supabaseAdmin.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    if (profile?.banned_at) {
+      return res.status(403).json({ success: false, error: 'ACCOUNT_BANNED', message: profile.ban_reason });
+    }
+
+    // Verify C++ license
+    const { data: license } = await supabaseAdmin
+      .from('licenses')
+      .select('*, products(*)')
+      .eq('user_id', user.id)
+      .eq('products.slug', 'cpp-client')
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (!license) {
+      return res.status(403).json({ success: false, error: 'NO_ACTIVE_LICENSE', message: 'No active C++ client license found' });
+    }
+
+    // Verify device
+    const { data: device } = await supabaseAdmin
+      .from('devices')
+      .select('id')
+      .eq('license_id', license.id)
+      .eq('hwid', cleanHwid)
+      .maybeSingle();
+
+    if (!device) {
+      return res.status(403).json({ success: false, error: 'DEVICE_NOT_REGISTERED', message: 'This device is no longer registered' });
+    }
+
+    // Update last seen
+    await supabaseAdmin
+      .from('devices')
+      .update({ last_seen_at: new Date().toISOString(), ip_address: clientIp })
+      .eq('id', device.id);
+
+    // Sign new grant
+    const timestamp = Date.now();
+    const grantPayload = JSON.stringify({
+      license_id: license.id,
+      user_id: user.id,
+      product: 'cpp-client',
+      hwid: cleanHwid,
+      timestamp,
+      expires_at: license.expires_at,
+    });
+    const signature = signEd25519(grantPayload);
+    const sessionToken = generateToken(16);
+
+    return res.json({
+      success: true,
+      session_token: sessionToken,
+      access_token: refreshData.session.access_token,
+      refresh_token: refreshData.session.refresh_token,
+      expires_in: refreshData.session.expires_in,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: profile?.username || user.email.split('@')[0],
+        displayName: profile?.display_name || user.email.split('@')[0],
+        role: profile?.role || 'user',
+      },
+      license: {
+        id: license.id,
+        key: license.license_key,
+        tier: license.license_type,
+        status: license.status,
+        expires_at: license.expires_at,
+        max_devices: license.max_devices,
+        product: '5.55 C++ Client',
+      },
+      grant: {
+        signature,
+        timestamp,
+        hwid: cleanHwid,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: 'SERVER_ERROR', message: err.message });
+  }
+});
+
 // GET /api/user/profile
 router.get('/user/profile', requireAuth, async (req, res) => {
   return res.json({
