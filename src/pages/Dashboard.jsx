@@ -107,10 +107,10 @@ export default function Dashboard() {
     const clean = redeemKey.trim().toUpperCase();
     if (!clean) return;
 
-    const KEY_FORMAT_REGEX = /^[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}$/i;
+    const KEY_FORMAT_REGEX = /^[A-Z0-9]{4,5}-[A-Z0-9]{4,5}-[A-Z0-9]{4,5}-[A-Z0-9]{4,5}$/i;
     if (!KEY_FORMAT_REGEX.test(clean)) {
       setRedeemStatus({
-        text: 'Incorrect key format! Key must follow: 5558N-87WEF-CB9VM-F95M6',
+        text: 'Incorrect key format! Key must follow: 555C-XXXX-XXXX-XXXX',
         type: 'danger',
       });
       return;
@@ -121,7 +121,7 @@ export default function Dashboard() {
     const token = auth.getToken();
 
     try {
-      const res = await fetch(`${API_BASE}/licenses/redeem`, {
+      const res = await fetch(`${API_BASE}/licenses/claim`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -617,7 +617,7 @@ export default function Dashboard() {
                   <form onSubmit={handleRedeem} style={{ display: 'flex', gap: '10px' }}>
                     <input
                       type="text"
-                      placeholder="e.g. 5558N-87WEF-CB9VM-F95M6"
+                      placeholder="e.g. 555C-A82K-P9XM-7QZW"
                       value={redeemKey}
                       onChange={(e) => setRedeemKey(e.target.value.toUpperCase())}
                       className="form-control"
@@ -858,7 +858,7 @@ export default function Dashboard() {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. 5558N-87WEF-CB9VM-F95M6"
+                  placeholder="e.g. 555C-A82K-P9XM-7QZW"
                   value={redeemKey}
                   onChange={(e) => setRedeemKey(e.target.value.toUpperCase())}
                   className="form-control"
