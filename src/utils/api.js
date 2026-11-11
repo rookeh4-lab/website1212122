@@ -6,9 +6,31 @@ export const auth = {
   supabase,
 
   /**
-   * Get current Supabase Auth access token
+   * Get current Supabase Auth access token synchronously
    */
-  async getToken() {
+  getToken() {
+    try {
+      const stored = localStorage.getItem('plutora_token');
+      if (stored && stored !== 'undefined' && stored !== 'null') return stored;
+
+      const raw = localStorage.getItem('555_supabase_auth_token');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.access_token) {
+          localStorage.setItem('plutora_token', parsed.access_token);
+          return parsed.access_token;
+        }
+      }
+    } catch {
+      // Fallback
+    }
+    return null;
+  },
+
+  /**
+   * Asynchronous token getter ensuring active session
+   */
+  async getAsyncToken() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.access_token) {
@@ -16,9 +38,9 @@ export const auth = {
         return session.access_token;
       }
     } catch {
-      // Fallback
+      // ignore
     }
-    return localStorage.getItem('plutora_token') || null;
+    return this.getToken();
   },
 
   setToken(t) {

@@ -118,7 +118,7 @@ export default function Dashboard() {
 
     setRedeemLoading(true);
     setRedeemStatus({ text: '', type: '' });
-    const token = auth.getToken();
+    const token = (await auth.getAsyncToken?.()) || auth.getToken();
 
     try {
       const res = await fetch(`${API_BASE}/licenses/claim`, {
@@ -147,7 +147,7 @@ export default function Dashboard() {
   const handleRename = async () => {
     if (!renameModal.key) return;
     setRenameModal((prev) => ({ ...prev, loading: true, error: '' }));
-    const token = auth.getToken();
+    const token = (await auth.getAsyncToken?.()) || auth.getToken();
     try {
       const res = await fetch(`${API_BASE}/licenses/update-name`, {
         method: 'POST',
@@ -174,7 +174,7 @@ export default function Dashboard() {
   const handleResetHwid = async () => {
     if (!hwidModalState.key) return;
     setHwidModalState((prev) => ({ ...prev, loading: true, error: '', msg: '' }));
-    const token = auth.getToken();
+    const token = (await auth.getAsyncToken?.()) || auth.getToken();
     try {
       const res = await fetch(`${API_BASE}/licenses/reset-hwid`, {
         method: 'POST',
