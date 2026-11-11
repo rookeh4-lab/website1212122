@@ -1296,7 +1296,7 @@ router.get('/downloads/file/:token', async (req, res) => {
   try {
     const { data: tokenRecord, error } = await supabaseAdmin
       .from('download_tokens')
-      .select('*, client_releases(*)')
+      .select('*')
       .eq('token', token)
       .maybeSingle();
 
