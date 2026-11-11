@@ -45,21 +45,15 @@ function RouteTracker() {
   return null;
 }
 
-export default function App() {
-  useEffect(() => {
-    AOS.init({
-      once: true,
-      duration: 600,
-      easing: 'ease-out-cubic',
-      offset: 40,
-    });
-  }, []);
+function AppShell() {
+  const { pathname } = useLocation();
+  const isDashboard = pathname === '/dashboard' || pathname === '/dashboard.html';
 
   return (
-    <BrowserRouter>
+    <>
       <RouteTracker />
-      <Navbar />
-      <main style={{ minHeight: 'calc(100vh - 140px)' }}>
+      {!isDashboard && <Navbar />}
+      <main style={{ minHeight: isDashboard ? '100vh' : 'calc(100vh - 140px)' }}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
@@ -98,7 +92,24 @@ export default function App() {
           <Route path="*" element={<Home />} />
         </Routes>
       </main>
-      <Footer />
+      {!isDashboard && <Footer />}
+    </>
+  );
+}
+
+export default function App() {
+  useEffect(() => {
+    AOS.init({
+      once: true,
+      duration: 600,
+      easing: 'ease-out-cubic',
+      offset: 40,
+    });
+  }, []);
+
+  return (
+    <BrowserRouter>
+      <AppShell />
     </BrowserRouter>
   );
 }

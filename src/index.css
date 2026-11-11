@@ -2449,3 +2449,112 @@ body[data-aos-easing="ease-in-out-quart"] [data-aos] {
     width: 60px;
   }
 }
+
+/* ============================================================
+   5.55 NEW DASHBOARD SHELL & AMBIENT VIOLET MOTION
+   ============================================================ */
+.v2-dash-shell {
+  min-height: 100vh;
+  display: flex;
+  background-color: #090611;
+  background-image:
+    radial-gradient(60% 45% at 78% 12%, rgba(139, 92, 246, 0.14), transparent 70%),
+    radial-gradient(45% 40% at 22% 92%, rgba(109, 40, 217, 0.11), transparent 70%);
+  color: #f4f4f5;
+  position: relative;
+  overflow-x: hidden;
+}
+
+.v2-dash-sidebar {
+  width: 242px;
+  flex-shrink: 0;
+  background: rgba(13, 9, 22, 0.94);
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  z-index: 30;
+  backdrop-filter: blur(20px);
+}
+
+.v2-dash-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 2;
+}
+
+.v2-dash-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(290px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.v2-dash-card {
+  background: rgba(18, 13, 29, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  backdrop-filter: blur(18px);
+  box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.55);
+}
+
+.v2-dash-mote {
+  position: fixed;
+  width: 8px;
+  height: 14px;
+  border-radius: 60% 40% 70% 30% / 50% 60% 40% 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(192, 132, 252, 0.45), rgba(124, 58, 237, 0.08));
+  pointer-events: none;
+  z-index: 1;
+  animation: v2MoteFall linear infinite;
+}
+
+@keyframes v2MoteFall {
+  0% {
+    transform: translate3d(0, -40px, 0) rotate(0deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.7;
+  }
+  85% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: translate3d(38px, 105vh, 0) rotate(220deg);
+    opacity: 0;
+  }
+}
+
+.v2-dash-mobile-btn {
+  display: none;
+}
+
+@media (max-width: 920px) {
+  .v2-dash-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .v2-dash-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 16px 0 40px rgba(0, 0, 0, 0.6);
+  }
+  .v2-dash-sidebar.open {
+    transform: translateX(0);
+  }
+  .v2-dash-mobile-btn {
+    display: inline-flex;
+  }
+}

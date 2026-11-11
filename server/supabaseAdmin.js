@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 import WebSocket from 'ws';
+import { verifyPortalToken } from './cryptoUtils.js';
 
 dotenv.config();
 
@@ -31,6 +32,29 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
 export async function authenticateToken(token) {
   if (!token) return null;
   try {
+    // 1. Check signed license-key portal token first
+    const portalData = verifyPortalToken(token);
+    if (portalData?.license_key) {
+      return {
+        user: {
+          id: portalData.user_id || portalData.license_id,
+          email: portalData.masked_email || '',
+          created_at: new Date().toISOString(),
+        },
+        profile: {
+          id: portalData.user_id || portalData.license_id,
+          email: portalData.masked_email || '',
+          username: portalData.username || portalData.license_key.slice(0, 9),
+          display_name: portalData.display_name || portalData.license_key.slice(0, 9),
+          role: 'user',
+        },
+        isPortalKey: true,
+        portalLicenseId: portalData.license_id,
+        portalLicenseKey: portalData.license_key,
+      };
+    }
+
+    // 2. Standard Supabase Auth JWT
     const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
     if (error || !user) return null;
 
@@ -73,6 +97,9 @@ export async function requireAuth(req, res, next) {
 
   req.user = authResult.user;
   req.profile = authResult.profile;
+  req.isPortalKey = Boolean(authResult.isPortalKey);
+  req.portalLicenseId = authResult.portalLicenseId || null;
+  req.portalLicenseKey = authResult.portalLicenseKey || null;
   next();
 }
 
@@ -81,6 +108,9 @@ export async function requireAuth(req, res, next) {
  */
 export async function requireAdmin(req, res, next) {
   await requireAuth(req, res, async () => {
+    if (req.isPortalKey) {
+      return res.status(403).json({ error: 'Administrator access requires account sign-in' });
+    }
     const isOwner = req.user?.email === 'rookeh4@gmail.com' || req.profile?.email === 'rookeh4@gmail.com';
     if (req.profile?.role !== 'admin' && !isOwner) {
       return res.status(403).json({ error: 'Administrator access required' });

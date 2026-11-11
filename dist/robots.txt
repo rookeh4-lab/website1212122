@@ -1,4 +1,8 @@
 User-agent: *
 Allow: /
+Disallow: /api/
+Disallow: /dl/
+Disallow: /downloads/
+Disallow: /admin
 
-Sitemap: https://555client.xyz/sitemap.xml
+Sitemap: https://www.555client.xyz/sitemap.xml

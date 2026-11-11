@@ -84,21 +84,21 @@ export const auth = {
   async clear() {
     localStorage.removeItem('plutora_token');
     localStorage.removeItem('plutora_user');
+    localStorage.removeItem('555_supabase_auth_token');
     try {
       await supabase.auth.signOut();
     } catch {}
   },
 
   /**
-   * Real user profile retrieval from Supabase Auth + profiles table
+   * Real user profile retrieval from Supabase Auth + profiles table (or Key Portal fallback)
    */
   async getProfile() {
     try {
       const { data: { user }, error: userErr } = await supabase.auth.getUser();
       if (userErr || !user) {
-        // Try via stored token or backend verify
         const token = localStorage.getItem('plutora_token');
-        if (token) {
+        if (token && !isTokenExpired(token)) {
           const res = await fetch(`${API_BASE}/auth/verify`, {
             method: 'POST',
             headers: {
@@ -127,8 +127,9 @@ export const auth = {
       const resolvedUser = {
         id: user.id,
         email: user.email,
+        discordId: profile?.discord_id || user.user_metadata?.discord_id || null,
         username: profile?.username || user.user_metadata?.username || user.email.split('@')[0],
-        displayName: profile?.display_name || user.user_metadata?.display_name || user.email.split('@')[0],
+        displayName: profile?.display_name || user.user_metadata?.display_name || profile?.username || user.email.split('@')[0],
         avatar: profile?.avatar_url || user.user_metadata?.avatar_url || null,
         role: (profile?.role === 'admin' || user.email?.toLowerCase() === 'rookeh4@gmail.com') ? 'admin' : (profile?.role || 'user'),
         createdAt: profile?.created_at || user.created_at,
@@ -144,21 +145,28 @@ export const auth = {
   },
 
   /**
-   * User Registration with Email and Password
+   * User Registration with Email and Password (verified & instant session)
    */
   async signUp(email, password, username) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          username: username || email.split('@')[0],
-          display_name: username || email.split('@')[0],
-        },
-      },
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email.trim(),
+        password,
+        username: (username || '').trim(),
+      }),
     });
-    if (error) throw error;
-    if (data.session?.access_token) {
+    const data = await res.json();
+    if (!res.ok || !data?.success) {
+      throw new Error(data?.error || 'Registration failed.');
+    }
+
+    if (data.session?.access_token && data.session?.refresh_token) {
+      await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      });
       this.setToken(data.session.access_token);
     }
     return data;

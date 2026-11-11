@@ -1,32 +1,94 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { auth, copyText, API_BASE } from '../utils/api';
-import HwidModal from '../components/HwidModal';
+
+const PRODUCT_CATALOG = [
+  {
+    id: 'client',
+    title: '5.55 Client',
+    spec: 'Fabric mod · 1.21–1.21.11',
+    subtitle: 'Fabric mod · 1.21–1.21.11',
+    productSlug: 'java-client',
+    placeholder: '555J-XXXX-XXXX-XXXX',
+    checkoutUrl: 'https://lama-co.mysellauth.com/checkout/f637dd86402c3-0000017323883',
+    onHold: false,
+    matches: (lic) =>
+      lic.product === 'java-client' ||
+      lic.platform === 'fabric' ||
+      (lic.product_name || '').toLowerCase().includes('java'),
+  },
+  {
+    id: 'injection',
+    title: '5.55 Injection',
+    spec: 'Native C++ injector · 1.21.11',
+    subtitle: 'Native C++ · 1.21.11 Single Player',
+    productSlug: 'cpp-client',
+    placeholder: '555C-XXXX-XXXX-XXXX',
+    checkoutUrl: 'https://lama-co.mysellauth.com/checkout/8bfd882b2959f-0000017323965',
+    onHold: false,
+    matches: (lic) =>
+      lic.product === 'cpp-client' ||
+      lic.platform === 'native' ||
+      lic.platform === 'both' ||
+      (lic.product_name || '').toLowerCase().includes('c++') ||
+      (lic.product_name || '').toLowerCase().includes('inject'),
+  },
+  {
+    id: 'external',
+    title: '5.55 External',
+    spec: 'External utility · Windows',
+    subtitle: 'External utility · Windows',
+    productSlug: 'external',
+    placeholder: '555E-XXXX-XXXX-XXXX',
+    checkoutUrl: 'https://discord.gg/xx7Ns6vW8',
+    onHold: true,
+    matches: (lic) =>
+      lic.product === 'external' ||
+      lic.platform === 'external' ||
+      (lic.product_name || '').toLowerCase().includes('external'),
+  },
+];
+
+const MOTES = [
+  { left: '18%', duration: '15s', delay: '-2s' },
+  { left: '34%', duration: '19s', delay: '-8s' },
+  { left: '52%', duration: '14s', delay: '-5s' },
+  { left: '68%', duration: '21s', delay: '-11s' },
+  { left: '84%', duration: '16s', delay: '-4s' },
+  { left: '92%', duration: '18s', delay: '-9s' },
+];
 
 export default function Dashboard() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+
   const [user, setUser] = useState(null);
   const [licenses, setLicenses] = useState([]);
-  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('licenses');
+  const [activeView, setActiveView] = useState('home'); // 'home' | 'client' | 'injection' | 'external'
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
-  // Key Redemption state
+  // Key redemption state (shared cleanly with inline view feedback)
   const [redeemKey, setRedeemKey] = useState('');
   const [redeemLoading, setRedeemLoading] = useState(false);
   const [redeemStatus, setRedeemStatus] = useState({ text: '', type: '' });
 
-  // Key visibility & copy states
+  // Service status state
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [apiOnline, setApiOnline] = useState(true);
+
+  // Key & Launch & Download states
   const [visibleKeys, setVisibleKeys] = useState({});
   const [copiedKey, setCopiedKey] = useState(null);
   const [copiedCommand, setCopiedCommand] = useState(null);
+  const [downloadLoading, setDownloadLoading] = useState(null);
+  const [downloadError, setDownloadError] = useState('');
 
   // Modals
   const [renameModal, setRenameModal] = useState({
     open: false,
     key: '',
-    id: null,
     name: '',
     loading: false,
     error: '',
@@ -46,7 +108,29 @@ export default function Dashboard() {
     licenseKey: '',
   });
 
-  const [buyHwidModal, setBuyHwidModal] = useState({ open: false, licenseKey: '' });
+  const loadLicenses = useCallback(async (token) => {
+    try {
+      const res = await fetch(`${API_BASE}/licenses/my`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setLicenses(data.licenses || []);
+    } catch {
+      setLicenses([]);
+    }
+  }, []);
+
+  const refreshServiceStatus = useCallback(async () => {
+    setStatusLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/health`);
+      setApiOnline(res.ok);
+    } catch {
+      setApiOnline(false);
+    } finally {
+      setTimeout(() => setStatusLoading(false), 300);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -66,8 +150,8 @@ export default function Dashboard() {
           return;
         }
         setUser(data.user);
-        const currentToken = await auth.getToken();
-        await loadLicenses(currentToken);
+        const currentToken = (await auth.getAsyncToken?.()) || auth.getToken();
+        await Promise.all([loadLicenses(currentToken), refreshServiceStatus()]);
       } catch {
         if (active) navigate('/login', { replace: true });
       } finally {
@@ -77,30 +161,40 @@ export default function Dashboard() {
 
     init();
     return () => { active = false; };
-  }, [searchParams, navigate]);
+  }, [searchParams, navigate, loadLicenses, refreshServiceStatus]);
 
-  const loadLicenses = async (token) => {
-    try {
-      const res = await fetch(`${API_BASE}/licenses/my`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      setLicenses(data.licenses || []);
-      setOrders(data.orders || []);
-    } catch {
-      setLicenses([]);
-      setOrders([]);
+  const isLicenseActive = (lic) => {
+    if (!lic || lic.status !== 'active') return false;
+    if (lic.expires_at && new Date(lic.expires_at) < new Date()) return false;
+    return true;
+  };
+
+  const getProductActiveLicenses = (productDef) =>
+    licenses.filter((lic) => isLicenseActive(lic) && productDef.matches(lic));
+
+  const formatTierLabel = (tier) => {
+    if (!tier) return 'Lifetime';
+    const t = String(tier).toLowerCase();
+    if (t.includes('lifetime')) return 'Lifetime';
+    if (t.includes('month')) return 'Monthly';
+    if (t.includes('trial')) return '3-Day Trial';
+    return tier;
+  };
+
+  const formatExpiryText = (lic) => {
+    if (!lic?.expires_at) return 'Never expires';
+    return `Expires ${new Date(lic.expires_at).toLocaleDateString()}`;
+  };
+
+  const handleCopy = (val, type = 'key') => {
+    copyText(val);
+    if (type === 'cmd') {
+      setCopiedCommand(val);
+      setTimeout(() => setCopiedCommand(null), 1800);
+    } else {
+      setCopiedKey(val);
+      setTimeout(() => setCopiedKey(null), 1600);
     }
-  };
-
-  const handleCopy = (key) => {
-    copyText(key);
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 1600);
-  };
-
-  const toggleKeyVisibility = (key) => {
-    setVisibleKeys((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleRedeem = async (e) => {
@@ -110,10 +204,7 @@ export default function Dashboard() {
 
     const KEY_FORMAT_REGEX = /^[A-Z0-9]{4,5}-[A-Z0-9]{4,5}-[A-Z0-9]{4,5}-[A-Z0-9]{4,5}$/i;
     if (!KEY_FORMAT_REGEX.test(clean)) {
-      setRedeemStatus({
-        text: 'Incorrect key format! Key must follow: 555C-XXXX-XXXX-XXXX',
-        type: 'danger',
-      });
+      setRedeemStatus({ text: 'Invalid or unavailable key.', type: 'danger' });
       return;
     }
 
@@ -132,11 +223,10 @@ export default function Dashboard() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setRedeemStatus({ text: data.message || 'Key activated successfully!', type: 'success' });
+        setRedeemStatus({ text: data.message || 'Key redeemed! Access unlocked.', type: 'success' });
         setRedeemKey('');
         await loadLicenses(token);
       } else if (res.status === 401) {
-        // Attempt session refresh and retry
         const freshToken = await auth.getAsyncToken?.();
         if (freshToken && freshToken !== token) {
           const retryRes = await fetch(`${API_BASE}/licenses/claim`, {
@@ -149,25 +239,25 @@ export default function Dashboard() {
           });
           const retryData = await retryRes.json();
           if (retryRes.ok && retryData.success) {
-            setRedeemStatus({ text: retryData.message || 'Key activated successfully!', type: 'success' });
+            setRedeemStatus({ text: retryData.message || 'Key redeemed! Access unlocked.', type: 'success' });
             setRedeemKey('');
             await loadLicenses(freshToken);
             return;
           }
         }
-        setRedeemStatus({ text: 'Session expired. Please log out and log back in.', type: 'danger' });
+        setRedeemStatus({ text: 'Session expired. Please sign out and sign back in.', type: 'danger' });
       } else {
-        setRedeemStatus({ text: data.error || 'Failed to activate key.', type: 'danger' });
+        setRedeemStatus({ text: data.error || 'Invalid or unavailable key.', type: 'danger' });
       }
     } catch {
-      setRedeemStatus({ text: 'Error connecting to licensing server.', type: 'danger' });
+      setRedeemStatus({ text: 'Unable to reach licensing server.', type: 'danger' });
     } finally {
       setRedeemLoading(false);
     }
   };
 
   const handleRename = async () => {
-    if (!renameModal.key) return;
+    if (!renameModal.key || !renameModal.name.trim()) return;
     setRenameModal((prev) => ({ ...prev, loading: true, error: '' }));
     const token = (await auth.getAsyncToken?.()) || auth.getToken();
     try {
@@ -186,10 +276,12 @@ export default function Dashboard() {
             lic.key === renameModal.key ? { ...lic, name: data.name || renameModal.name.trim() } : lic
           )
         );
-        setRenameModal({ open: false, key: '', id: null, name: '', loading: false, error: '' });
+        setRenameModal({ open: false, key: '', name: '', loading: false, error: '' });
+      } else {
+        setRenameModal((prev) => ({ ...prev, loading: false, error: data.error || 'Failed to rename.' }));
       }
     } catch {
-      setRenameModal({ open: false, key: '', id: null, name: '', loading: false, error: '' });
+      setRenameModal((prev) => ({ ...prev, loading: false, error: 'Network error.' }));
     }
   };
 
@@ -228,7 +320,7 @@ export default function Dashboard() {
         setHwidModalState((prev) => ({
           ...prev,
           loading: false,
-          error: data.error || 'Failed to reset HWID. Check your reset key.',
+          error: data.error || 'Invalid or used reset key.',
         }));
       }
     } catch {
@@ -240,793 +332,1541 @@ export default function Dashboard() {
     }
   };
 
+  const handleAuthorizedDownload = async (productSlug) => {
+    setDownloadLoading(productSlug);
+    setDownloadError('');
+    const token = (await auth.getAsyncToken?.()) || auth.getToken();
+    try {
+      const res = await fetch(`${API_BASE}/downloads/authorize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ product_slug: productSlug }),
+      });
+      const data = await res.json();
+      if (res.ok && data.authorized && data.download_url) {
+        window.location.href = `${API_BASE}${data.download_url.replace(/^\/api/, '')}`;
+      } else {
+        setDownloadError(data.error || 'Could not authorize download.');
+      }
+    } catch {
+      setDownloadError('Connection error authorizing download.');
+    } finally {
+      setDownloadLoading(null);
+    }
+  };
+
   const handleLogout = async () => {
     await auth.clear();
     navigate('/login');
   };
 
+  const selectView = (viewId) => {
+    setActiveView(viewId);
+    setRedeemStatus({ text: '', type: '' });
+    setDownloadError('');
+    setMobileSidebarOpen(false);
+  };
+
   if (loading) {
     return (
-      <div className="container" style={{ padding: '100px 20px', textAlign: 'center' }}>
-        <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>Loading 5.55 Client Dashboard...</p>
+      <div className="v2-dash-shell" style={{ alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <img src="/logo.png" alt="5.55" style={{ width: '48px', height: '48px', borderRadius: '12px', marginBottom: '14px' }} />
+          <p style={{ color: '#a1a1aa', fontSize: '14px', fontWeight: 500 }}>Loading 5.55 Dashboard...</p>
+        </div>
       </div>
     );
   }
 
-  const formatTier = (tier) => {
-    if (!tier) return 'Standard';
-    const t = String(tier).toLowerCase();
-    if (t.includes('inject')) return 'Injectable Lifetime';
-    if (t.includes('lifetime')) return 'Lifetime';
-    if (t.includes('month')) return 'Monthly';
-    return tier;
-  };
+  const displayUsername = user?.displayName || user?.username || 'member';
+  const initials = displayUsername.slice(0, 2).toUpperCase();
+  const activeOwnedList = PRODUCT_CATALOG.flatMap((prod) =>
+    getProductActiveLicenses(prod).map((lic) => ({ prod, lic }))
+  );
+  const currentProductDef = PRODUCT_CATALOG.find((p) => p.id === activeView) || null;
+  const topTitle = activeView === 'home' ? 'Home' : currentProductDef?.title || 'Home';
+
+  const serviceItems = [
+    { label: 'Website', status: 'Operational', color: '#22c55e' },
+    { label: 'Sign-in', status: apiOnline ? 'Operational' : 'Degraded', color: apiOnline ? '#22c55e' : '#ef4444' },
+    { label: '5.55 Client', status: apiOnline ? 'Operational' : 'Offline', color: apiOnline ? '#22c55e' : '#ef4444' },
+    { label: '5.55 Injection', status: apiOnline ? 'Operational' : 'Offline', color: apiOnline ? '#22c55e' : '#ef4444' },
+    { label: '5.55 External', status: 'On hold', color: '#f59e0b' },
+    { label: 'Downloads', status: apiOnline ? 'Operational' : 'Offline', color: apiOnline ? '#22c55e' : '#ef4444' },
+  ];
 
   return (
-    <div className="container" style={{ maxWidth: '1120px', padding: '40px 24px 80px' }}>
-      {/* User Discord Profile Header Banner */}
-      <div
-        className="card"
-        style={{
-          background: 'linear-gradient(135deg, rgba(24, 22, 34, 0.85) 0%, rgba(15, 14, 21, 0.95) 100%)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          borderRadius: '20px',
-          padding: '28px 32px',
-          marginBottom: '32px',
-          boxShadow: '0 12px 36px -12px rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '20px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <div style={{ position: 'relative' }}>
+    <div className="v2-dash-shell">
+      {/* Subtle Ambient Purple Motes */}
+      {MOTES.map((m, i) => (
+        <span
+          key={i}
+          className="v2-dash-mote"
+          style={{
+            left: m.left,
+            animationDuration: m.duration,
+            animationDelay: m.delay,
+          }}
+        />
+      ))}
+
+      {/* Mobile Drawer Backdrop */}
+      {mobileSidebarOpen && (
+        <div
+          onClick={() => setMobileSidebarOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.65)',
+            zIndex: 25,
+          }}
+        />
+      )}
+
+      {/* ========================================================
+          LEFT SIDEBAR NAVIGATION
+          ======================================================== */}
+      <aside className={`v2-dash-sidebar ${mobileSidebarOpen ? 'open' : ''}`}>
+        <div style={{ padding: '18px 14px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Brand Logo Header */}
+          <Link
+            to="/"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '4px 8px',
+              textDecoration: 'none',
+            }}
+          >
             <img
-              src={user?.avatar || '/logo.png'}
-              alt={user?.username || 'User'}
+              src="/logo.png"
+              alt="5.55"
               style={{
-                width: '64px',
-                height: '64px',
-                borderRadius: '50%',
-                border: '2px solid rgba(255, 255, 255, 0.15)',
+                width: '28px',
+                height: '28px',
+                borderRadius: '7px',
                 objectFit: 'cover',
-                background: '#0e0d14',
-              }}
-              onError={(e) => {
-                e.currentTarget.src = '/logo.png';
+                boxShadow: '0 0 14px rgba(168, 85, 247, 0.45)',
               }}
             />
             <span
               style={{
-                position: 'absolute',
-                bottom: '2px',
-                right: '2px',
-                width: '14px',
-                height: '14px',
-                borderRadius: '50%',
-                background: '#10b981',
-                border: '2px solid #0e0d14',
+                fontSize: '19px',
+                fontWeight: 800,
+                color: '#ffffff',
+                letterSpacing: '-0.02em',
               }}
-              title="Online"
-            />
-          </div>
+            >
+              5.55 Client
+            </span>
+          </Link>
 
+          {/* Primary Home Button */}
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              <h1
-                style={{
-                  fontSize: '22px',
-                  fontWeight: 800,
-                  color: '#ffffff',
-                  margin: 0,
-                  letterSpacing: '-0.01em',
-                }}
-              >
-                {user?.displayName || user?.username || '5.55 Member'}
-              </h1>
-              <span
-                className="badge"
-                style={{
-                  background: licenses.length > 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(99, 102, 241, 0.15)',
-                  color: licenses.length > 0 ? '#10b981' : '#818cf8',
-                  border: licenses.length > 0 ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(99, 102, 241, 0.3)',
-                  padding: '3px 10px',
-                  borderRadius: '9999px',
-                  fontSize: '11.5px',
-                  fontWeight: 700,
-                }}
-              >
-                {licenses.length > 0 ? '👑 Verified Licensee' : 'Discord Member'}
-              </span>
-            </div>
-            <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#8e8e99' }}>
-              Discord ID: <span style={{ color: '#d1d5db', fontFamily: 'monospace' }}>{user?.discordId || user?.id || 'Connected'}</span>
-              {user?.username && <span> · @{user.username}</span>}
-            </p>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div
-            style={{
-              textAlign: 'right',
-              paddingRight: '16px',
-              borderRight: '1px solid rgba(255, 255, 255, 0.1)',
-            }}
-          >
-            <div style={{ fontSize: '12px', color: '#8e8e99', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Licenses
-            </div>
-            <div style={{ fontSize: '20px', fontWeight: 800, color: '#ffffff' }}>
-              {licenses.length} Active
-            </div>
+            <button
+              type="button"
+              onClick={() => selectView('home')}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '10px 12px',
+                borderRadius: '10px',
+                border:
+                  activeView === 'home'
+                    ? '1px solid rgba(168, 85, 247, 0.36)'
+                    : '1px solid transparent',
+                background:
+                  activeView === 'home'
+                    ? 'linear-gradient(135deg, rgba(147, 51, 234, 0.24) 0%, rgba(124, 58, 237, 0.12) 100%)'
+                    : 'transparent',
+                color: activeView === 'home' ? '#ffffff' : '#a1a1aa',
+                fontSize: '13.5px',
+                fontWeight: activeView === 'home' ? 700 : 500,
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                <polyline points="9 22 9 12 15 12 15 22" />
+              </svg>
+              <span>Home</span>
+            </button>
           </div>
 
-          <button
-            onClick={handleLogout}
-            className="btn btn-secondary btn-sm"
-            style={{ padding: '8px 16px', fontSize: '13px' }}
-          >
-            Sign Out
-          </button>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div
-        className="dashboard-tabs"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '24px',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-          marginBottom: '32px',
-        }}
-      >
-        <button
-          onClick={() => setActiveTab('licenses')}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '12px 2px 14px',
-            fontSize: '14.5px',
-            fontWeight: 700,
-            color: activeTab === 'licenses' ? '#ffffff' : '#8e8e99',
-            borderBottom: activeTab === 'licenses' ? '2px solid #8b5cf6' : '2px solid transparent',
-            transition: 'color 0.15s, border-color 0.15s',
-          }}
-        >
-          My Licenses ({licenses.length})
-        </button>
-
-        <button
-          onClick={() => setActiveTab('redeem')}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '12px 2px 14px',
-            fontSize: '14.5px',
-            fontWeight: 700,
-            color: activeTab === 'redeem' ? '#ffffff' : '#8e8e99',
-            borderBottom: activeTab === 'redeem' ? '2px solid #8b5cf6' : '2px solid transparent',
-            transition: 'color 0.15s, border-color 0.15s',
-          }}
-        >
-          Activate Key
-        </button>
-
-        <button
-          onClick={() => setActiveTab('faq')}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '12px 2px 14px',
-            fontSize: '14.5px',
-            fontWeight: 700,
-            color: activeTab === 'faq' ? '#ffffff' : '#8e8e99',
-            borderBottom: activeTab === 'faq' ? '2px solid #8b5cf6' : '2px solid transparent',
-            transition: 'color 0.15s, border-color 0.15s',
-          }}
-        >
-          Launcher & Support
-        </button>
-      </div>
-
-      {/* TAB 1: LICENSES */}
-      {activeTab === 'licenses' && (
-        <div>
-          {licenses.length === 0 ? (
-            /* EMPTY STATE: Professional Buy & Redeem Action Center */
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-              <div
-                className="card"
-                style={{
-                  textAlign: 'center',
-                  padding: '48px 24px',
-                  background: 'rgba(18, 17, 26, 0.75)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  borderRadius: '20px',
-                }}
-              >
-                <div
-                  style={{
-                    width: '60px',
-                    height: '60px',
-                    borderRadius: '50%',
-                    background: 'rgba(99, 102, 241, 0.12)',
-                    color: '#818cf8',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto 16px',
-                  }}
-                >
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                  </svg>
-                </div>
-                <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#ffffff', margin: '0 0 8px' }}>
-                  No Active License Found
-                </h2>
-                <p
-                  style={{
-                    fontSize: '14px',
-                    color: 'var(--text-muted)',
-                    maxWidth: '480px',
-                    margin: '0 auto 28px',
-                    lineHeight: 1.6,
-                  }}
-                >
-                  Your Discord account is connected, but you do not currently hold an active 5.55 license key. Choose a plan below to activate instant access:
-                </p>
-
-                {/* Instant Purchase Cards matching user's SellAuth links */}
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                    gap: '20px',
-                    maxWidth: '720px',
-                    margin: '0 auto 32px',
-                    textAlign: 'left',
-                  }}
-                >
-                  {/* 5.55 Client Lifetime */}
-                  <div
-                    style={{
-                      background: 'rgba(14, 13, 20, 0.85)',
-                      border: '1.5px solid #10b981',
-                      borderRadius: '16px',
-                      padding: '24px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      position: 'relative',
-                    }}
-                  >
-                    <span
-                      style={{
-                        position: 'absolute',
-                        top: '-10px',
-                        right: '16px',
-                        background: '#10b981',
-                        color: '#fff',
-                        fontSize: '10px',
-                        fontWeight: 800,
-                        padding: '3px 10px',
-                        borderRadius: '9999px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.04em',
-                      }}
-                    >
-                      Most Popular
-                    </span>
-                    <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#fff', margin: '0 0 4px' }}>
-                      5.55 Client Lifetime
-                    </h3>
-                    <p style={{ fontSize: '12px', color: '#8e8e99', margin: '0 0 14px' }}>
-                      One-time · Forever · Instant Delivery
-                    </p>
-                    <div style={{ fontSize: '32px', fontWeight: 900, color: '#fff', marginBottom: '14px' }}>
-                      $2.00
-                    </div>
-                    <ul style={{ margin: '0 0 20px', paddingLeft: '18px', fontSize: '12.5px', color: '#d1d5db', lineHeight: 1.7 }}>
-                      <li>Fabric 1.21-1.21.11 support</li>
-                      <li>All modules included</li>
-                      <li>Lifetime updates & Discord support</li>
-                    </ul>
-                    <a
-                      href="https://lama-co.mysellauth.com/checkout/f637dd86402c3-0000017323883"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn"
-                      style={{
-                        background: '#10b981',
-                        color: '#fff',
-                        textAlign: 'center',
-                        textDecoration: 'none',
-                        fontWeight: 700,
-                        padding: '12px',
-                        borderRadius: '10px',
-                        marginTop: 'auto',
-                      }}
-                    >
-                      Buy Lifetime ($2) →
-                    </a>
-                  </div>
-
-                  {/* 5.55 Injectable Lifetime */}
-                  <div
-                    style={{
-                      background: 'rgba(14, 13, 20, 0.85)',
-                      border: '1.5px solid #6366f1',
-                      borderRadius: '16px',
-                      padding: '24px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      position: 'relative',
-                    }}
-                  >
-                    <span
-                      style={{
-                        position: 'absolute',
-                        top: '-10px',
-                        right: '16px',
-                        background: '#6366f1',
-                        color: '#fff',
-                        fontSize: '10px',
-                        fontWeight: 800,
-                        padding: '3px 10px',
-                        borderRadius: '9999px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.04em',
-                      }}
-                    >
-                      Best Value · NEW
-                    </span>
-                    <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#fff', margin: '0 0 4px' }}>
-                      5.55 Injectable Lifetime
-                    </h3>
-                    <p style={{ fontSize: '12px', color: '#8e8e99', margin: '0 0 14px' }}>
-                      Stronger screenshare bypass · Leaves no trace
-                    </p>
-                    <div style={{ fontSize: '32px', fontWeight: 900, color: '#fff', marginBottom: '14px' }}>
-                      $6.00
-                    </div>
-                    <ul style={{ margin: '0 0 20px', paddingLeft: '18px', fontSize: '12.5px', color: '#d1d5db', lineHeight: 1.7 }}>
-                      <li>Direct in-game injection</li>
-                      <li>Fabric 1.21-26.1 support</li>
-                      <li>New GUI & undetected modules</li>
-                    </ul>
-                    <a
-                      href="https://lama-co.mysellauth.com/checkout/8bfd882b2959f-0000017323965"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn"
-                      style={{
-                        background: '#6366f1',
-                        color: '#fff',
-                        textAlign: 'center',
-                        textDecoration: 'none',
-                        fontWeight: 700,
-                        padding: '12px',
-                        borderRadius: '10px',
-                        marginTop: 'auto',
-                      }}
-                    >
-                      Buy Injectable ($6) →
-                    </a>
-                  </div>
-                </div>
-
-                {/* Inline Quick Key Activation Form */}
-                <div
-                  style={{
-                    maxWidth: '520px',
-                    margin: '0 auto',
-                    background: 'rgba(0, 0, 0, 0.4)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    borderRadius: '16px',
-                    padding: '24px',
-                    textAlign: 'left',
-                  }}
-                >
-                  <h4 style={{ margin: '0 0 6px', fontSize: '15px', color: '#fff', fontWeight: 700 }}>
-                    Already have a license key?
-                  </h4>
-                  <p style={{ margin: '0 0 14px', fontSize: '12.5px', color: '#8e8e99' }}>
-                    Enter your key below to bind it to your Discord account immediately:
-                  </p>
-                  <form onSubmit={handleRedeem} style={{ display: 'flex', gap: '10px' }}>
-                    <input
-                      type="text"
-                      placeholder="e.g. 555C-A82K-P9XM-7QZW"
-                      value={redeemKey}
-                      onChange={(e) => setRedeemKey(e.target.value.toUpperCase())}
-                      className="form-control"
-                      style={{ fontSize: '13.5px', padding: '10px 14px' }}
-                    />
-                    <button
-                      type="submit"
-                      disabled={redeemLoading}
-                      className="btn btn-primary btn-sm"
-                      style={{ padding: '0 18px', whiteSpace: 'nowrap' }}
-                    >
-                      {redeemLoading ? 'Activating...' : 'Activate Key'}
-                    </button>
-                  </form>
-                  {redeemStatus.text && (
-                    <div
-                      style={{
-                        marginTop: '12px',
-                        fontSize: '12.5px',
-                        color: redeemStatus.type === 'success' ? '#4ade80' : '#f87171',
-                      }}
-                    >
-                      {redeemStatus.text}
-                    </div>
-                  )}
-                </div>
-              </div>
+          {/* PRODUCTS SECTION */}
+          <div>
+            <div
+              style={{
+                fontSize: '10.5px',
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                color: '#71717a',
+                textTransform: 'uppercase',
+                padding: '0 12px',
+                marginBottom: '8px',
+              }}
+            >
+              Products
             </div>
-          ) : (
-            /* ACTIVE LICENSES LIST */
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#ffffff', margin: 0 }}>
-                  Active Licenses ({licenses.length})
-                </h2>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button onClick={() => setActiveTab('redeem')} className="btn btn-secondary btn-sm">
-                    + Redeem Key
-                  </button>
-                  <a
-                    href="https://lama-co.mysellauth.com/checkout/f637dd86402c3-0000017323883"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-primary btn-sm"
-                  >
-                    + Purchase More
-                  </a>
-                </div>
-              </div>
 
-              {licenses.map((lic) => {
-                const isHidden = !visibleKeys[lic.key];
-                const displayKey = isHidden
-                  ? lic.key.substring(0, 7) + '••••-••••'
-                  : lic.key;
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {PRODUCT_CATALOG.map((prod) => {
+                const isSelected = activeView === prod.id;
+                const isOwned = getProductActiveLicenses(prod).length > 0;
 
                 return (
-                  <div
-                    key={lic.key}
-                    className="card"
+                  <button
+                    key={prod.id}
+                    type="button"
+                    onClick={() => selectView(prod.id)}
                     style={{
-                      background: 'rgba(18, 17, 26, 0.85)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: '18px',
-                      padding: '28px',
-                      boxShadow: '0 10px 30px -10px rgba(0,0,0,0.5)',
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '9px 12px',
+                      borderRadius: '10px',
+                      border: isSelected
+                        ? '1px solid rgba(168, 85, 247, 0.35)'
+                        : '1px solid transparent',
+                      background: isSelected
+                        ? 'linear-gradient(135deg, rgba(147, 51, 234, 0.22) 0%, rgba(124, 58, 237, 0.10) 100%)'
+                        : 'transparent',
+                      color: prod.onHold
+                        ? '#71717a'
+                        : isSelected
+                        ? '#ffffff'
+                        : '#d4d4d8',
+                      fontSize: '13.5px',
+                      fontWeight: isSelected ? 700 : 500,
+                      fontStyle: prod.onHold ? 'italic' : 'normal',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease',
                     }}
                   >
-                    {/* Header */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        flexWrap: 'wrap',
-                        gap: '12px',
-                        marginBottom: '18px',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <span style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff' }}>
-                          {lic.name || (lic.duration ? `5.55 ${lic.duration}` : '5.55 Client Lifetime')}
-                        </span>
-                        <button
-                          onClick={() =>
-                            setRenameModal({
-                              open: true,
-                              key: lic.key,
-                              id: lic.id,
-                              name: lic.name || '',
-                              loading: false,
-                              error: '',
-                            })
-                          }
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: '#8e8e99',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            textDecoration: 'underline',
-                          }}
-                        >
-                          Rename
-                        </button>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span className="badge badge-primary">{formatTier(lic.tier || lic.duration)}</span>
-                        <span
-                          className={`badge ${lic.status === 'active' ? 'badge-success' : 'badge-danger'}`}
-                        >
-                          {lic.status === 'active' ? '● Active' : '● Expired'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Key box */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        background: 'rgba(0, 0, 0, 0.5)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
-                        padding: '12px 16px',
-                        borderRadius: '12px',
-                        marginBottom: '18px',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <code style={{ fontSize: '15px', color: '#c4b5fd', fontFamily: 'monospace' }}>
-                          {displayKey}
-                        </code>
-                        <button
-                          onClick={() => toggleKeyVisibility(lic.key)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: '#8e8e99',
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                          }}
-                        >
-                          {isHidden ? '👁️ Show' : '🔒 Hide'}
-                        </button>
-                      </div>
-
-                      <button
-                        onClick={() => handleCopy(lic.key)}
+                    <span>{prod.title}</span>
+                    {prod.onHold ? (
+                      <span
                         style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#fff',
-                          cursor: 'pointer',
-                          fontSize: '13px',
-                          fontWeight: 700,
+                          fontSize: '11px',
+                          fontStyle: 'normal',
+                          fontWeight: 600,
+                          color: '#f59e0b',
+                          opacity: 0.9,
                         }}
                       >
-                        {copiedKey === lic.key ? '✓ Copied' : 'Copy Key'}
-                      </button>
-                    </div>
-
-                    {/* Footer Info & Actions */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        flexWrap: 'wrap',
-                        gap: '14px',
-                      }}
-                    >
-                      <div style={{ fontSize: '13px', color: '#8e8e99', lineHeight: 1.5 }}>
-                        HWID:{' '}
-                        <span style={{ color: '#fff', fontFamily: 'monospace' }}>
-                          {lic.hwid ? `${lic.hwid.substring(0, 16)}...` : 'Unbound (Ready for first PC)'}
-                        </span>
-                        <span> · {lic.hwid_resets_left ?? 2} reset(s) available</span>
-                      </div>
-
-                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                        <button
-                          onClick={() =>
-                            setHwidModalState({
-                              open: true,
-                              key: lic.key,
-                              loading: false,
-                              msg: '',
-                              error: '',
-                            })
-                          }
-                          className="btn btn-secondary btn-sm"
-                        >
-                          Reset HWID
-                        </button>
-
-                        <button
-                          onClick={() => setLaunchModal({ open: true, licenseKey: lic.key })}
-                          className="btn btn-primary btn-sm"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                        >
-                          <span>🚀 Launch Command</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                        On hold
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          width: '7px',
+                          height: '7px',
+                          borderRadius: '50%',
+                          background: isOwned ? '#22c55e' : '#52525b',
+                          boxShadow: isOwned ? '0 0 8px rgba(34, 197, 94, 0.7)' : 'none',
+                        }}
+                        title={isOwned ? 'Owned' : 'Not owned'}
+                      />
+                    )}
+                  </button>
                 );
               })}
             </div>
-          )}
-        </div>
-      )}
+          </div>
 
-      {/* TAB 2: REDEEM KEY */}
-      {activeTab === 'redeem' && (
-        <div style={{ maxWidth: '640px', margin: '0 auto' }}>
-          <div
-            className="card"
-            style={{
-              padding: '36px',
-              background: 'rgba(18, 17, 26, 0.85)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: '20px',
-            }}
-          >
-            <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#fff', margin: '0 0 8px' }}>
-              Activate a License Key
-            </h2>
-            <p style={{ fontSize: '14px', color: 'var(--text-muted)', margin: '0 0 24px', lineHeight: 1.6 }}>
-              Purchased your key on SellAuth or received a license key from an administrator? Enter it below to instantly bind it to your Discord account:
-            </p>
-
-            <form onSubmit={handleRedeem} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '12px', textTransform: 'uppercase', color: '#8e8e99', marginBottom: '6px', fontWeight: 700 }}>
-                  License Key
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. 555C-A82K-P9XM-7QZW"
-                  value={redeemKey}
-                  onChange={(e) => setRedeemKey(e.target.value.toUpperCase())}
-                  className="form-control"
-                  style={{ fontSize: '14px', padding: '12px 14px' }}
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={redeemLoading}
-                className="btn btn-primary"
-                style={{ padding: '12px', fontSize: '14px', fontWeight: 700, borderRadius: '10px' }}
-              >
-                {redeemLoading ? 'Verifying & Binding...' : 'Activate License →'}
-              </button>
-            </form>
-
-            {redeemStatus.text && (
-              <div
+          {/* ADMIN & LINKS SECTION */}
+          <div>
+            <div
+              style={{
+                fontSize: '10.5px',
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                color: '#71717a',
+                textTransform: 'uppercase',
+                padding: '0 12px',
+                marginBottom: '8px',
+              }}
+            >
+              Quick Links
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {user?.role === 'admin' && (
+                <Link
+                  to="/admin"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '8px 12px',
+                    borderRadius: '10px',
+                    color: '#fb7185',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                  }}
+                >
+                  <span>Admin Panel</span>
+                  <span style={{ fontSize: '11px' }}>→</span>
+                </Link>
+              )}
+              <Link
+                to="/checkout"
                 style={{
-                  marginTop: '16px',
-                  padding: '12px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '8px 12px',
                   borderRadius: '10px',
+                  color: '#a1a1aa',
                   fontSize: '13px',
-                  background: redeemStatus.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                  color: redeemStatus.type === 'success' ? '#4ade80' : '#f87171',
-                  border: redeemStatus.type === 'success' ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+                  fontWeight: 500,
+                  textDecoration: 'none',
                 }}
               >
-                {redeemStatus.text}
-              </div>
-            )}
+                <span>Store & Pricing</span>
+                <span style={{ fontSize: '11px' }}>↗</span>
+              </Link>
+              <a
+                href="https://discord.gg/xx7Ns6vW8"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '8px 12px',
+                  borderRadius: '10px',
+                  color: '#a1a1aa',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  textDecoration: 'none',
+                }}
+              >
+                <span>Discord Support</span>
+                <span style={{ fontSize: '11px' }}>↗</span>
+              </a>
+            </div>
           </div>
         </div>
-      )}
 
-      {/* TAB 3: LAUNCHER & SUPPORT */}
-      {activeTab === 'faq' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          <div
-            className="card"
-            style={{
-              padding: '32px',
-              background: 'rgba(18, 17, 26, 0.85)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: '20px',
-            }}
-          >
-            <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#fff', margin: '0 0 12px' }}>
-              How to Launch 5.55 Client
-            </h3>
-            <ol style={{ margin: 0, paddingLeft: '20px', color: '#d1d5db', fontSize: '14px', lineHeight: 1.8 }}>
-              <li>Copy your license key from the <strong>My Licenses</strong> tab above.</li>
-              <li>Launch Minecraft Fabric 1.21.11 (or your supported version).</li>
-              <li>Press the keybind (default: <code>Right Shift</code>) to open the 5.55 In-Game GUI.</li>
-              <li>If running headless or via PowerShell, use your one-click fileless launch command.</li>
-            </ol>
-          </div>
+        {/* Bottom User Account Footer Card */}
+        <div style={{ padding: '12px', position: 'relative' }}>
+          {userMenuOpen && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '74px',
+                left: '12px',
+                right: '12px',
+                background: '#161124',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '12px',
+                padding: '6px',
+                boxShadow: '0 14px 30px rgba(0,0,0,0.6)',
+                zIndex: 40,
+              }}
+            >
+              <Link
+                to="/"
+                style={{
+                  display: 'block',
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  fontSize: '12.5px',
+                  color: '#d4d4d8',
+                  textDecoration: 'none',
+                }}
+              >
+                Back to Homepage
+              </Link>
+              <button
+                type="button"
+                onClick={handleLogout}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '8px 10px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#f87171',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+          )}
 
-          <div
-            className="card"
+          <button
+            type="button"
+            onClick={() => setUserMenuOpen((prev) => !prev)}
             style={{
-              padding: '32px',
-              background: 'rgba(18, 17, 26, 0.85)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: '20px',
+              width: '100%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '16px',
+              padding: '10px',
+              borderRadius: '12px',
+              background: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              color: '#fff',
+              cursor: 'pointer',
+              textAlign: 'left',
             }}
           >
-            <div>
-              <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#fff', margin: '0 0 6px' }}>
-                Need 24/7 Discord Support?
-              </h3>
-              <p style={{ margin: 0, fontSize: '13.5px', color: '#8e8e99' }}>
-                Join our official Discord server (1,035 members) for configs, screenshare guides, and live staff help.
-              </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+              {user?.avatar ? (
+                <img
+                  src={user.avatar}
+                  alt={displayUsername}
+                  style={{
+                    width: '34px',
+                    height: '34px',
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    border: '1px solid rgba(168, 85, 247, 0.4)',
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: '34px',
+                    height: '34px',
+                    borderRadius: '50%',
+                    background: 'rgba(139, 92, 246, 0.22)',
+                    border: '1px solid rgba(168, 85, 247, 0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '12px',
+                    fontWeight: 800,
+                    color: '#e9d5ff',
+                    flexShrink: 0,
+                  }}
+                >
+                  {initials}
+                </div>
+              )}
+              <div style={{ minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    color: '#ffffff',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {displayUsername}
+                </div>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    marginTop: '2px',
+                    padding: '1px 7px',
+                    borderRadius: '6px',
+                    fontSize: '10.5px',
+                    fontWeight: 700,
+                    background: 'rgba(147, 51, 234, 0.22)',
+                    color: '#c084fc',
+                  }}
+                >
+                  {user?.role === 'admin'
+                    ? 'Admin'
+                    : activeOwnedList.length > 0
+                    ? '5.55 Owner'
+                    : 'Member'}
+                </span>
+              </div>
             </div>
-            <a
-              href="https://discord.gg/xx7Ns6vW8"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-discord"
-              style={{ padding: '12px 24px', fontWeight: 700, textDecoration: 'none' }}
-            >
-              Join 5.55 Discord Server
-            </a>
-          </div>
-        </div>
-      )}
 
-      {/* HWID Reset Confirm Modal */}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#71717a" strokeWidth="2">
+              <polyline points="7 15 12 20 17 15" />
+              <polyline points="7 9 12 4 17 9" />
+            </svg>
+          </button>
+        </div>
+      </aside>
+
+      {/* ========================================================
+          RIGHT CONTENT WORKSPACE
+          ======================================================== */}
+      <div className="v2-dash-main">
+        {/* Clean Slim Top Bar */}
+        <header
+          style={{
+            height: '54px',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 28px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button
+              type="button"
+              className="v2-dash-mobile-btn"
+              onClick={() => setMobileSidebarOpen(true)}
+              style={{
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                color: '#fff',
+                borderRadius: '8px',
+                padding: '6px 9px',
+                cursor: 'pointer',
+              }}
+              aria-label="Open menu"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+            <span style={{ fontSize: '13.5px', fontWeight: 600, color: '#e4e4e7' }}>
+              {topTitle}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            {user?.role === 'admin' && (
+              <Link
+                to="/admin"
+                style={{
+                  fontSize: '12.5px',
+                  fontWeight: 700,
+                  color: '#fb7185',
+                  textDecoration: 'none',
+                }}
+              >
+                Admin
+              </Link>
+            )}
+            <button
+              type="button"
+              onClick={handleLogout}
+              style={{
+                background: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid rgba(255, 255, 255, 0.09)',
+                borderRadius: '8px',
+                padding: '5px 12px',
+                color: '#a1a1aa',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Log out
+            </button>
+          </div>
+        </header>
+
+        {/* Main Workspace Body */}
+        <div style={{ width: '100%', maxWidth: '1080px', padding: '32px 32px 64px', margin: '0 auto' }}>
+          {/* ==================================================
+              VIEW 1: HOME DASHBOARD
+              ================================================== */}
+          {activeView === 'home' && (
+            <div>
+              {/* Hero Welcome */}
+              <h1
+                style={{
+                  fontSize: 'clamp(28px, 3.6vw, 38px)',
+                  fontWeight: 800,
+                  color: '#ffffff',
+                  letterSpacing: '-0.025em',
+                  margin: '0 0 20px',
+                }}
+              >
+                Welcome back,{' '}
+                <span
+                  style={{
+                    background: 'linear-gradient(135deg, #d8b4fe 0%, #a855f7 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                  }}
+                >
+                  {displayUsername}
+                </span>
+                .
+              </h1>
+
+              {/* Amber External On Hold Notice Banner */}
+              <div
+                onClick={() => selectView('external')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  background: 'rgba(120, 74, 10, 0.22)',
+                  border: '1px solid rgba(245, 158, 11, 0.34)',
+                  color: '#fbbf24',
+                  fontSize: '13.5px',
+                  fontWeight: 500,
+                  marginBottom: '22px',
+                  cursor: 'pointer',
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ flexShrink: 0 }}>
+                  <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <span>5.55 External is currently on hold.</span>
+              </div>
+
+              {/* 2-Column Main Home Grid */}
+              <div className="v2-dash-grid">
+                {/* LEFT COLUMN: Your Products + Redeem a Key */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                  {/* Your products card */}
+                  <div className="v2-dash-card" style={{ padding: '20px 22px' }}>
+                    <div
+                      style={{
+                        fontSize: '13.5px',
+                        fontWeight: 700,
+                        color: '#ffffff',
+                        marginBottom: '14px',
+                      }}
+                    >
+                      Your products
+                    </div>
+
+                    {activeOwnedList.length === 0 ? (
+                      <div
+                        style={{
+                          padding: '18px',
+                          borderRadius: '12px',
+                          background: 'rgba(0, 0, 0, 0.28)',
+                          border: '1px dashed rgba(255, 255, 255, 0.1)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: '12px',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: '14px', fontWeight: 700, color: '#e4e4e7' }}>
+                            No active products yet
+                          </div>
+                          <div style={{ fontSize: '12.5px', color: '#71717a', marginTop: '3px' }}>
+                            Redeem a key below or view available plans to unlock access.
+                          </div>
+                        </div>
+                        <Link
+                          to="/checkout"
+                          style={{
+                            padding: '9px 16px',
+                            borderRadius: '10px',
+                            background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
+                            color: '#ffffff',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            textDecoration: 'none',
+                          }}
+                        >
+                          View plans →
+                        </Link>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {activeOwnedList.map(({ prod, lic }) => (
+                          <div
+                            key={lic.key}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              flexWrap: 'wrap',
+                              gap: '14px',
+                              padding: '14px 16px',
+                              borderRadius: '12px',
+                              background: 'rgba(255, 255, 255, 0.025)',
+                              border: '1px solid rgba(255, 255, 255, 0.07)',
+                            }}
+                          >
+                            <div style={{ minWidth: '160px' }}>
+                              <div style={{ fontSize: '17px', fontWeight: 800, color: '#ffffff' }}>
+                                {prod.title}
+                              </div>
+                              <div style={{ fontSize: '12px', color: '#71717a', marginTop: '2px' }}>
+                                {prod.subtitle}
+                              </div>
+                            </div>
+
+                            <div style={{ textAlign: 'center' }}>
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  padding: '3px 10px',
+                                  borderRadius: '9999px',
+                                  background: 'rgba(34, 197, 94, 0.14)',
+                                  border: '1px solid rgba(34, 197, 94, 0.3)',
+                                  color: '#4ade80',
+                                  fontSize: '11.5px',
+                                  fontWeight: 700,
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    width: '5px',
+                                    height: '5px',
+                                    borderRadius: '50%',
+                                    background: '#4ade80',
+                                  }}
+                                />
+                                {formatTierLabel(lic.tier)}
+                              </span>
+                              <div style={{ fontSize: '11.5px', color: '#71717a', marginTop: '4px' }}>
+                                {formatExpiryText(lic)}
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => selectView(prod.id)}
+                              style={{
+                                padding: '9px 18px',
+                                borderRadius: '10px',
+                                border: 'none',
+                                background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
+                                color: '#ffffff',
+                                fontSize: '13px',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                boxShadow: '0 4px 14px rgba(147, 51, 234, 0.32)',
+                              }}
+                            >
+                              {prod.id === 'injection' ? 'Open loader' : 'Open client'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Redeem a key card */}
+                  <div className="v2-dash-card" style={{ padding: '20px 22px' }}>
+                    <div
+                      style={{
+                        fontSize: '13.5px',
+                        fontWeight: 700,
+                        color: '#ffffff',
+                        marginBottom: '12px',
+                      }}
+                    >
+                      Redeem a key
+                    </div>
+
+                    <form
+                      onSubmit={handleRedeem}
+                      style={{
+                        display: 'flex',
+                        gap: '10px',
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <input
+                        type="text"
+                        value={redeemKey}
+                        onChange={(e) => setRedeemKey(e.target.value.toUpperCase())}
+                        placeholder="Paste any 5.55 Client, Injection or External key"
+                        style={{
+                          flex: '1 1 240px',
+                          padding: '11px 14px',
+                          borderRadius: '10px',
+                          background: 'rgba(10, 7, 18, 0.85)',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          color: '#ffffff',
+                          fontFamily: 'monospace',
+                          fontSize: '13px',
+                          outline: 'none',
+                        }}
+                      />
+                      <button
+                        type="submit"
+                        disabled={redeemLoading || !redeemKey.trim()}
+                        style={{
+                          padding: '11px 22px',
+                          borderRadius: '10px',
+                          border: 'none',
+                          background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
+                          color: '#ffffff',
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          cursor: redeemLoading || !redeemKey.trim() ? 'not-allowed' : 'pointer',
+                          opacity: redeemLoading || !redeemKey.trim() ? 0.7 : 1,
+                        }}
+                      >
+                        {redeemLoading ? 'Checking...' : 'Redeem'}
+                      </button>
+                    </form>
+
+                    {redeemStatus.text ? (
+                      <div
+                        style={{
+                          marginTop: '10px',
+                          fontSize: '12.5px',
+                          fontWeight: 600,
+                          color: redeemStatus.type === 'success' ? '#4ade80' : '#f87171',
+                        }}
+                      >
+                        {redeemStatus.text}
+                      </div>
+                    ) : (
+                      <div style={{ marginTop: '10px', fontSize: '12px', color: '#71717a' }}>
+                        We work out which product a key is for, so there&apos;s only one box.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* RIGHT COLUMN: Service status card */}
+                <div className="v2-dash-card" style={{ padding: '20px 22px' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '12px',
+                    }}
+                  >
+                    <span style={{ fontSize: '13.5px', fontWeight: 700, color: '#ffffff' }}>
+                      Service status
+                    </span>
+                    <button
+                      type="button"
+                      onClick={refreshServiceStatus}
+                      title="Refresh service status"
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#71717a',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        transform: statusLoading ? 'rotate(180deg)' : 'none',
+                        transition: 'transform 0.3s ease',
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="23 4 23 10 17 10" />
+                        <polyline points="1 20 1 14 7 14" />
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {serviceItems.map((svc, idx) => (
+                      <div
+                        key={svc.label}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '12px 0',
+                          borderBottom:
+                            idx === serviceItems.length - 1
+                              ? 'none'
+                              : '1px solid rgba(255, 255, 255, 0.06)',
+                          fontSize: '13px',
+                        }}
+                      >
+                        <span style={{ color: '#e4e4e7', fontWeight: 500 }}>{svc.label}</span>
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            color: svc.color,
+                            fontWeight: 600,
+                            fontSize: '12.5px',
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: '6px',
+                              height: '6px',
+                              borderRadius: '50%',
+                              background: svc.color,
+                              boxShadow: `0 0 8px ${svc.color}`,
+                            }}
+                          />
+                          {svc.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ==================================================
+              VIEW 2/3/4: PRODUCT DETAIL PAGE
+              ================================================== */}
+          {activeView !== 'home' && currentProductDef && (() => {
+            const productLicenses = getProductActiveLicenses(currentProductDef);
+            const isOwned = productLicenses.length > 0;
+            const isOnHold = currentProductDef.onHold;
+
+            return (
+              <div>
+                {/* Product Header + Badges */}
+                <div style={{ marginBottom: '26px' }}>
+                  <h1
+                    style={{
+                      fontSize: 'clamp(28px, 3.6vw, 38px)',
+                      fontWeight: 800,
+                      color: '#ffffff',
+                      letterSpacing: '-0.025em',
+                      margin: '0 0 12px',
+                    }}
+                  >
+                    {currentProductDef.title}
+                  </h1>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span
+                      style={{
+                        padding: '4px 12px',
+                        borderRadius: '9999px',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        color: '#a1a1aa',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {currentProductDef.spec}
+                    </span>
+
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '4px 12px',
+                        borderRadius: '9999px',
+                        background: isOnHold
+                          ? 'rgba(245, 158, 11, 0.14)'
+                          : isOwned
+                          ? 'rgba(34, 197, 94, 0.14)'
+                          : 'rgba(255, 255, 255, 0.05)',
+                        border: isOnHold
+                          ? '1px solid rgba(245, 158, 11, 0.35)'
+                          : isOwned
+                          ? '1px solid rgba(34, 197, 94, 0.35)'
+                          : '1px solid rgba(255, 255, 255, 0.1)',
+                        color: isOnHold ? '#fbbf24' : isOwned ? '#4ade80' : '#a1a1aa',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          background: isOnHold ? '#f59e0b' : isOwned ? '#4ade80' : '#71717a',
+                        }}
+                      />
+                      {isOnHold ? 'On hold' : isOwned ? 'Owned' : 'Not owned'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* STATE 1: 5.55 External ON HOLD */}
+                {isOnHold && !isOwned && (
+                  <div
+                    className="v2-dash-card"
+                    style={{
+                      padding: '56px 28px',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '46px',
+                        height: '46px',
+                        borderRadius: '50%',
+                        background: 'rgba(245, 158, 11, 0.14)',
+                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#fbbf24',
+                        marginBottom: '16px',
+                      }}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="6" y="4" width="4" height="16" />
+                        <rect x="14" y="4" width="4" height="16" />
+                      </svg>
+                    </div>
+
+                    <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#ffffff', margin: '0 0 8px' }}>
+                      5.55 External is on hold.
+                    </h2>
+                    <p
+                      style={{
+                        fontSize: '13.5px',
+                        color: '#a1a1aa',
+                        maxWidth: '440px',
+                        margin: '0 auto 24px',
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      Access, key redemption, and downloads for 5.55 External are temporarily paused while builds are finalized.
+                    </p>
+
+                    <a
+                      href="https://discord.gg/xx7Ns6vW8"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '10px 20px',
+                        borderRadius: '10px',
+                        background: 'rgba(255, 255, 255, 0.06)',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        color: '#ffffff',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        textDecoration: 'none',
+                      }}
+                    >
+                      <span>Join Discord for updates</span>
+                      <span style={{ fontSize: '11px' }}>↗</span>
+                    </a>
+                  </div>
+                )}
+
+                {/* STATE 2: NOT OWNED (matches Reference Screenshot 2 exactly) */}
+                {!isOnHold && !isOwned && (
+                  <div
+                    className="v2-dash-card"
+                    style={{
+                      padding: '52px 28px',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '50%',
+                        background: 'rgba(255, 255, 255, 0.06)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#d4d4d8',
+                        marginBottom: '16px',
+                      }}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                      </svg>
+                    </div>
+
+                    <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#ffffff', margin: '0 0 8px' }}>
+                      You don&apos;t own {currentProductDef.title} yet.
+                    </h2>
+                    <p
+                      style={{
+                        fontSize: '13.5px',
+                        color: '#a1a1aa',
+                        maxWidth: '490px',
+                        margin: '0 auto 24px',
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      Have a key? Paste it below. Your licence, machine and downloads appear here straight away.
+                    </p>
+
+                    <div style={{ maxWidth: '460px', margin: '0 auto', textAlign: 'left' }}>
+                      <form onSubmit={handleRedeem} style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                        <input
+                          type="text"
+                          value={redeemKey}
+                          onChange={(e) => setRedeemKey(e.target.value.toUpperCase())}
+                          placeholder={currentProductDef.placeholder}
+                          style={{
+                            flex: '1 1 260px',
+                            padding: '11px 14px',
+                            borderRadius: '10px',
+                            background: 'rgba(9, 6, 17, 0.9)',
+                            border:
+                              redeemStatus.type === 'danger'
+                                ? '1px solid rgba(239, 68, 68, 0.65)'
+                                : '1px solid rgba(168, 85, 247, 0.4)',
+                            color: '#ffffff',
+                            fontFamily: 'monospace',
+                            fontSize: '13.5px',
+                            outline: 'none',
+                          }}
+                        />
+                        <button
+                          type="submit"
+                          disabled={redeemLoading || !redeemKey.trim()}
+                          style={{
+                            padding: '11px 22px',
+                            borderRadius: '10px',
+                            border: 'none',
+                            background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
+                            color: '#ffffff',
+                            fontSize: '13.5px',
+                            fontWeight: 700,
+                            cursor: redeemLoading || !redeemKey.trim() ? 'not-allowed' : 'pointer',
+                            opacity: redeemLoading || !redeemKey.trim() ? 0.7 : 1,
+                          }}
+                        >
+                          {redeemLoading ? 'Checking...' : 'Redeem'}
+                        </button>
+                      </form>
+
+                      {redeemStatus.text && (
+                        <div
+                          style={{
+                            marginTop: '10px',
+                            fontSize: '12.5px',
+                            fontWeight: 600,
+                            color: redeemStatus.type === 'success' ? '#4ade80' : '#f87171',
+                          }}
+                        >
+                          {redeemStatus.text}
+                        </div>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '14px',
+                        maxWidth: '460px',
+                        margin: '22px auto',
+                      }}
+                    >
+                      <span style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.08)' }} />
+                      <span style={{ fontSize: '12px', color: '#71717a' }}>or</span>
+                      <span style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.08)' }} />
+                    </div>
+
+                    <a
+                      href={currentProductDef.checkoutUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '10px 20px',
+                        borderRadius: '10px',
+                        background: 'rgba(255, 255, 255, 0.06)',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        color: '#ffffff',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        textDecoration: 'none',
+                      }}
+                    >
+                      <span>Get {currentProductDef.title}</span>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                        <polyline points="15 3 21 3 21 9" />
+                        <line x1="10" y1="14" x2="21" y2="3" />
+                      </svg>
+                    </a>
+                  </div>
+                )}
+
+                {/* STATE 3: OWNED PRODUCT VIEW (License, Launch, Downloads & HWID Machine) */}
+                {isOwned && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                    {productLicenses.map((lic) => {
+                      const isHidden = !visibleKeys[lic.key];
+                      const displayKey = isHidden
+                        ? `${lic.key.substring(0, 7)}••••-••••`
+                        : lic.key;
+                      const launchCommand = `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://www.555client.xyz/dl/${user?.email || lic.key} | iex"`;
+
+                      return (
+                        <div key={lic.key} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                          {/* Launch & Downloads Card */}
+                          <div className="v2-dash-card" style={{ padding: '24px' }}>
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                flexWrap: 'wrap',
+                                gap: '12px',
+                                marginBottom: '16px',
+                              }}
+                            >
+                              <div>
+                                <div style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>
+                                  Launch & Downloads
+                                </div>
+                                <div style={{ fontSize: '12.5px', color: '#71717a', marginTop: '3px' }}>
+                                  {currentProductDef.id === 'injection'
+                                    ? 'Run the instant PowerShell loader or download the standalone executable.'
+                                    : 'Download the latest authorized client package for your account.'}
+                                </div>
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAuthorizedDownload(currentProductDef.productSlug)}
+                                  disabled={downloadLoading === currentProductDef.productSlug}
+                                  style={{
+                                    padding: '9px 16px',
+                                    borderRadius: '10px',
+                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    background: 'rgba(255,255,255,0.06)',
+                                    color: '#ffffff',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {downloadLoading === currentProductDef.productSlug
+                                    ? 'Authorizing...'
+                                    : 'Download Package ↓'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setLaunchModal({ open: true, licenseKey: lic.key })}
+                                  style={{
+                                    padding: '9px 18px',
+                                    borderRadius: '10px',
+                                    border: 'none',
+                                    background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
+                                    color: '#ffffff',
+                                    fontSize: '13px',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  Launch Guide
+                                </button>
+                              </div>
+                            </div>
+
+                            {downloadError && (
+                              <div style={{ color: '#f87171', fontSize: '12.5px', marginBottom: '12px' }}>
+                                {downloadError}
+                              </div>
+                            )}
+
+                            {/* Quick Command Strip */}
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '12px',
+                                padding: '12px 14px',
+                                borderRadius: '10px',
+                                background: 'rgba(8, 5, 16, 0.85)',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                              }}
+                            >
+                              <code
+                                style={{
+                                  fontSize: '12px',
+                                  color: '#c4b5fd',
+                                  fontFamily: 'monospace',
+                                  wordBreak: 'break-all',
+                                }}
+                              >
+                                {launchCommand}
+                              </code>
+                              <button
+                                type="button"
+                                onClick={() => handleCopy(launchCommand, 'cmd')}
+                                style={{
+                                  flexShrink: 0,
+                                  padding: '7px 14px',
+                                  borderRadius: '8px',
+                                  border: '1px solid rgba(168, 85, 247, 0.4)',
+                                  background: 'rgba(147, 51, 234, 0.2)',
+                                  color: '#e9d5ff',
+                                  fontSize: '12px',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {copiedCommand === launchCommand ? '✓ Copied' : 'Copy'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Licence & Machine Card */}
+                          <div className="v2-dash-card" style={{ padding: '24px' }}>
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                flexWrap: 'wrap',
+                                gap: '12px',
+                                marginBottom: '16px',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>
+                                  {lic.name || currentProductDef.title}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setRenameModal({
+                                      open: true,
+                                      key: lic.key,
+                                      name: lic.name || '',
+                                      loading: false,
+                                      error: '',
+                                    })
+                                  }
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#a1a1aa',
+                                    fontSize: '12px',
+                                    textDecoration: 'underline',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  Rename
+                                </button>
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span
+                                  style={{
+                                    padding: '3px 10px',
+                                    borderRadius: '9999px',
+                                    background: 'rgba(147, 51, 234, 0.18)',
+                                    border: '1px solid rgba(168, 85, 247, 0.3)',
+                                    color: '#d8b4fe',
+                                    fontSize: '11.5px',
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  {formatTierLabel(lic.tier)}
+                                </span>
+                                <span
+                                  style={{
+                                    padding: '3px 10px',
+                                    borderRadius: '9999px',
+                                    background: 'rgba(34, 197, 94, 0.14)',
+                                    border: '1px solid rgba(34, 197, 94, 0.3)',
+                                    color: '#4ade80',
+                                    fontSize: '11.5px',
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  ● Active
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Key row */}
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '12px 14px',
+                                borderRadius: '10px',
+                                background: 'rgba(8, 5, 16, 0.85)',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                marginBottom: '16px',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <code style={{ fontSize: '14px', color: '#e9d5ff', fontFamily: 'monospace' }}>
+                                  {displayKey}
+                                </code>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setVisibleKeys((prev) => ({ ...prev, [lic.key]: !prev[lic.key] }))
+                                  }
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#a1a1aa',
+                                    fontSize: '12px',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {isHidden ? 'Show' : 'Hide'}
+                                </button>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => handleCopy(lic.key, 'key')}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#ffffff',
+                                  fontSize: '12.5px',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {copiedKey === lic.key ? '✓ Copied' : 'Copy Key'}
+                              </button>
+                            </div>
+
+                            {/* Machine HWID row */}
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                flexWrap: 'wrap',
+                                gap: '12px',
+                              }}
+                            >
+                              <div style={{ fontSize: '13px', color: '#a1a1aa' }}>
+                                Bound Machine:{' '}
+                                <span style={{ color: '#ffffff', fontFamily: 'monospace' }}>
+                                  {lic.hwid
+                                    ? `${lic.hwid.substring(0, 18)}...`
+                                    : 'Unbound (Ready for first launch)'}
+                                </span>
+                                <span style={{ color: '#71717a' }}> · {formatExpiryText(lic)}</span>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setHwidModalState({
+                                    open: true,
+                                    key: lic.key,
+                                    resetKey: '',
+                                    loading: false,
+                                    msg: '',
+                                    error: '',
+                                  })
+                                }
+                                style={{
+                                  padding: '8px 14px',
+                                  borderRadius: '9px',
+                                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                                  background: 'rgba(255, 255, 255, 0.05)',
+                                  color: '#e4e4e7',
+                                  fontSize: '12.5px',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                Reset HWID
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+
+      {/* ========================================================
+          MODALS (HWID RESET, LAUNCH GUIDE, RENAME)
+          ======================================================== */}
       {hwidModalState.open && (
         <div
           style={{
             position: 'fixed',
             inset: 0,
             zIndex: 10000,
-            background: 'rgba(0, 0, 0, 0.75)',
+            background: 'rgba(0, 0, 0, 0.78)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             padding: '20px',
           }}
           onClick={(e) => {
-            if (e.target === e.currentTarget)
+            if (e.target === e.currentTarget) {
               setHwidModalState({ ...hwidModalState, open: false });
+            }
           }}
         >
           <div
-            className="card"
-            style={{ maxWidth: '440px', width: '100%', padding: '28px', background: '#121118', borderRadius: '18px' }}
+            className="v2-dash-card"
+            style={{ maxWidth: '440px', width: '100%', padding: '26px', background: '#120d1d' }}
           >
-            <h3 style={{ fontSize: '18px', color: '#fff', marginBottom: '8px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: '0 0 8px' }}>
               Reset Hardware ID (HWID)
             </h3>
-            <p style={{ fontSize: '13.5px', color: '#8e8e99', lineHeight: 1.5, marginBottom: '16px' }}>
-              To unbind your license and transfer to another computer, please enter the single-use <strong>Admin Reset Key</strong> provided by staff.
+            <p style={{ fontSize: '13px', color: '#a1a1aa', lineHeight: 1.5, margin: '0 0 16px' }}>
+              To unbind your license and move to a new PC, enter the single-use{' '}
+              <strong>Admin Reset Key</strong> provided by 5.55 staff.
             </p>
             <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '11.5px',
+                  fontWeight: 700,
+                  color: '#a1a1aa',
+                  marginBottom: '6px',
+                  letterSpacing: '0.05em',
+                }}
+              >
                 ADMIN RESET KEY
               </label>
               <input
                 type="text"
                 placeholder="555R-XXXX-XXXX"
                 value={hwidModalState.resetKey || ''}
-                onChange={(e) => setHwidModalState({ ...hwidModalState, resetKey: e.target.value.toUpperCase() })}
+                onChange={(e) =>
+                  setHwidModalState({ ...hwidModalState, resetKey: e.target.value.toUpperCase() })
+                }
                 style={{
                   width: '100%',
                   padding: '10px 14px',
                   borderRadius: '10px',
-                  background: 'rgba(255,255,255,0.05)',
+                  background: 'rgba(0,0,0,0.45)',
                   border: '1px solid rgba(255,255,255,0.12)',
-                  color: '#fff',
+                  color: '#ffffff',
                   fontFamily: 'monospace',
                   fontSize: '14px',
                   outline: 'none',
@@ -1034,26 +1874,45 @@ export default function Dashboard() {
               />
             </div>
             {hwidModalState.msg && (
-              <p style={{ color: '#4ade80', fontSize: '13px', marginBottom: '12px' }}>
+              <p style={{ color: '#4ade80', fontSize: '13px', margin: '0 0 12px' }}>
                 {hwidModalState.msg}
               </p>
             )}
             {hwidModalState.error && (
-              <p style={{ color: '#f87171', fontSize: '13px', marginBottom: '12px' }}>
+              <p style={{ color: '#f87171', fontSize: '13px', margin: '0 0 12px' }}>
                 {hwidModalState.error}
               </p>
             )}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button
+                type="button"
                 onClick={() => setHwidModalState({ ...hwidModalState, open: false })}
-                className="btn btn-secondary btn-sm"
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '9px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: 'transparent',
+                  color: '#d4d4d8',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleResetHwid}
                 disabled={hwidModalState.loading}
-                className="btn btn-primary btn-sm"
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '9px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
+                  color: '#ffffff',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
               >
                 {hwidModalState.loading ? 'Resetting...' : 'Confirm Reset'}
               </button>
@@ -1062,14 +1921,13 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Launch Command Modal */}
       {launchModal.open && (
         <div
           style={{
             position: 'fixed',
             inset: 0,
             zIndex: 10000,
-            background: 'rgba(0, 0, 0, 0.75)',
+            background: 'rgba(0, 0, 0, 0.78)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -1080,47 +1938,64 @@ export default function Dashboard() {
           }}
         >
           <div
-            className="card"
-            style={{ maxWidth: '520px', width: '100%', padding: '28px', background: '#121118', borderRadius: '18px' }}
+            className="v2-dash-card"
+            style={{ maxWidth: '520px', width: '100%', padding: '26px', background: '#120d1d' }}
           >
-            <h3 style={{ fontSize: '18px', color: '#fff', marginBottom: '10px' }}>
-              🚀 Launch Command (Fileless Loader)
+            <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: '0 0 8px' }}>
+              Launch Command (PowerShell)
             </h3>
-            <p style={{ fontSize: '13.5px', color: '#8e8e99', lineHeight: 1.5, marginBottom: '16px' }}>
-              Run this one-line command in Windows PowerShell to instantly launch 5.55 Client without leaving traces:
+            <p style={{ fontSize: '13px', color: '#a1a1aa', lineHeight: 1.5, margin: '0 0 16px' }}>
+              Paste this command in Windows PowerShell to automatically initialize and start 5.55 Client:
             </p>
 
             <div
               style={{
-                background: 'rgba(0,0,0,0.6)',
+                background: 'rgba(0,0,0,0.55)',
                 border: '1px solid rgba(255,255,255,0.1)',
                 borderRadius: '10px',
                 padding: '12px',
                 fontFamily: 'monospace',
                 fontSize: '12px',
-                color: '#38bdf8',
+                color: '#c4b5fd',
                 wordBreak: 'break-all',
                 marginBottom: '16px',
               }}
             >
-              powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://www.555client.xyz/dl/{user?.email || launchModal.licenseKey} | iex"
+              powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;irm https://www.555client.xyz/dl/{user?.email || launchModal.licenseKey} | iex&quot;
             </div>
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button
+                type="button"
                 onClick={() => setLaunchModal({ open: false, licenseKey: '' })}
-                className="btn btn-secondary btn-sm"
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '9px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: 'transparent',
+                  color: '#d4d4d8',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
               >
                 Close
               </button>
               <button
+                type="button"
                 onClick={() => {
                   const cmd = `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://www.555client.xyz/dl/${user?.email || launchModal.licenseKey} | iex"`;
-                  copyText(cmd);
-                  setCopiedCommand(true);
-                  setTimeout(() => setCopiedCommand(false), 1600);
+                  handleCopy(cmd, 'cmd');
                 }}
-                className="btn btn-primary btn-sm"
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '9px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
+                  color: '#ffffff',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
               >
                 {copiedCommand ? '✓ Copied Command' : 'Copy Launch Command'}
               </button>
@@ -1129,14 +2004,13 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Rename Modal */}
       {renameModal.open && (
         <div
           style={{
             position: 'fixed',
             inset: 0,
             zIndex: 10000,
-            background: 'rgba(0, 0, 0, 0.75)',
+            background: 'rgba(0, 0, 0, 0.78)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -1147,29 +2021,64 @@ export default function Dashboard() {
           }}
         >
           <div
-            className="card"
-            style={{ maxWidth: '400px', width: '100%', padding: '28px', background: '#121118', borderRadius: '18px' }}
+            className="v2-dash-card"
+            style={{ maxWidth: '400px', width: '100%', padding: '26px', background: '#120d1d' }}
           >
-            <h3 style={{ fontSize: '18px', color: '#fff', marginBottom: '16px' }}>Rename License</h3>
+            <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: '0 0 14px' }}>
+              Rename License
+            </h3>
             <input
               type="text"
               value={renameModal.name}
               onChange={(e) => setRenameModal({ ...renameModal, name: e.target.value })}
               placeholder="e.g. Primary PC"
-              className="form-control"
-              style={{ marginBottom: '16px' }}
+              style={{
+                width: '100%',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                background: 'rgba(0,0,0,0.45)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                color: '#ffffff',
+                fontSize: '13.5px',
+                marginBottom: '14px',
+                outline: 'none',
+              }}
             />
+            {renameModal.error && (
+              <p style={{ color: '#f87171', fontSize: '12.5px', margin: '0 0 10px' }}>
+                {renameModal.error}
+              </p>
+            )}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button
+                type="button"
                 onClick={() => setRenameModal({ ...renameModal, open: false })}
-                className="btn btn-secondary btn-sm"
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '9px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: 'transparent',
+                  color: '#d4d4d8',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleRename}
                 disabled={renameModal.loading}
-                className="btn btn-primary btn-sm"
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '9px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
+                  color: '#ffffff',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
               >
                 {renameModal.loading ? 'Saving...' : 'Save Name'}
               </button>

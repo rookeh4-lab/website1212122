@@ -111,3 +111,43 @@ export function verifySellAuthWebhook(payload, signature, secret) {
     return false;
   }
 }
+
+const getPortalSecret = () =>
+  process.env.PORTAL_SESSION_SECRET ||
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  privateKey;
+
+/**
+ * Sign a short-lived portal session token for license-key login
+ */
+export function signPortalToken(payloadObj, ttlSeconds = 24 * 60 * 60) {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'KPORTAL' })).toString('base64url');
+  const payload = Buffer.from(
+    JSON.stringify({ ...payloadObj, exp: Math.floor(Date.now() / 1000) + ttlSeconds })
+  ).toString('base64url');
+  const sig = crypto.createHmac('sha256', getPortalSecret()).update(`${header}.${payload}`).digest('base64url');
+  return `${header}.${payload}.${sig}`;
+}
+
+/**
+ * Verify a portal session token
+ */
+export function verifyPortalToken(token) {
+  try {
+    if (!token || typeof token !== 'string') return null;
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const [header, payload, sig] = parts;
+    const headerObj = JSON.parse(Buffer.from(header, 'base64url').toString('utf-8'));
+    if (headerObj?.typ !== 'KPORTAL') return null;
+    const expected = crypto.createHmac('sha256', getPortalSecret()).update(`${header}.${payload}`).digest('base64url');
+    if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+      return null;
+    }
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf-8'));
+    if (!data?.exp || data.exp * 1000 < Date.now()) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}

@@ -1,13 +1,14 @@
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
-import { supabaseAdmin, requireAuth, requireAdmin } from './supabaseAdmin.js';
+import { supabaseAdmin, authenticateToken, requireAuth, requireAdmin } from './supabaseAdmin.js';
 import {
   signEd25519,
   sha256,
   generateLicenseKey,
   generateToken,
   verifySellAuthWebhook,
+  signPortalToken,
 } from './cryptoUtils.js';
 
 const router = express.Router();
@@ -15,6 +16,36 @@ router.use(express.json());
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://thmpaozerfhoykqxwrlz.supabase.co';
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_obBunwnFtclwda77bynVZw_1jsL_pnx';
+
+// Helper: Issue a real Supabase Auth session for any verified user email via admin magiclink + OTP verify
+async function createSupabaseSessionForEmail(email) {
+  const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
+    type: 'magiclink',
+    email,
+  });
+  if (linkErr || !linkData?.properties?.hashed_token) {
+    throw new Error(linkErr?.message || 'Could not generate authentication link');
+  }
+
+  const verifyRes = await fetch(`${supabaseUrl}/auth/v1/verify`, {
+    method: 'POST',
+    headers: {
+      'apikey': supabaseAnonKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      type: 'magiclink',
+      token_hash: linkData.properties.hashed_token,
+    }),
+  });
+
+  const sessionData = await verifyRes.json();
+  if (!verifyRes.ok || !sessionData?.access_token) {
+    throw new Error(sessionData?.error_description || sessionData?.msg || 'Failed to verify authentication session');
+  }
+
+  return sessionData;
+}
 
 // ==============================================================================
 // 1. HEALTH & INTROSPECTION
@@ -40,16 +71,12 @@ router.post('/auth/verify', async (req, res) => {
 
   const token = authHeader.split(' ')[1];
   try {
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-    if (error || !user) {
+    const authResult = await authenticateToken(token);
+    if (!authResult) {
       return res.status(401).json({ valid: false, error: 'Invalid or expired token' });
     }
 
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
+    const { user, profile, isPortalKey, portalLicenseId } = authResult;
 
     if (profile?.banned_at) {
       return res.status(403).json({
@@ -59,28 +86,327 @@ router.post('/auth/verify', async (req, res) => {
       });
     }
 
-    // Fetch active licenses count
-    const { count: licenseCount } = await supabaseAdmin
-      .from('licenses')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('status', 'active');
+    let licenseCount = 0;
+    if (isPortalKey && portalLicenseId) {
+      licenseCount = 1;
+    } else {
+      const { count } = await supabaseAdmin
+        .from('licenses')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('status', 'active');
+      licenseCount = count || 0;
+    }
+
+    const emailStr = user.email || '';
+    const isAdmin = !isPortalKey && (profile?.role === 'admin' || emailStr.toLowerCase() === 'rookeh4@gmail.com');
 
     return res.json({
       valid: true,
       user: {
         id: user.id,
-        email: user.email,
-        username: profile?.username || user.email.split('@')[0],
-        displayName: profile?.display_name || user.email.split('@')[0],
-        avatarUrl: profile?.avatar_url,
-        role: profile?.role || 'user',
+        email: emailStr,
+        discordId: profile?.discord_id || user.user_metadata?.discord_id || null,
+        username: profile?.username || (emailStr ? emailStr.split('@')[0] : 'member'),
+        displayName: profile?.display_name || profile?.username || (emailStr ? emailStr.split('@')[0] : '5.55 Member'),
+        avatar: profile?.avatar_url || user.user_metadata?.avatar_url || null,
+        avatarUrl: profile?.avatar_url || user.user_metadata?.avatar_url || null,
+        role: isAdmin ? 'admin' : 'user',
+        isPortalKey: Boolean(isPortalKey),
         createdAt: profile?.created_at || user.created_at,
       },
-      activeLicenses: licenseCount || 0,
+      activeLicenses: licenseCount,
     });
   } catch (err) {
     return res.status(500).json({ valid: false, error: err.message });
+  }
+});
+
+// POST /api/auth/register (Instant verified registration without broken email redirects)
+router.post('/auth/register', async (req, res) => {
+  const { email, password, username } = req.body;
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const cleanUser = (username || cleanEmail.split('@')[0] || 'member').trim().slice(0, 32);
+
+  if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    return res.status(400).json({ success: false, error: 'Please provide a valid email address.' });
+  }
+  if (!password || password.length < 6) {
+    return res.status(400).json({ success: false, error: 'Password must be at least 6 characters.' });
+  }
+
+  try {
+    const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+      email: cleanEmail,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        username: cleanUser,
+        display_name: cleanUser,
+      },
+    });
+
+    if (createErr) {
+      const msg = createErr.message || 'Registration failed.';
+      if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('registered') || msg.toLowerCase().includes('exists')) {
+        return res.status(409).json({ success: false, error: 'An account with this email already exists. Please sign in.' });
+      }
+      return res.status(400).json({ success: false, error: msg });
+    }
+
+    const userId = created.user.id;
+    await supabaseAdmin.from('profiles').upsert({
+      id: userId,
+      email: cleanEmail,
+      username: cleanUser,
+      display_name: cleanUser,
+      role: cleanEmail === 'rookeh4@gmail.com' ? 'admin' : 'user',
+      updated_at: new Date().toISOString(),
+    });
+
+    const authRes = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: {
+        'apikey': supabaseAnonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email: cleanEmail, password }),
+    });
+    const sessionData = await authRes.json();
+
+    if (!authRes.ok || !sessionData?.access_token) {
+      return res.status(500).json({ success: false, error: 'Account created. Please sign in now.' });
+    }
+
+    return res.json({
+      success: true,
+      session: sessionData,
+      token: sessionData.access_token,
+      user: {
+        id: userId,
+        email: cleanEmail,
+        username: cleanUser,
+        displayName: cleanUser,
+        role: cleanEmail === 'rookeh4@gmail.com' ? 'admin' : 'user',
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/auth/discord-sync (Verify Discord OAuth token server-side & mint Supabase session)
+router.post('/auth/discord-sync', async (req, res) => {
+  const { accessToken } = req.body;
+  if (!accessToken || typeof accessToken !== 'string') {
+    return res.status(400).json({ success: false, error: 'Discord access token is required.' });
+  }
+
+  try {
+    // 1. Verify token directly with Discord API
+    const discordRes = await fetch('https://discord.com/api/users/@me', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!discordRes.ok) {
+      return res.status(401).json({ success: false, error: 'Invalid or expired Discord OAuth token.' });
+    }
+
+    const discordUser = await discordRes.json();
+    if (!discordUser?.id) {
+      return res.status(401).json({ success: false, error: 'Unable to verify Discord profile.' });
+    }
+
+    const discordId = String(discordUser.id);
+    const uname = discordUser.username || `discord_${discordId.slice(0, 6)}`;
+    const dname = discordUser.global_name || uname;
+    const avatarExt = discordUser.avatar?.startsWith('a_') ? 'gif' : 'png';
+    const avatarUrl = discordUser.avatar
+      ? `https://cdn.discordapp.com/avatars/${discordId}/${discordUser.avatar}.${avatarExt}?size=256`
+      : null;
+
+    // 2. Match existing profile by discord_id or verified Discord email
+    let targetUserId = null;
+    let targetEmail = null;
+    let targetRole = 'user';
+
+    const { data: byDiscord } = await supabaseAdmin
+      .from('profiles')
+      .select('id, email, role, banned_at, ban_reason')
+      .eq('discord_id', discordId)
+      .maybeSingle();
+
+    if (byDiscord) {
+      if (byDiscord.banned_at) {
+        return res.status(403).json({ success: false, error: `Account suspended: ${byDiscord.ban_reason || 'Terms violation'}` });
+      }
+      targetUserId = byDiscord.id;
+      targetEmail = byDiscord.email;
+      targetRole = byDiscord.role || 'user';
+    } else if (discordUser.email && discordUser.verified) {
+      const { data: byEmail } = await supabaseAdmin
+        .from('profiles')
+        .select('id, email, role, banned_at, ban_reason')
+        .ilike('email', discordUser.email)
+        .maybeSingle();
+
+      if (byEmail) {
+        if (byEmail.banned_at) {
+          return res.status(403).json({ success: false, error: `Account suspended: ${byEmail.ban_reason || 'Terms violation'}` });
+        }
+        targetUserId = byEmail.id;
+        targetEmail = byEmail.email;
+        targetRole = byEmail.role || 'user';
+      }
+    }
+
+    // 3. Create Supabase Auth account if none matched yet
+    if (!targetUserId) {
+      const candidateEmail =
+        discordUser.email && discordUser.verified
+          ? discordUser.email.toLowerCase()
+          : `discord_${discordId}@users.555client.xyz`;
+
+      const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
+        email: candidateEmail,
+        email_confirm: true,
+        password: generateToken(24),
+        user_metadata: {
+          discord_id: discordId,
+          username: uname,
+          display_name: dname,
+          avatar_url: avatarUrl,
+        },
+      });
+
+      if (createErr) {
+        const { data: existingProf } = await supabaseAdmin
+          .from('profiles')
+          .select('id, email, role')
+          .ilike('email', candidateEmail)
+          .maybeSingle();
+
+        if (existingProf) {
+          targetUserId = existingProf.id;
+          targetEmail = existingProf.email;
+          targetRole = existingProf.role || 'user';
+        } else {
+          const { data: listed } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+          const authMatch = listed?.users?.find((u) => u.email?.toLowerCase() === candidateEmail);
+          if (!authMatch) throw createErr;
+          targetUserId = authMatch.id;
+          targetEmail = authMatch.email;
+        }
+      } else {
+        targetUserId = created.user.id;
+        targetEmail = created.user.email;
+      }
+    }
+
+    const finalRole = targetRole === 'admin' || targetEmail?.toLowerCase() === 'rookeh4@gmail.com' ? 'admin' : 'user';
+
+    // 4. Sync profile row
+    await supabaseAdmin.from('profiles').upsert({
+      id: targetUserId,
+      email: targetEmail,
+      discord_id: discordId,
+      username: uname,
+      display_name: dname,
+      avatar_url: avatarUrl,
+      role: finalRole,
+      updated_at: new Date().toISOString(),
+    });
+
+    // 5. Issue genuine Supabase Auth session
+    const sessionData = await createSupabaseSessionForEmail(targetEmail);
+
+    return res.json({
+      success: true,
+      token: sessionData.access_token,
+      session: sessionData,
+      user: {
+        id: targetUserId,
+        email: targetEmail,
+        discordId,
+        username: uname,
+        displayName: dname,
+        avatar: avatarUrl,
+        role: finalRole,
+      },
+    });
+  } catch (err) {
+    console.error('[DiscordSync Error]:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Discord authentication failed.' });
+  }
+});
+
+// POST /api/auth/key-login (Log into web dashboard cleanly with a license key without consuming HWID slot)
+router.post('/auth/key-login', async (req, res) => {
+  const cleanKey = (req.body?.license_key || '').trim().toUpperCase();
+  if (!cleanKey) {
+    return res.status(400).json({ success: false, error: 'License key is required.' });
+  }
+
+  try {
+    const { data: license, error: licErr } = await supabaseAdmin
+      .from('licenses')
+      .select('id, license_key, status, expires_at, user_id, products(slug, name)')
+      .eq('license_key', cleanKey)
+      .maybeSingle();
+
+    if (licErr || !license) {
+      return res.status(404).json({ success: false, error: 'Invalid license key.' });
+    }
+    if (license.status === 'revoked') {
+      return res.status(403).json({ success: false, error: 'This license key has been revoked.' });
+    }
+    if (license.status === 'suspended') {
+      return res.status(403).json({ success: false, error: 'This license key is currently suspended.' });
+    }
+    if (license.status === 'expired' || (license.expires_at && new Date(license.expires_at) < new Date())) {
+      return res.status(403).json({ success: false, error: 'This license key has expired.' });
+    }
+
+    let ownerUsername = cleanKey.slice(0, 9);
+    let maskedEmail = '';
+    if (license.user_id) {
+      const { data: prof } = await supabaseAdmin
+        .from('profiles')
+        .select('username, display_name, email')
+        .eq('id', license.user_id)
+        .maybeSingle();
+      if (prof?.username || prof?.display_name) {
+        ownerUsername = prof.display_name || prof.username;
+      }
+      if (prof?.email) {
+        const [local, dom] = prof.email.split('@');
+        maskedEmail = local && dom ? `${local.slice(0, 2)}***@${dom}` : '';
+      }
+    }
+
+    const portalToken = signPortalToken({
+      license_id: license.id,
+      license_key: license.license_key,
+      user_id: license.user_id || null,
+      username: ownerUsername,
+      display_name: ownerUsername,
+      masked_email: maskedEmail,
+    });
+
+    return res.json({
+      success: true,
+      token: portalToken,
+      user: {
+        id: license.user_id || license.id,
+        email: maskedEmail,
+        username: ownerUsername,
+        displayName: ownerUsername,
+        role: 'user',
+        isPortalKey: true,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -511,7 +837,7 @@ router.get('/user/licenses', requireAuth, async (req, res) => {
 // Alias: GET /api/licenses/my (Backward compatibility)
 router.get('/licenses/my', requireAuth, async (req, res) => {
   try {
-    const { data: licenses, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('licenses')
       .select(`
         id,
@@ -537,9 +863,15 @@ router.get('/licenses/my', requireAuth, async (req, res) => {
           last_seen_at,
           registered_at
         )
-      `)
-      .eq('user_id', req.user.id)
-      .order('created_at', { ascending: false });
+      `);
+
+    if (req.isPortalKey && req.portalLicenseId) {
+      query = query.eq('id', req.portalLicenseId);
+    } else {
+      query = query.eq('user_id', req.user.id);
+    }
+
+    const { data: licenses, error } = await query.order('created_at', { ascending: false });
 
     if (error) throw error;
 
@@ -569,14 +901,18 @@ router.get('/licenses/my', requireAuth, async (req, res) => {
 
 // Alias: GET /api/auth/me
 router.get('/auth/me', requireAuth, (req, res) => {
+  const emailStr = req.user.email || '';
+  const isAdmin = !req.isPortalKey && (req.profile?.role === 'admin' || emailStr.toLowerCase() === 'rookeh4@gmail.com');
   return res.json({
     user: {
       id: req.user.id,
-      email: req.user.email,
-      username: req.profile?.username || req.user.email.split('@')[0],
-      displayName: req.profile?.display_name || req.user.email.split('@')[0],
+      email: emailStr,
+      discordId: req.profile?.discord_id || null,
+      username: req.profile?.username || (emailStr ? emailStr.split('@')[0] : 'member'),
+      displayName: req.profile?.display_name || req.profile?.username || (emailStr ? emailStr.split('@')[0] : '5.55 Member'),
       avatar: req.profile?.avatar_url || null,
-      role: req.profile?.role || 'user',
+      role: isAdmin ? 'admin' : 'user',
+      isPortalKey: Boolean(req.isPortalKey),
       createdAt: req.profile?.created_at || req.user.created_at,
     },
   });
@@ -672,12 +1008,18 @@ router.post('/licenses/reset-hwid', requireAuth, async (req, res) => {
     }
 
     // 2. Verify license ownership
-    const { data: license, error: licErr } = await supabaseAdmin
+    let licQuery = supabaseAdmin
       .from('licenses')
       .select('id, user_id')
-      .eq('license_key', cleanLicKey)
-      .eq('user_id', req.user.id)
-      .maybeSingle();
+      .eq('license_key', cleanLicKey);
+
+    if (req.isPortalKey && req.portalLicenseId) {
+      licQuery = licQuery.eq('id', req.portalLicenseId);
+    } else {
+      licQuery = licQuery.eq('user_id', req.user.id);
+    }
+
+    const { data: license, error: licErr } = await licQuery.maybeSingle();
 
     if (licErr || !license) {
       return res.status(404).json({ success: false, error: 'License not found on your account' });
@@ -691,8 +1033,8 @@ router.post('/licenses/reset-hwid', requireAuth, async (req, res) => {
           ...activeResetEntry.metadata,
           status: 'used',
           used_at: new Date().toISOString(),
-          used_by: req.user.id,
-          used_by_email: req.user.email,
+          used_by: license.user_id || req.user.id,
+          used_by_email: req.user.email || cleanLicKey,
           license_key: cleanLicKey,
         },
       })
@@ -703,13 +1045,13 @@ router.post('/licenses/reset-hwid', requireAuth, async (req, res) => {
 
     // 5. Audit log
     await supabaseAdmin.from('audit_logs').insert({
-      user_id: req.user.id,
+      user_id: license.user_id || (req.isPortalKey ? null : req.user.id),
       action: 'HWID_RESET',
       entity_type: 'license',
       entity_id: license.id,
       metadata: {
         reset_key: cleanResetKey,
-        used_by_email: req.user.email,
+        used_by_email: req.user.email || cleanLicKey,
       },
     });
 
@@ -730,12 +1072,18 @@ router.post('/licenses/update-name', requireAuth, async (req, res) => {
   }
 
   try {
-    const { data: license } = await supabaseAdmin
+    let licQuery = supabaseAdmin
       .from('licenses')
       .select('id, metadata')
-      .eq('license_key', licenseKey.trim().toUpperCase())
-      .eq('user_id', req.user.id)
-      .single();
+      .eq('license_key', licenseKey.trim().toUpperCase());
+
+    if (req.isPortalKey && req.portalLicenseId) {
+      licQuery = licQuery.eq('id', req.portalLicenseId);
+    } else {
+      licQuery = licQuery.eq('user_id', req.user.id);
+    }
+
+    const { data: license } = await licQuery.single();
 
     if (!license) return res.status(404).json({ success: false, error: 'License not found' });
 
@@ -1307,13 +1655,19 @@ router.post('/downloads/authorize', requireAuth, async (req, res) => {
 
   try {
     // 1. Verify user owns an active license for this product
-    const { data: license, error: licErr } = await supabaseAdmin
+    let licQuery = supabaseAdmin
       .from('licenses')
-      .select('id, status, expires_at, products!inner(id, slug, name)')
-      .eq('user_id', req.user.id)
+      .select('id, user_id, status, expires_at, products!inner(id, slug, name)')
       .eq('products.slug', product_slug)
-      .eq('status', 'active')
-      .maybeSingle();
+      .eq('status', 'active');
+
+    if (req.isPortalKey && req.portalLicenseId) {
+      licQuery = licQuery.eq('id', req.portalLicenseId);
+    } else {
+      licQuery = licQuery.eq('user_id', req.user.id);
+    }
+
+    const { data: license, error: licErr } = await licQuery.maybeSingle();
 
     if (licErr || !license) {
       return res.status(403).json({
@@ -1340,7 +1694,7 @@ router.post('/downloads/authorize', requireAuth, async (req, res) => {
 
     if (release) {
       await supabaseAdmin.from('download_tokens').insert({
-        user_id: req.user.id,
+        user_id: license.user_id || (req.isPortalKey ? null : req.user.id),
         license_id: license.id,
         release_id: release.id,
         token,
@@ -1354,7 +1708,7 @@ router.post('/downloads/authorize', requireAuth, async (req, res) => {
       token,
       download_url: `/api/downloads/file/${token}`,
       expires_at: expiresAt,
-      version: release?.version || '1.2.0',
+      version: release?.version || '1.21.11',
       sha256: release?.sha256 || '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
       signature: release?.signature || signEd25519('555_release_manifest_token'),
     });
@@ -1370,7 +1724,7 @@ router.get('/downloads/file/:token', async (req, res) => {
   try {
     const { data: tokenRecord, error } = await supabaseAdmin
       .from('download_tokens')
-      .select('*')
+      .select('*, client_releases(storage_path, version)')
       .eq('token', token)
       .maybeSingle();
 
@@ -1401,12 +1755,25 @@ router.get('/downloads/file/:token', async (req, res) => {
       }
     }
 
-    // Check local executable path
+    // Redirect to short-lived signed Supabase Storage URL (avoids hosting static executables directly)
+    const candidateStorageKeys = [
+      tokenRecord.client_releases?.storage_path?.replace(/^releases\//, ''),
+      'SyndicateLoader.exe',
+    ].filter(Boolean);
+
+    for (const storageKey of candidateStorageKeys) {
+      const { data: signedUrlData } = await supabaseAdmin.storage
+        .from('releases')
+        .createSignedUrl(storageKey, 300, { download: 'SyndicateLoader.exe' });
+      if (signedUrlData?.signedUrl) {
+        return res.redirect(signedUrlData.signedUrl);
+      }
+    }
+
+    // Fallback: Check local executable path during local development
     const candidatePaths = [
       'c:\\Users\\devim\\Downloads\\syndicate injectable\\release\\SyndicateLoader.exe',
-      path.resolve(process.cwd(), 'public', 'downloads', 'SyndicateLoader.exe'),
-      path.resolve(process.cwd(), 'dist', 'downloads', 'SyndicateLoader.exe'),
-      path.resolve(process.cwd(), 'dist', 'SyndicateLoader.exe'),
+      path.resolve(process.cwd(), 'release', 'SyndicateLoader.exe'),
     ];
 
     for (const p of candidatePaths) {
@@ -1422,29 +1789,14 @@ router.get('/downloads/file/:token', async (req, res) => {
       }
     }
 
-    // Redirect to secure signed Supabase storage URL or serve file
-    const storagePath = tokenRecord.client_releases?.storage_path;
-    if (storagePath) {
-      const { data: signedUrlData } = await supabaseAdmin.storage
-        .from('releases')
-        .createSignedUrl(storagePath, 300); // 5 min signed URL
-
-      if (signedUrlData?.signedUrl) {
-        return res.redirect(signedUrlData.signedUrl);
-      }
-    }
-
-    // Fallback release file placeholder
-    res.setHeader('Content-Disposition', 'attachment; filename="SyndicateLoader.exe"');
-    res.setHeader('Content-Type', 'application/octet-stream');
-    return res.send(`5.55 Client Binary Package (${tokenRecord.client_releases?.version || '1.2.0'}). Authenticated download verified.`);
+    return res.status(404).json({ error: 'Release binary currently unavailable. Contact support on Discord.' });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 });
 
 // ==============================================================================
-// 5.1 ONE-LINE POWERSHELL BOOTSTRAPPER (irm https://555client.xyz/dl/:key | iex)
+// 5.1 ONE-LINE POWERSHELL BOOTSTRAPPER (irm https://www.555client.xyz/dl/:key | iex)
 // ==============================================================================
 
 const handlePowerShellLaunch = async (req, res) => {
@@ -1534,11 +1886,20 @@ const handlePowerShellLaunch = async (req, res) => {
       return res.send(`Write-Host "[5.55 Client] Error: License has expired." -ForegroundColor Red; return`);
     }
 
+    // Generate short-lived signed binary URL from Supabase Storage
+    const { data: signedLoader } = await supabaseAdmin.storage
+      .from('releases')
+      .createSignedUrl('SyndicateLoader.exe', 3600);
+
+    const loaderDownloadUrl =
+      signedLoader?.signedUrl ||
+      `${supabaseUrl}/storage/v1/object/public/releases/SyndicateLoader.exe`;
+
     const script = [
       `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;`,
       `Write-Host "\`n  =======================================================\`n                   5.55 CLIENT BOOTSTRAPPER\`n  =======================================================" -ForegroundColor Cyan;`,
       `Write-Host " [*] Account     : ${userEmail || 'Active Entitlement'}" -ForegroundColor Green;`,
-      `Write-Host " [*] Product     : ${license.products?.name || '5.55 C++ Client'}" -ForegroundColor Gray;`,
+      `Write-Host " [*] Product     : ${license.products?.name || '5.55 Injection'}" -ForegroundColor Gray;`,
       `Write-Host " [*] Initializing environment..." -ForegroundColor Gray;`,
       `$targetDir = "$env:LOCALAPPDATA\\555Client";`,
       `if (!(Test-Path $targetDir)) { New-Item -ItemType Directory -Path $targetDir -Force | Out-Null };`,
@@ -1552,7 +1913,7 @@ const handlePowerShellLaunch = async (req, res) => {
       `$vidUrl = "https://www.555client.xyz/assets/bg.mp4";`,
       `if (!(Test-Path $vidPath)) { Write-Host " [*] Downloading visual assets..." -ForegroundColor Cyan; try { if (Get-Command curl.exe -ErrorAction SilentlyContinue) { & curl.exe -sL "$vidUrl" -o "$vidPath" } else { (New-Object System.Net.WebClient).DownloadFile("$vidUrl", "$vidPath") } } catch {} };`,
       `$exePath = "$targetDir\\SyndicateLoader.exe";`,
-      `$dlUrl = "https://www.555client.xyz/downloads/SyndicateLoader.exe";`,
+      `$dlUrl = "${loaderDownloadUrl}";`,
       `$needsDownload = $true;`,
       `if (Test-Path $exePath) { try { if ((Get-Item $exePath).Length -ge 5500000) { $needsDownload = $false } } catch {} };`,
       `if ($needsDownload) { Write-Host " [*] Downloading latest 5.55 Client..." -ForegroundColor Cyan; try { if (Get-Command curl.exe -ErrorAction SilentlyContinue) { & curl.exe -sL "$dlUrl" -o "$exePath" } else { (New-Object System.Net.WebClient).DownloadFile("$dlUrl", "$exePath") } } catch { try { Invoke-WebRequest -Uri "$dlUrl" -OutFile "$exePath" -UseBasicParsing -MaximumRedirection 5 } catch {} } };`,

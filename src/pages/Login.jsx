@@ -23,79 +23,83 @@ export default function Login() {
   const [showOAuthHelp, setShowOAuthHelp] = useState(false);
   const [copiedRedirect, setCopiedRedirect] = useState(false);
 
-  // 1. Check existing session on mount
+  // 1. Check OAuth callback or existing session on mount
   useEffect(() => {
-    auth.getProfile().then((res) => {
-      if (res?.user) {
+    let active = true;
+
+    const initAuth = async () => {
+      // Check direct query token (from /weblogin command)
+      const queryToken = searchParams.get('token');
+      if (queryToken) {
+        auth.setToken(queryToken);
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+
+      // Check password reset redirect
+      if (searchParams.get('reset') === 'true') {
+        setStatus({ text: 'Please enter your new password below.', type: 'info' });
+      }
+
+      // Check OAuth fragment token & clear from URL immediately
+      const hash = window.location.hash;
+      if (hash && hash.includes('access_token=')) {
+        const params = new URLSearchParams(hash.substring(1));
+        const accessToken = params.get('access_token');
+        window.history.replaceState(null, '', window.location.pathname);
+
+        if (accessToken) {
+          setLoading(true);
+          setStatus({ text: 'Completing Discord sign-in...', type: 'info' });
+          try {
+            const syncRes = await fetch(`${API_BASE}/auth/discord-sync`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ accessToken }),
+            });
+            const syncData = await syncRes.json().catch(() => ({}));
+
+            if (!active) return;
+
+            if (syncRes.ok && syncData?.success && syncData?.token) {
+              if (syncData.session?.access_token && syncData.session?.refresh_token) {
+                await auth.supabase.auth.setSession({
+                  access_token: syncData.session.access_token,
+                  refresh_token: syncData.session.refresh_token,
+                });
+              }
+              auth.setToken(syncData.token);
+              if (syncData.user) {
+                localStorage.setItem('plutora_user', JSON.stringify(syncData.user));
+              }
+              navigate('/dashboard', { replace: true });
+              return;
+            } else {
+              setStatus({
+                text: syncData?.error || 'Could not sign in with Discord. Please try again.',
+                type: 'danger',
+              });
+            }
+          } catch {
+            if (active) {
+              setStatus({ text: 'Connection error during Discord sign-in.', type: 'danger' });
+            }
+          } finally {
+            if (active) setLoading(false);
+          }
+          return;
+        }
+      }
+
+      // Check existing authenticated session
+      const existing = await auth.getProfile();
+      if (active && existing?.user) {
         navigate('/dashboard', { replace: true });
       }
-    });
+    };
 
-    // Check direct query token (from /weblogin command)
-    const queryToken = searchParams.get('token');
-    if (queryToken) {
-      auth.setToken(queryToken);
-      navigate('/dashboard', { replace: true });
-      return;
-    }
-
-    // Check password reset redirect
-    if (searchParams.get('reset') === 'true') {
-      setStatus({ text: 'Please enter your new password below.', type: 'info' });
-    }
-
-    // Check OAuth fragment token
-    const hash = window.location.hash;
-    if (hash && hash.includes('access_token=')) {
-      const params = new URLSearchParams(hash.substring(1));
-      const accessToken = params.get('access_token');
-      if (accessToken) {
-        setLoading(true);
-        setStatus({ text: 'Authenticating with Discord...', type: 'info' });
-
-        fetch('https://discord.com/api/users/@me', {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        })
-          .then((res) => res.json())
-          .then(async (discordUser) => {
-            if (discordUser?.id) {
-              const avatarUrl = discordUser.avatar
-                ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png?size=256`
-                : null;
-
-              // Sync with backend
-              try {
-                const syncRes = await fetch(`${API_BASE}/auth/discord-sync`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    discordId: discordUser.id,
-                    username: discordUser.username,
-                    displayName: discordUser.global_name || discordUser.username,
-                    avatarUrl,
-                  }),
-                });
-                const syncData = await syncRes.json();
-                if (syncData.token) {
-                  auth.setToken(syncData.token);
-                  localStorage.setItem('plutora_user', JSON.stringify(syncData.user));
-                }
-              } catch {
-                // Handled gracefully
-              }
-
-              window.history.replaceState(null, '', window.location.pathname);
-              navigate('/dashboard');
-            } else {
-              setStatus({ text: 'Failed to retrieve Discord profile.', type: 'danger' });
-            }
-          })
-          .catch(() => {
-            setStatus({ text: 'Error connecting to Discord API.', type: 'danger' });
-          })
-          .finally(() => setLoading(false));
-      }
-    }
+    initAuth();
+    return () => { active = false; };
   }, [searchParams, navigate]);
 
   // Handle Email + Password Sign In
@@ -202,23 +206,18 @@ export default function Login() {
     setStatus({ text: '', type: '' });
 
     try {
-      const res = await fetch(`${API_BASE}/licenses/validate`, {
+      const res = await fetch(`${API_BASE}/auth/key-login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ license_key: clean, hwid: 'WEB-PORTAL-LOGIN' }),
+        body: JSON.stringify({ license_key: clean }),
       });
       const data = await res.json();
-      if (data.valid) {
-        auth.setToken(data.session_token || clean);
-        localStorage.setItem(
-          'plutora_user',
-          JSON.stringify({
-            id: clean,
-            username: clean.substring(0, 10),
-            role: 'user',
-          })
-        );
-        navigate('/dashboard');
+      if (res.ok && data.success && data.token) {
+        auth.setToken(data.token);
+        if (data.user) {
+          localStorage.setItem('plutora_user', JSON.stringify(data.user));
+        }
+        navigate('/dashboard', { replace: true });
       } else {
         setStatus({ text: data.error || 'Invalid or inactive license key.', type: 'danger' });
       }
@@ -231,8 +230,12 @@ export default function Login() {
 
   // Discord OAuth Redirect
   const handleDiscordOAuth = () => {
-    const redirectUri = encodeURIComponent(window.location.origin + '/login');
-    const discordAuthUrl = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=token&redirect_uri=${redirectUri}&scope=identify`;
+    const baseOrigin =
+      window.location.hostname === '555client.xyz'
+        ? 'https://www.555client.xyz'
+        : window.location.origin;
+    const redirectUri = encodeURIComponent(`${baseOrigin}/login`);
+    const discordAuthUrl = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=token&redirect_uri=${redirectUri}&scope=identify%20email`;
     window.location.href = discordAuthUrl;
   };
 
@@ -584,8 +587,8 @@ export default function Login() {
             <h2 style={{ fontSize: '22px', marginBottom: '6px', color: '#fff', fontWeight: 800 }}>
               License Key
             </h2>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '22px' }}>
-              Enter your 23-character product key for instant session authorization.
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '22px' }}>
+              Enter your product license key for instant dashboard access.
             </p>
 
             <div className="form-group" style={{ textAlign: 'left', marginBottom: '16px' }}>
@@ -597,7 +600,7 @@ export default function Login() {
                 value={licenseKey}
                 onChange={(e) => setLicenseKey(e.target.value)}
                 className="form-control"
-                placeholder="555XX-XXXXX-XXXXX-XXXXX"
+                placeholder="555C-XXXX-XXXX-XXXX"
                 required
                 style={{ fontSize: '14px', padding: '11px 14px', letterSpacing: '0.05em' }}
               />
