@@ -1339,19 +1339,31 @@ router.get('/downloads/file/:token', async (req, res) => {
 
     // Increment download count
     if (tokenRecord.release_id) {
-      await supabaseAdmin.rpc('increment_download_count', { release_id: tokenRecord.release_id }).catch(() => {});
+      try {
+        await supabaseAdmin.rpc('increment_download_count', { release_id: tokenRecord.release_id });
+      } catch (countErr) {
+        // Non-critical, ignore
+      }
     }
 
     // Check local executable path
     const candidatePaths = [
       'c:\\Users\\devim\\Downloads\\syndicate injectable\\release\\SyndicateLoader.exe',
       path.resolve(process.cwd(), 'public', 'downloads', 'SyndicateLoader.exe'),
+      path.resolve(process.cwd(), 'dist', 'downloads', 'SyndicateLoader.exe'),
       path.resolve(process.cwd(), 'dist', 'SyndicateLoader.exe'),
     ];
 
     for (const p of candidatePaths) {
       if (fs.existsSync(p)) {
-        return res.download(p, 'SyndicateLoader.exe');
+        try {
+          res.setHeader('Content-Disposition', 'attachment; filename="SyndicateLoader.exe"');
+          res.setHeader('Content-Type', 'application/vnd.microsoft.portable-executable');
+          const fileBuf = fs.readFileSync(p);
+          return res.send(fileBuf);
+        } catch (readErr) {
+          console.error('[Download file read error]:', readErr);
+        }
       }
     }
 
