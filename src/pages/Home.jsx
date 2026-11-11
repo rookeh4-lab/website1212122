@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import PricingSection from '../components/PricingSection';
 import PurchaseModal from '../components/PurchaseModal';
+import VideoShowcase from '../components/VideoShowcase';
 
 export default function Home() {
   const [modalState, setModalState] = useState({ open: false, tier: 'lifetime' });
@@ -109,6 +110,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* Echo-Style Animated Video Showcase Reel */}
+      <VideoShowcase />
 
       {/* Showcase Section */}
       <section
