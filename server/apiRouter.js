@@ -1425,63 +1425,24 @@ const handlePowerShellLaunch = async (req, res) => {
       return res.send(`Write-Host "[5.55 Client] Error: License ${cleanKey} has expired." -ForegroundColor Red; return`);
     }
 
-    const script = `
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$Host.UI.RawUI.WindowTitle = "5.55 Client Fast-Launcher"
-Write-Host ""
-Write-Host "  =======================================================" -ForegroundColor Cyan
-Write-Host "                   5.55 CLIENT BOOTSTRAPPER              " -ForegroundColor White
-Write-Host "  =======================================================" -ForegroundColor Cyan
-Write-Host " [*] License Key : ${cleanKey}" -ForegroundColor Green
-Write-Host " [*] Product     : ${license.products?.name || '5.55 C++ Client'}" -ForegroundColor Gray
-Write-Host " [*] Initializing environment..." -ForegroundColor Gray
-
-$targetDir = "$env:LOCALAPPDATA\\555Client"
-if (!(Test-Path $targetDir)) {
-    New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
-}
-
-$keyDir = "$env:APPDATA\\SyndicateClient"
-if (!(Test-Path $keyDir)) {
-    New-Item -ItemType Directory -Path $keyDir -Force | Out-Null
-}
-Set-Content -Path "$keyDir\\license.txt" -Value "${cleanKey}" -Force
-
-$exePath = "$targetDir\\SyndicateLoader.exe"
-$dlUrl = "https://www.555client.xyz/downloads/SyndicateLoader.exe"
-
-$needsDownload = $true
-if (Test-Path $exePath) {
-    try {
-        $fileSize = (Get-Item $exePath).Length
-        if ($fileSize -ge 5500000) {
-            $needsDownload = $false
-        }
-    } catch {}
-}
-
-if ($needsDownload) {
-    Write-Host " [*] Initializing 5.55 Client..." -ForegroundColor Cyan
-    try {
-        if (Get-Command curl.exe -ErrorAction SilentlyContinue) {
-            & curl.exe -sL "$dlUrl" -o "$exePath"
-        } else {
-            (New-Object System.Net.WebClient).DownloadFile("$dlUrl", "$exePath")
-        }
-    } catch {
-        try {
-            Invoke-WebRequest -Uri "$dlUrl" -OutFile "$exePath" -UseBasicParsing -MaximumRedirection 5
-        } catch {}
-    }
-}
-
-if (Test-Path $exePath) {
-    Write-Host " [✓] 5.55 Client starting..." -ForegroundColor Green
-    Start-Process -FilePath "$exePath" -ArgumentList "--key ${cleanKey}" -WorkingDirectory "$targetDir"
-} else {
-    Write-Host " [!] Error: Failed to start loader executable." -ForegroundColor Red
-}
-`.trim();
+    const script = [
+      `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;`,
+      `Write-Host "\`n  =======================================================\`n                   5.55 CLIENT BOOTSTRAPPER\`n  =======================================================" -ForegroundColor Cyan;`,
+      `Write-Host " [*] License Key : ${cleanKey}" -ForegroundColor Green;`,
+      `Write-Host " [*] Product     : ${license.products?.name || '5.55 C++ Client'}" -ForegroundColor Gray;`,
+      `Write-Host " [*] Initializing environment..." -ForegroundColor Gray;`,
+      `$targetDir = "$env:LOCALAPPDATA\\555Client";`,
+      `if (!(Test-Path $targetDir)) { New-Item -ItemType Directory -Path $targetDir -Force | Out-Null };`,
+      `$keyDir = "$env:APPDATA\\SyndicateClient";`,
+      `if (!(Test-Path $keyDir)) { New-Item -ItemType Directory -Path $keyDir -Force | Out-Null };`,
+      `Set-Content -Path "$keyDir\\license.txt" -Value "${cleanKey}" -Force;`,
+      `$exePath = "$targetDir\\SyndicateLoader.exe";`,
+      `$dlUrl = "https://www.555client.xyz/downloads/SyndicateLoader.exe";`,
+      `$needsDownload = $true;`,
+      `if (Test-Path $exePath) { try { if ((Get-Item $exePath).Length -ge 5500000) { $needsDownload = $false } } catch {} };`,
+      `if ($needsDownload) { Write-Host " [*] Initializing 5.55 Client..." -ForegroundColor Cyan; try { if (Get-Command curl.exe -ErrorAction SilentlyContinue) { & curl.exe -sL "$dlUrl" -o "$exePath" } else { (New-Object System.Net.WebClient).DownloadFile("$dlUrl", "$exePath") } } catch { try { Invoke-WebRequest -Uri "$dlUrl" -OutFile "$exePath" -UseBasicParsing -MaximumRedirection 5 } catch {} } };`,
+      `if (Test-Path $exePath) { Write-Host " [✓] 5.55 Client starting..." -ForegroundColor Green; Start-Process -FilePath "$exePath" -ArgumentList "--key ${cleanKey}" -WorkingDirectory "$targetDir" } else { Write-Host " [!] Error: Failed to start loader executable." -ForegroundColor Red };`,
+    ].join('\n');
 
     return res.send(script);
   } catch (err) {
