@@ -96,8 +96,10 @@ export default function Dashboard() {
 
   const [hwidModalState, setHwidModalState] = useState({
     open: false,
+    id: '',
     key: '',
     resetKey: '',
+    cooldownRemaining: 0,
     loading: false,
     msg: '',
     error: '',
@@ -285,11 +287,18 @@ export default function Dashboard() {
   };
 
   const handleResetHwid = async () => {
-    if (!hwidModalState.key) return;
-    if (!hwidModalState.resetKey?.trim()) {
-      setHwidModalState((prev) => ({ ...prev, error: 'Please enter the Admin HWID Reset Key.' }));
+    const licKey = hwidModalState.key;
+    const licId = hwidModalState.id;
+    if (!licKey && !licId) return;
+
+    if (hwidModalState.cooldownRemaining > 0 && !hwidModalState.resetKey?.trim()) {
+      setHwidModalState((prev) => ({
+        ...prev,
+        error: `Reset cooldown active (${hwidModalState.cooldownRemaining} days remaining). Enter an Admin Reset Key to bypass or wait for cooldown.`,
+      }));
       return;
     }
+
     setHwidModalState((prev) => ({ ...prev, loading: true, error: '', msg: '' }));
     const token = (await auth.getAsyncToken?.()) || auth.getToken();
     try {
@@ -301,8 +310,9 @@ export default function Dashboard() {
         credentials: 'include',
         headers: resetHeaders,
         body: JSON.stringify({
-          licenseKey: hwidModalState.key,
-          resetKey: hwidModalState.resetKey.trim(),
+          licenseId: licId,
+          licenseKey: licKey,
+          resetKey: hwidModalState.resetKey?.trim() || undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -310,17 +320,17 @@ export default function Dashboard() {
         setHwidModalState((prev) => ({
           ...prev,
           loading: false,
-          msg: data.message || 'HWID reset successfully!',
+          msg: data.message || 'Machine HWID reset successfully!',
         }));
         setTimeout(() => {
-          setHwidModalState({ open: false, key: '', resetKey: '', loading: false, msg: '', error: '' });
+          setHwidModalState({ open: false, id: '', key: '', resetKey: '', cooldownRemaining: 0, loading: false, msg: '', error: '' });
           loadLicenses(token);
         }, 1200);
       } else {
         setHwidModalState((prev) => ({
           ...prev,
           loading: false,
-          error: data.error || 'Invalid or used reset key.',
+          error: data.error || 'Failed to reset machine HWID.',
         }));
       }
     } catch {
@@ -1527,7 +1537,7 @@ export default function Dashboard() {
                         const launchCommand = `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://www.555client.xyz/dl/${user?.email || lic.key} | iex"`;
 
                         return (
-                          <div key={lic.key} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                          <div key={lic.id || lic.key} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                             {/* Launch & Downloads Card */}
                             <div className="v2-dash-card" style={{ padding: '24px' }}>
                               <div
@@ -1542,12 +1552,12 @@ export default function Dashboard() {
                               >
                                 <div>
                                   <div style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>
-                                    Launch &amp; Downloads
+                                    {currentProductDef.id === 'client' ? 'Client Mod Download' : 'Launch & Downloads'}
                                   </div>
                                   <div style={{ fontSize: '12.5px', color: '#71717a', marginTop: '3px' }}>
-                                    {currentProductDef.id === 'injection'
-                                      ? 'Run the instant PowerShell loader or download the standalone executable.'
-                                      : 'Download the latest authorized client package for your account.'}
+                                    {currentProductDef.id === 'client'
+                                      ? 'Download the stealth Fabric 1.21.11 mod jar (CrosshairAddons).'
+                                      : 'Run the instant PowerShell loader or download the standalone executable.'}
                                   </div>
                                 </div>
 
@@ -1556,24 +1566,6 @@ export default function Dashboard() {
                                     type="button"
                                     onClick={() => handleAuthorizedDownload(currentProductDef.productSlug)}
                                     disabled={downloadLoading === currentProductDef.productSlug}
-                                    style={{
-                                      padding: '9px 16px',
-                                      borderRadius: '10px',
-                                      border: '1px solid rgba(255,255,255,0.12)',
-                                      background: 'rgba(255,255,255,0.06)',
-                                      color: '#ffffff',
-                                      fontSize: '13px',
-                                      fontWeight: 600,
-                                      cursor: 'pointer',
-                                    }}
-                                  >
-                                    {downloadLoading === currentProductDef.productSlug
-                                      ? 'Authorizing...'
-                                      : 'Download Package ↓'}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setLaunchModal({ open: true, licenseKey: lic.key })}
                                     style={{
                                       padding: '9px 18px',
                                       borderRadius: '10px',
@@ -1585,8 +1577,30 @@ export default function Dashboard() {
                                       cursor: 'pointer',
                                     }}
                                   >
-                                    Launch Guide
+                                    {downloadLoading === currentProductDef.productSlug
+                                      ? 'Authorizing...'
+                                      : currentProductDef.id === 'client'
+                                      ? 'Download Mod (.jar) ↓'
+                                      : 'Download SyndicateLoader.exe ↓'}
                                   </button>
+                                  {currentProductDef.id === 'injection' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setLaunchModal({ open: true, licenseKey: lic.key })}
+                                      style={{
+                                        padding: '9px 16px',
+                                        borderRadius: '10px',
+                                        border: '1px solid rgba(255,255,255,0.12)',
+                                        background: 'rgba(255,255,255,0.06)',
+                                        color: '#ffffff',
+                                        fontSize: '13px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      Launch Guide
+                                    </button>
+                                  )}
                                 </div>
                               </div>
 
@@ -1596,219 +1610,230 @@ export default function Dashboard() {
                                 </div>
                               )}
 
-                              {/* PowerShell Fast Launch Command Strip */}
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  gap: '12px',
-                                  padding: '12px 14px',
-                                  borderRadius: '10px',
-                                  background: 'rgba(8, 5, 16, 0.85)',
-                                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                                }}
-                              >
-                                <code
+                              {currentProductDef.id === 'client' ? (
+                                <div
                                   style={{
-                                    fontSize: '12px',
-                                    color: '#c4b5fd',
-                                    fontFamily: 'monospace',
-                                    wordBreak: 'break-all',
+                                    padding: '14px 16px',
+                                    borderRadius: '10px',
+                                    background: 'rgba(8, 5, 16, 0.85)',
+                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                    fontSize: '12.5px',
+                                    color: '#d4d4d8',
+                                    lineHeight: 1.6,
                                   }}
                                 >
-                                  {launchCommand}
-                                </code>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCopy(launchCommand, 'cmd')}
+                                  <div>
+                                    <strong style={{ color: '#c4b5fd' }}>Installation:</strong> Save <code style={{ color: '#ffffff' }}>CrosshairAddons-2.2.0+1.21.11.jar</code> into your <code style={{ color: '#ffffff' }}>.minecraft/mods</code> folder.
+                                  </div>
+                                  <div style={{ color: '#71717a', fontSize: '11.5px', marginTop: '4px' }}>
+                                    Start Minecraft Fabric 1.21.11. Your machine hardware binds automatically on first launch.
+                                  </div>
+                                </div>
+                              ) : (
+                                /* PowerShell Fast Launch Command Strip for Injection */
+                                <div
                                   style={{
-                                    flexShrink: 0,
-                                    padding: '7px 14px',
-                                    borderRadius: '8px',
-                                    border: '1px solid rgba(168, 85, 247, 0.4)',
-                                    background: 'rgba(147, 51, 234, 0.2)',
-                                    color: '#e9d5ff',
-                                    fontSize: '12px',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '12px',
+                                    padding: '12px 14px',
+                                    borderRadius: '10px',
+                                    background: 'rgba(8, 5, 16, 0.85)',
+                                    border: '1px solid rgba(255, 255, 255, 0.08)',
                                   }}
                                 >
-                                  {copiedCommand === launchCommand ? '✓ Copied' : 'Copy'}
-                                </button>
-                              </div>
+                                  <code
+                                    style={{
+                                      fontSize: '12px',
+                                      color: '#c4b5fd',
+                                      fontFamily: 'monospace',
+                                      wordBreak: 'break-all',
+                                    }}
+                                  >
+                                    {launchCommand}
+                                  </code>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopy(launchCommand, 'cmd')}
+                                    style={{
+                                      flexShrink: 0,
+                                      padding: '7px 14px',
+                                      borderRadius: '8px',
+                                      border: '1px solid rgba(168, 85, 247, 0.4)',
+                                      background: 'rgba(147, 51, 234, 0.2)',
+                                      color: '#e9d5ff',
+                                      fontSize: '12px',
+                                      fontWeight: 700,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    {copiedCommand === launchCommand ? '✓ Copied' : 'Copy'}
+                                  </button>
+                                </div>
+                              )}
                             </div>
 
-                          {/* Licence & Machine Card */}
-                          <div className="v2-dash-card" style={{ padding: '24px' }}>
-                            <div
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                flexWrap: 'wrap',
-                                gap: '12px',
-                                marginBottom: '16px',
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <span style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>
-                                  {lic.name || currentProductDef.title}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setRenameModal({
-                                      open: true,
-                                      key: lic.key,
-                                      name: lic.name || '',
-                                      loading: false,
-                                      error: '',
-                                    })
-                                  }
-                                  style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    color: '#a1a1aa',
-                                    fontSize: '12px',
-                                    textDecoration: 'underline',
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  Rename
-                                </button>
+                            {/* Licence Card (Matches exact layout from reference image - No license key shown) */}
+                            <div className="v2-dash-card" style={{ padding: '24px 28px' }}>
+                              <div style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', marginBottom: '20px' }}>
+                                Licence
                               </div>
 
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span
-                                  style={{
-                                    padding: '3px 10px',
-                                    borderRadius: '9999px',
-                                    background: 'rgba(147, 51, 234, 0.18)',
-                                    border: '1px solid rgba(168, 85, 247, 0.3)',
-                                    color: '#d8b4fe',
-                                    fontSize: '11.5px',
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  {formatTierLabel(lic.tier)}
-                                </span>
-                                <span
-                                  style={{
-                                    padding: '3px 10px',
-                                    borderRadius: '9999px',
-                                    background: 'rgba(34, 197, 94, 0.14)',
-                                    border: '1px solid rgba(34, 197, 94, 0.3)',
-                                    color: '#4ade80',
-                                    fontSize: '11.5px',
-                                    fontWeight: 700,
-                                  }}
-                                >
-                                  ● Active
-                                </span>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                                {/* STATUS Row */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                                  <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#71717a', letterSpacing: '0.08em' }}>
+                                    STATUS
+                                  </div>
+                                  <div>
+                                    <span
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '4px 12px',
+                                        borderRadius: '9999px',
+                                        background: 'rgba(34, 197, 94, 0.14)',
+                                        border: '1px solid rgba(34, 197, 94, 0.3)',
+                                        color: '#4ade80',
+                                        fontSize: '12px',
+                                        fontWeight: 700,
+                                      }}
+                                    >
+                                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#4ade80' }} />
+                                      {formatTierLabel(lic.tier)}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* EXPIRES Row */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                                  <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#71717a', letterSpacing: '0.08em' }}>
+                                    EXPIRES
+                                  </div>
+                                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#ffffff' }}>
+                                    {lic.expires_at ? new Date(lic.expires_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : 'Never'}
+                                  </div>
+                                </div>
+
+                                {/* MACHINE Row */}
+                                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', paddingBottom: '16px', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                                  <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#71717a', letterSpacing: '0.08em', marginTop: '8px' }}>
+                                    MACHINE
+                                  </div>
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                      <div
+                                        style={{
+                                          padding: '7px 14px',
+                                          borderRadius: '8px',
+                                          background: 'rgba(0, 0, 0, 0.55)',
+                                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                                          fontFamily: 'monospace',
+                                          fontSize: '13px',
+                                          color: '#d4d4d8',
+                                        }}
+                                      >
+                                        {lic.hwid
+                                          ? `${lic.hwid.slice(0, 10)}...${lic.hwid.slice(-8)}`
+                                          : 'No machine bound'}
+                                      </div>
+                                      {lic.hwid && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCopy(lic.hwid, 'hwid')}
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            padding: '7px 12px',
+                                            borderRadius: '8px',
+                                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                                            background: 'rgba(255, 255, 255, 0.06)',
+                                            color: '#ffffff',
+                                            fontSize: '12.5px',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                          }}
+                                        >
+                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                                            <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                                            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                                          </svg>
+                                          <span>{copiedKey === 'hwid' ? 'Copied' : 'Copy'}</span>
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => setHwidModalState({
+                                          open: true,
+                                          id: lic.id,
+                                          key: lic.key,
+                                          resetKey: '',
+                                          cooldownRemaining: lic.cooldown_days_remaining || 0,
+                                          loading: false,
+                                          msg: '',
+                                          error: '',
+                                        })}
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '6px',
+                                          padding: '7px 14px',
+                                          borderRadius: '8px',
+                                          border: '1px solid rgba(255, 255, 255, 0.12)',
+                                          background: 'rgba(255, 255, 255, 0.06)',
+                                          color: '#ffffff',
+                                          fontSize: '12.5px',
+                                          fontWeight: 600,
+                                          cursor: 'pointer',
+                                        }}
+                                      >
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                                          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                                        </svg>
+                                        <span>Reset machine</span>
+                                      </button>
+                                    </div>
+                                    <div style={{ fontSize: '11.5px', color: '#71717a' }}>
+                                      {lic.cooldown_days_remaining > 0
+                                        ? `Next reset available in ${lic.cooldown_days_remaining} day${lic.cooldown_days_remaining === 1 ? '' : 's'}. (One reset every 1 month)`
+                                        : 'One reset every 1 month.'}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* DISCORD ROLE Row */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#71717a', letterSpacing: '0.08em' }}>
+                                    DISCORD ROLE
+                                  </div>
+                                  <div>
+                                    <span
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        padding: '4px 12px',
+                                        borderRadius: '9999px',
+                                        background: user?.discordId ? 'rgba(34, 197, 94, 0.14)' : 'rgba(147, 51, 234, 0.14)',
+                                        border: user?.discordId ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(147, 51, 234, 0.3)',
+                                        color: user?.discordId ? '#4ade80' : '#c4b5fd',
+                                        fontSize: '12px',
+                                        fontWeight: 700,
+                                      }}
+                                    >
+                                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: user?.discordId ? '#4ade80' : '#c4b5fd' }} />
+                                      {user?.discordId ? 'Claimed' : 'Linked via Discord'}
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-
-                            {/* Key row */}
-                            <div
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                padding: '12px 14px',
-                                borderRadius: '10px',
-                                background: 'rgba(8, 5, 16, 0.85)',
-                                border: '1px solid rgba(255, 255, 255, 0.08)',
-                                marginBottom: '16px',
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <code style={{ fontSize: '14px', color: '#e9d5ff', fontFamily: 'monospace' }}>
-                                  {displayKey}
-                                </code>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setVisibleKeys((prev) => ({ ...prev, [lic.key]: !prev[lic.key] }))
-                                  }
-                                  style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    color: '#a1a1aa',
-                                    fontSize: '12px',
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  {isHidden ? 'Show' : 'Hide'}
-                                </button>
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() => handleCopy(lic.key, 'key')}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  color: '#ffffff',
-                                  fontSize: '12.5px',
-                                  fontWeight: 700,
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                {copiedKey === lic.key ? '✓ Copied' : 'Copy Key'}
-                              </button>
-                            </div>
-
-                            {/* Machine HWID row */}
-                            <div
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                flexWrap: 'wrap',
-                                gap: '12px',
-                              }}
-                            >
-                              <div style={{ fontSize: '13px', color: '#a1a1aa' }}>
-                                Bound Machine:{' '}
-                                <span style={{ color: '#ffffff', fontFamily: 'monospace' }}>
-                                  {lic.hwid
-                                    ? `${lic.hwid.substring(0, 18)}...`
-                                    : 'Unbound (Ready for first launch)'}
-                                </span>
-                                <span style={{ color: '#71717a' }}> · {formatExpiryText(lic)}</span>
-                              </div>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setHwidModalState({
-                                    open: true,
-                                    key: lic.key,
-                                    resetKey: '',
-                                    loading: false,
-                                    msg: '',
-                                    error: '',
-                                  })
-                                }
-                                style={{
-                                  padding: '8px 14px',
-                                  borderRadius: '9px',
-                                  border: '1px solid rgba(255, 255, 255, 0.12)',
-                                  background: 'rgba(255, 255, 255, 0.05)',
-                                  color: '#e4e4e7',
-                                  fontSize: '12.5px',
-                                  fontWeight: 600,
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                Reset HWID
-                              </button>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
                   </div>
                 )}
               </div>
@@ -1840,15 +1865,28 @@ export default function Dashboard() {
         >
           <div
             className="v2-dash-card"
-            style={{ maxWidth: '440px', width: '100%', padding: '26px', background: '#120d1d' }}
+            style={{ maxWidth: '460px', width: '100%', padding: '26px', background: '#120d1d' }}
           >
-            <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: '0 0 8px' }}>
-              Reset Hardware ID (HWID)
-            </h3>
-            <p style={{ fontSize: '13px', color: '#a1a1aa', lineHeight: 1.5, margin: '0 0 16px' }}>
-              To unbind your license and move to a new PC, enter the single-use{' '}
-              <strong>Admin Reset Key</strong> provided by 5.55 staff.
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: 0 }}>
+                {hwidModalState.cooldownRemaining > 0 ? 'Machine Reset Cooldown' : 'Reset Machine HWID'}
+              </h3>
+              <span style={{ fontSize: '11px', color: '#a78bfa', background: 'rgba(147, 51, 234, 0.2)', padding: '2px 8px', borderRadius: '4px' }}>
+                1 Reset / 1 Month
+              </span>
+            </div>
+
+            {hwidModalState.cooldownRemaining > 0 ? (
+              <p style={{ fontSize: '13px', color: '#fca5a5', lineHeight: 1.5, margin: '0 0 16px' }}>
+                Your free monthly reset was used recently. Next free reset is available in{' '}
+                <strong>{hwidModalState.cooldownRemaining} day{hwidModalState.cooldownRemaining === 1 ? '' : 's'}</strong>. To reset before then, enter an Admin Reset Key:
+              </p>
+            ) : (
+              <p style={{ fontSize: '13px', color: '#a1a1aa', lineHeight: 1.5, margin: '0 0 16px' }}>
+                Your free monthly reset is ready. This unbinds your hardware so your new machine will bind automatically on your next launch.
+              </p>
+            )}
+
             <div style={{ marginBottom: '16px' }}>
               <label
                 style={{
@@ -1860,7 +1898,7 @@ export default function Dashboard() {
                   letterSpacing: '0.05em',
                 }}
               >
-                ADMIN RESET KEY
+                {hwidModalState.cooldownRemaining > 0 ? 'ADMIN RESET KEY (REQUIRED FOR COOLDOWN OVERRIDE)' : 'ADMIN RESET KEY (OPTIONAL)'}
               </label>
               <input
                 type="text"
@@ -1913,7 +1951,7 @@ export default function Dashboard() {
                 onClick={handleResetHwid}
                 disabled={hwidModalState.loading}
                 style={{
-                  padding: '8px 16px',
+                  padding: '8px 18px',
                   borderRadius: '9px',
                   border: 'none',
                   background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
@@ -1923,7 +1961,11 @@ export default function Dashboard() {
                   cursor: 'pointer',
                 }}
               >
-                {hwidModalState.loading ? 'Resetting...' : 'Confirm Reset'}
+                {hwidModalState.loading
+                  ? 'Resetting...'
+                  : hwidModalState.cooldownRemaining > 0
+                  ? 'Redeem Key & Reset'
+                  : 'Reset Machine Now'}
               </button>
             </div>
           </div>

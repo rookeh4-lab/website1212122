@@ -1330,22 +1330,37 @@ router.get('/licenses/my', requireAuth, async (req, res) => {
     if (error) throw error;
 
     // Format for existing dashboard state
-    const formatted = (licenses || []).map((lic) => ({
-      id: lic.id,
-      key: lic.license_key,
-      license_key: lic.license_key,
-      name: lic.metadata?.name || lic.products?.name || '5.55 Client',
-      product: lic.products?.slug,
-      product_name: lic.products?.name,
-      platform: lic.products?.platform,
-      status: lic.status,
-      tier: lic.license_type,
-      expires_at: lic.expires_at,
-      hwid: lic.devices?.[0]?.hwid || null,
-      devices: lic.devices || [],
-      max_devices: lic.max_devices,
-      created_at: lic.created_at,
-    }));
+    const formatted = (licenses || []).map((lic) => {
+      const lastReset = lic.metadata?.last_hwid_reset_at;
+      let cooldownDaysRemaining = 0;
+      if (lastReset) {
+        const diffMs = Date.now() - new Date(lastReset).getTime();
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+        if (diffDays < 30) {
+          cooldownDaysRemaining = Math.max(1, Math.ceil(30 - diffDays));
+        }
+      }
+
+      return {
+        id: lic.id,
+        key: lic.license_key,
+        license_key: lic.license_key,
+        name: lic.metadata?.name || lic.products?.name || '5.55 Client',
+        product: lic.products?.slug,
+        product_name: lic.products?.name,
+        platform: lic.products?.platform,
+        status: lic.status,
+        tier: lic.license_type,
+        expires_at: lic.expires_at,
+        hwid: lic.devices?.[0]?.hwid || null,
+        devices: lic.devices || [],
+        max_devices: lic.max_devices,
+        created_at: lic.created_at,
+        metadata: lic.metadata || {},
+        last_hwid_reset_at: lastReset || null,
+        cooldown_days_remaining: cooldownDaysRemaining,
+      };
+    });
 
     return res.json({ licenses: formatted, orders: [] });
   } catch (err) {
@@ -1426,28 +1441,25 @@ router.post('/licenses/claim', requireAuth, async (req, res) => {
 
 // POST /api/licenses/reset-hwid
 router.post('/licenses/reset-hwid', rateLimitReset, requireAuth, async (req, res) => {
-  const { licenseKey, resetKey } = req.body;
-  if (!licenseKey) return res.status(400).json({ success: false, error: 'licenseKey required' });
-  if (!resetKey || !resetKey.trim()) {
-    return res.status(400).json({
-      success: false,
-      error: 'Admin HWID Reset Key required. Please contact client administration or staff to obtain an authorized reset key.',
-    });
-  }
-
-  const cleanLicKey = licenseKey.trim().toUpperCase();
-  const cleanResetKey = resetKey.trim().toUpperCase();
-
+  const { licenseKey, licenseId, resetKey } = req.body;
+  
   try {
-    // 1. Verify license ownership first before consuming any reset key
+    // 1. Verify license ownership by ID, key, or active user entitlement
     let licQuery = supabaseAdmin
       .from('licenses')
-      .select('id, user_id')
-      .eq('license_key', cleanLicKey);
+      .select('id, user_id, license_key, metadata, products(slug, name)');
+
+    if (licenseId) {
+      licQuery = licQuery.eq('id', licenseId);
+    } else if (licenseKey) {
+      licQuery = licQuery.eq('license_key', licenseKey.trim().toUpperCase());
+    } else {
+      licQuery = licQuery.eq('user_id', req.user.id).eq('status', 'active');
+    }
 
     if (req.isPortalKey && req.portalLicenseId) {
       licQuery = licQuery.eq('id', req.portalLicenseId);
-    } else {
+    } else if (!req.profile || req.profile.role !== 'admin') {
       licQuery = licQuery.eq('user_id', req.user.id);
     }
 
@@ -1457,70 +1469,114 @@ router.post('/licenses/reset-hwid', rateLimitReset, requireAuth, async (req, res
       return res.status(404).json({ success: false, error: 'License not found on your account' });
     }
 
-    // 2. Lookup active reset key
-    const { data: activeResetEntry, error: rkErr } = await supabaseAdmin
-      .from('audit_logs')
-      .select('id, metadata')
-      .eq('action', 'HWID_RESET_KEY')
-      .filter('metadata->>reset_key', 'eq', cleanResetKey)
-      .filter('metadata->>status', 'eq', 'active')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const cleanResetKey = (resetKey || '').trim().toUpperCase();
+    const hasAdminResetKey = Boolean(cleanResetKey);
 
-    if (rkErr) throw rkErr;
+    // 2. Cooldown check: 1 free self-service reset every 30 days (1 month)
+    const COOLDOWN_DAYS = 30;
+    const lastResetAt = license.metadata?.last_hwid_reset_at;
+    let isCooldownActive = false;
+    let daysRemaining = 0;
 
-    if (!activeResetEntry) {
-      return res.status(403).json({
+    if (lastResetAt) {
+      const diffMs = Date.now() - new Date(lastResetAt).getTime();
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+      if (diffDays < COOLDOWN_DAYS) {
+        isCooldownActive = true;
+        daysRemaining = Math.max(1, Math.ceil(COOLDOWN_DAYS - diffDays));
+      }
+    }
+
+    // If cooldown is active and user has not provided an admin override key
+    if (isCooldownActive && !hasAdminResetKey) {
+      return res.status(429).json({
         success: false,
-        error: 'Invalid or already used HWID Reset Key. Please request a valid reset key from an administrator.',
+        cooldown: true,
+        daysRemaining,
+        error: `Machine reset cooldown active. You can reset your machine once every 1 month (30 days). Next reset available in ${daysRemaining} day${daysRemaining === 1 ? '' : 's'}.`,
       });
     }
 
-    // 3. Atomically mark reset key as used (prevents concurrent replay races)
-    const { data: consumedRow, error: consumeErr } = await supabaseAdmin
-      .from('audit_logs')
-      .update({
-        metadata: {
-          ...activeResetEntry.metadata,
-          status: 'used',
-          used_at: new Date().toISOString(),
-          used_by: license.user_id || req.user.id,
-          used_by_email: req.user.email || cleanLicKey,
-          license_key: cleanLicKey,
-        },
-      })
-      .eq('id', activeResetEntry.id)
-      .filter('metadata->>status', 'eq', 'active')
-      .select('id')
-      .maybeSingle();
+    // 3. If an admin reset key was supplied, validate and atomically consume it
+    if (hasAdminResetKey) {
+      const { data: activeResetEntry, error: rkErr } = await supabaseAdmin
+        .from('audit_logs')
+        .select('id, metadata')
+        .eq('action', 'HWID_RESET_KEY')
+        .filter('metadata->>reset_key', 'eq', cleanResetKey)
+        .filter('metadata->>status', 'eq', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-    if (consumeErr || !consumedRow) {
-      return res.status(409).json({
-        success: false,
-        error: 'This HWID Reset Key has already been used.',
-      });
+      if (rkErr) throw rkErr;
+
+      if (!activeResetEntry) {
+        return res.status(403).json({
+          success: false,
+          error: 'Invalid or already used HWID Reset Key. Please request a valid reset key from an administrator.',
+        });
+      }
+
+      const { data: consumedRow, error: consumeErr } = await supabaseAdmin
+        .from('audit_logs')
+        .update({
+          metadata: {
+            ...activeResetEntry.metadata,
+            status: 'used',
+            used_at: new Date().toISOString(),
+            used_by: license.user_id || req.user.id,
+            used_by_email: req.user.email || 'customer',
+            license_id: license.id,
+          },
+        })
+        .eq('id', activeResetEntry.id)
+        .filter('metadata->>status', 'eq', 'active')
+        .select('id')
+        .maybeSingle();
+
+      if (consumeErr || !consumedRow) {
+        return res.status(409).json({
+          success: false,
+          error: 'This HWID Reset Key has already been used.',
+        });
+      }
     }
 
     // 4. Delete bound devices for this license
     await supabaseAdmin.from('devices').delete().eq('license_id', license.id);
 
-    // 5. Audit log
+    // 5. Update license metadata with last reset timestamp
+    const nowIso = new Date().toISOString();
+    const updatedMetadata = {
+      ...(license.metadata || {}),
+      last_hwid_reset_at: nowIso,
+      hwid_reset_count: ((license.metadata?.hwid_reset_count || 0) + 1),
+    };
+
+    await supabaseAdmin
+      .from('licenses')
+      .update({ metadata: updatedMetadata, updated_at: nowIso })
+      .eq('id', license.id);
+
+    // 6. Audit log
     await supabaseAdmin.from('audit_logs').insert({
       user_id: license.user_id || (req.isPortalKey ? null : req.user.id),
-      action: 'HWID_RESET',
+      action: hasAdminResetKey ? 'HWID_RESET_ADMIN_KEY' : 'HWID_RESET_MONTHLY_SELF_SERVE',
       entity_type: 'license',
       entity_id: license.id,
       ip_address: getClientIp(req),
       metadata: {
-        reset_key: cleanResetKey,
-        used_by_email: req.user.email || cleanLicKey,
+        reset_key: cleanResetKey || 'MONTHLY_SELF_SERVE',
+        used_by_email: req.user.email || 'customer',
+        license_id: license.id,
       },
     });
 
     return res.json({
       success: true,
-      message: 'HWID successfully reset! Your hardware binding has been cleared. You can now launch on your new PC.',
+      message: 'Machine HWID successfully reset! Your hardware binding has been cleared. You can now launch on your new machine.',
+      last_hwid_reset_at: nowIso,
     });
   } catch (err) {
     return serverError(res, 'ResetHWID Error', err, { success: false });
@@ -2201,12 +2257,16 @@ router.post('/downloads/authorize', requireAuth, async (req, res) => {
       });
     }
 
+    const isJar = release?.file_type === 'jar' || product_slug === 'java-client' || release?.storage_path?.endsWith('.jar');
+    const resolvedFileName = isJar ? 'CrosshairAddons-2.2.0+1.21.11.jar' : (release?.file_name || 'SyndicateLoader.exe');
+    const resolvedFileSize = isJar ? 16284469 : (release?.file_size_bytes || 11779072);
+
     return res.json({
       authorized: true,
       token,
       download_url: `/api/downloads/file/${token}`,
-      file_name: release?.file_name || 'SyndicateLoader.exe',
-      file_size_bytes: release?.file_size_bytes || 11772416,
+      file_name: resolvedFileName,
+      file_size_bytes: resolvedFileSize,
       expires_at: expiresAt,
       version: release?.version || '1.21.11',
       sha256: release?.sha256 || null,
@@ -2272,13 +2332,15 @@ router.get('/downloads/file/:token', async (req, res) => {
     // Redirect only to trusted Supabase Storage signed URL for releases bucket
     const candidateStorageKeys = [
       tokenRecord.client_releases?.storage_path?.replace(/^releases\//, ''),
+      'CrosshairAddons-2.2.0+1.21.11.jar',
       'SyndicateLoader.exe',
     ].filter(Boolean);
 
     for (const storageKey of candidateStorageKeys) {
+      const targetFilename = storageKey.endsWith('.jar') ? 'CrosshairAddons-2.2.0+1.21.11.jar' : 'SyndicateLoader.exe';
       const { data: signedUrlData } = await supabaseAdmin.storage
         .from('releases')
-        .createSignedUrl(storageKey, 300, { download: 'SyndicateLoader.exe' });
+        .createSignedUrl(storageKey, 300, { download: targetFilename });
       if (signedUrlData?.signedUrl && signedUrlData.signedUrl.startsWith(`${supabaseUrl}/storage/v1/`)) {
         return res.redirect(302, signedUrlData.signedUrl);
       }
