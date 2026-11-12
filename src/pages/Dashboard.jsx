@@ -350,7 +350,7 @@ export default function Dashboard() {
       if (res.ok && data.authorized && data.download_url) {
         setDownloadMeta({
           fileName: data.file_name || 'SyndicateLoader.exe',
-          fileSizeMb: data.file_size_bytes ? `${(data.file_size_bytes / (1024 * 1024)).toFixed(2)} MB` : '5.48 MB',
+          fileSizeMb: data.file_size_bytes ? `${(data.file_size_bytes / (1024 * 1024)).toFixed(2)} MB` : '11.23 MB',
           sha256: data.sha256 || null,
           version: data.version || '1.21.11',
         });
@@ -1543,7 +1543,7 @@ export default function Dashboard() {
                                   Official Package Download
                                 </div>
                                 <div style={{ fontSize: '12.5px', color: '#71717a', marginTop: '3px' }}>
-                                  Download SyndicateLoader.exe (Windows x64 Executable · 5.48 MB) directly from authenticated storage. Downloaded files require manual launch and are never executed automatically.
+                                  Download SyndicateLoader.exe (Windows x64 Executable · 11.23 MB) directly from authenticated storage. Downloaded files require manual launch and are never executed automatically.
                                 </div>
                               </div>
 
@@ -1565,7 +1565,7 @@ export default function Dashboard() {
                                 >
                                   {downloadLoading === currentProductDef.productSlug
                                     ? 'Authorizing...'
-                                    : 'Download SyndicateLoader.exe (5.48 MB) ↓'}
+                                    : 'Download SyndicateLoader.exe (11.23 MB) ↓'}
                                 </button>
                                 <button
                                   type="button"
@@ -1592,7 +1592,7 @@ export default function Dashboard() {
                               </div>
                             )}
 
-                            {/* Package Details & Account Email Strip */}
+                            {/* Package Details & License Key Strip */}
                             <div
                               style={{
                                 display: 'flex',
@@ -1610,17 +1610,17 @@ export default function Dashboard() {
                                 <strong style={{ color: '#e4e4e7' }}>
                                   {downloadMeta?.fileName || 'SyndicateLoader.exe'}
                                 </strong>{' '}
-                                · Windows x64 Executable ({downloadMeta?.fileSizeMb || '5.48 MB'}) · Minecraft Fabric 1.21.11 Single Player
+                                · Windows x64 Executable ({downloadMeta?.fileSizeMb || '11.23 MB'}) · Minecraft Fabric 1.21.11 Single Player
                                 {downloadMeta?.sha256 ? (
                                   <div style={{ fontFamily: 'monospace', color: '#c4b5fd', marginTop: '4px', wordBreak: 'break-all' }}>
                                     SHA-256: {downloadMeta.sha256}
                                   </div>
                                 ) : null}
                               </div>
-                              {accountEmail && (
+                              {lic?.key && (
                                 <button
                                   type="button"
-                                  onClick={() => handleCopy(accountEmail, 'cmd')}
+                                  onClick={() => handleCopy(lic.key, 'cmd')}
                                   style={{
                                     flexShrink: 0,
                                     padding: '7px 14px',
@@ -1633,7 +1633,7 @@ export default function Dashboard() {
                                     cursor: 'pointer',
                                   }}
                                 >
-                                  {copiedCommand === accountEmail ? '✓ Email Copied' : 'Copy Login Email'}
+                                  {copiedCommand === lic.key ? '✓ Key Copied' : 'Copy Loader Key'}
                                 </button>
                               )}
                             </div>
@@ -1970,13 +1970,13 @@ export default function Dashboard() {
               }}
             >
               <li>
-                Click <strong>Download SyndicateLoader.exe (5.48 MB)</strong> to fetch the Windows executable via a single-use authenticated link from Supabase Storage.
+                Click <strong>Download SyndicateLoader.exe (11.23 MB)</strong> to fetch the Windows executable via a single-use authenticated link from Supabase Storage.
               </li>
               <li>
                 No file is run automatically. Launch <code style={{ color: '#c4b5fd' }}>SyndicateLoader.exe</code> manually only after you have saved it to your trusted folder.
               </li>
               <li>
-                Start <strong>Minecraft Java Edition (Fabric 1.21.11, single-player)</strong>, open the loader, and sign in with your registered email{user?.email ? ` (${user.email})` : ''} and password.
+                Start <strong>Minecraft Java Edition (Fabric 1.21.11, single-player)</strong>, open the loader, and enter your active license key{launchModal.licenseKey ? ` (${launchModal.licenseKey})` : ''}.
               </li>
               <li>
                 If you change PCs, request an Admin HWID Reset Key and use <strong>Reset HWID</strong> on your license card.

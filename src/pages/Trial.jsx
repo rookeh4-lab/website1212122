@@ -300,11 +300,19 @@ export default function Trial() {
               </button>
             </div>
 
-            <div style={{ display: 'flex', gap: 12 }}>
-              <Link to="/download" style={{ ...buttonStyle, background: '#6d28d9' }}>
-                Launch Client →
-              </Link>
-              <Link to="/checkout" style={buttonStyle}>
+            {statusStr !== 'active' && (
+              <p style={{ ...subTextStyle, marginBottom: 16, color: '#fca5a5' }}>
+                This 3-day free trial is no longer active. Upgrade to a paid license to continue launching 5.55 Client.
+              </p>
+            )}
+
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {statusStr === 'active' && (
+                <Link to="/download" style={{ ...buttonStyle, background: '#6d28d9' }}>
+                  Download Loader →
+                </Link>
+              )}
+              <Link to="/checkout" style={statusStr === 'active' ? buttonStyle : { ...buttonStyle, background: '#6d28d9' }}>
                 Upgrade to Full Plan
               </Link>
             </div>

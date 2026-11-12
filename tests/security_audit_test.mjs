@@ -225,6 +225,142 @@ async function runHttpSecurityTests() {
     assert.match(logoutCookie, /555_session=;/);
     assert.match(logoutCookie, /HttpOnly/i);
     console.log('[PASS] Auth verify rejects unauthenticated requests (401) + logout clears HttpOnly session cookie');
+
+    // 10. Favicon & Brand Logo HTML/Asset checks for Google Search
+    const indexHtml = fs.readFileSync(path.join(ROOT, 'dist', 'index.html'), 'utf8');
+    assert.match(indexHtml, /sizes="48x48"/, 'Built index.html must include >=48x48 favicon link for Google Search');
+    assert.match(indexHtml, /sizes="96x96"/, 'Built index.html must include 96x96 favicon link');
+    assert.match(indexHtml, /sizes="192x192"/, 'Built index.html must include 192x192 favicon link');
+    for (const iconFile of ['favicon.ico', 'favicon-48x48.png', 'favicon-96x96.png', 'favicon-144x144.png', 'android-chrome-192x192.png']) {
+      assert.equal(fs.existsSync(path.join(ROOT, 'dist', iconFile)), true, `Missing dist/${iconFile}`);
+    }
+    console.log('[PASS] Google Search >=48px favicon & structured brand logo assets verified in dist/');
+
+    // 11. 3-Day Free Trial Endpoints + HWID Auto-Login/Reset Validation Flow
+    const trialInfoRes = await fetch(`${baseUrl}/api/trials/info`);
+    assert.equal(trialInfoRes.status, 200);
+    const trialInfo = await trialInfoRes.json();
+    assert.equal(trialInfo.enabled, true);
+    assert.equal(trialInfo.durationDays, 3);
+
+    const unauthTrialMy = await fetch(`${baseUrl}/api/trials/my`);
+    assert.equal(unauthTrialMy.status, 401);
+    const unauthTrialClaim = await fetch(`${baseUrl}/api/trials/claim`, { method: 'POST' });
+    assert.equal(unauthTrialClaim.status, 401);
+
+    const { supabaseAdmin } = await import('../server/supabaseAdmin.js');
+    const testEmail = `trial_audit_${Date.now()}@555client.xyz`;
+    const testPassword = `AuditPass!${Date.now()}`;
+    const { data: createdUser, error: createUserErr } = await supabaseAdmin.auth.admin.createUser({
+      email: testEmail,
+      password: testPassword,
+      email_confirm: true,
+      user_metadata: { username: 'trial_audit_user' },
+    });
+    assert.ifError(createUserErr);
+    const testUserId = createdUser.user.id;
+
+    try {
+      await supabaseAdmin.from('profiles').upsert({
+        id: testUserId,
+        email: testEmail,
+        username: 'trial_audit_user',
+        display_name: 'trial_audit_user',
+        role: 'user',
+      });
+
+      const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: testEmail, password: testPassword }),
+      });
+      assert.equal(loginRes.status, 200);
+      const loginJson = await loginRes.json();
+      const accessToken = loginJson.session?.access_token || loginJson.token;
+      assert.ok(accessToken, 'Test user login must return session token');
+
+      const authHeaders = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      };
+
+      const preTrialRes = await fetch(`${baseUrl}/api/trials/my`, { headers: authHeaders });
+      assert.equal(preTrialRes.status, 200);
+      assert.equal((await preTrialRes.json()).trial, null);
+
+      const claimRes = await fetch(`${baseUrl}/api/trials/claim`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({}),
+      });
+      assert.equal(claimRes.status, 201);
+      const claimed = (await claimRes.json()).trial;
+      assert.ok(claimed?.licenseKey?.startsWith('555C-'), 'Trial key must use 555C- format');
+      assert.equal(claimed.status, 'active');
+      assert.equal(claimed.tier, 'trial');
+      const daysRemaining = (Date.parse(claimed.expiresAt) - Date.now()) / (24 * 60 * 60 * 1000);
+      assert.ok(daysRemaining > 2.9 && daysRemaining <= 3.05, 'Trial expiry must be ~3 days');
+
+      // Manual key validation registers HWID-1 and returns tier + username
+      const hwid1 = 'AUDIT_HWID_ONE_' + Date.now();
+      const hwid2 = 'AUDIT_HWID_TWO_' + Date.now();
+      const val1 = await fetch(`${baseUrl}/api/licenses/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ license_key: claimed.licenseKey, hwid: hwid1, client_type: 'cpp', mc_version: '1.21.11' }),
+      });
+      assert.equal(val1.status, 200);
+      const val1Json = await val1.json();
+      assert.equal(val1Json.valid, true);
+      assert.equal(val1Json.tier, 'trial');
+      assert.equal(val1Json.username, 'trial_audit_user');
+
+      // Different HWID gets exact prompt message
+      const val2 = await fetch(`${baseUrl}/api/licenses/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ license_key: claimed.licenseKey, hwid: hwid2, client_type: 'cpp' }),
+      });
+      assert.equal(val2.status, 403);
+      const val2Json = await val2.json();
+      assert.equal(val2Json.error, 'DEVICE_LIMIT_REACHED');
+      assert.equal(val2Json.message, 'Please reset HWID and try again');
+
+      // Same HWID auto_login succeeds without prompt
+      const autoOk = await fetch(`${baseUrl}/api/licenses/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ license_key: claimed.licenseKey, hwid: hwid1, client_type: 'cpp', auto_login: true }),
+      });
+      assert.equal(autoOk.status, 200);
+
+      // Simulate HWID reset -> next auto_login requires re-entering key
+      await supabaseAdmin.from('devices').delete().eq('license_id', claimed.id);
+      const autoAfterReset = await fetch(`${baseUrl}/api/licenses/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ license_key: claimed.licenseKey, hwid: hwid1, client_type: 'cpp', auto_login: true }),
+      });
+      assert.equal(autoAfterReset.status, 401);
+      assert.equal((await autoAfterReset.json()).error, 'HWID_RESET_REAUTH');
+
+      // Manual re-auth after reset binds cleanly again
+      const manualAfterReset = await fetch(`${baseUrl}/api/licenses/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ license_key: claimed.licenseKey, hwid: hwid2, client_type: 'cpp', auto_login: false }),
+      });
+      assert.equal(manualAfterReset.status, 200);
+      assert.equal((await manualAfterReset.json()).valid, true);
+      console.log('[PASS] 3-Day Trial claim, License Key validate, HWID lock & post-reset reauth verified');
+    } finally {
+      await supabaseAdmin.from('audit_logs').delete().eq('user_id', testUserId);
+      await supabaseAdmin.from('sessions').delete().eq('user_id', testUserId);
+      await supabaseAdmin.from('devices').delete().eq('user_id', testUserId);
+      await supabaseAdmin.from('licenses').delete().eq('user_id', testUserId);
+      await supabaseAdmin.from('profiles').delete().eq('id', testUserId);
+      await supabaseAdmin.auth.admin.deleteUser(testUserId);
+    }
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

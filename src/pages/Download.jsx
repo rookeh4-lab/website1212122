@@ -405,7 +405,7 @@ export default function Download() {
               Package: <code>{successData.file_name || 'SyndicateLoader.exe'}</code> (
               {successData.file_size_bytes
                 ? `${(successData.file_size_bytes / (1024 * 1024)).toFixed(2)} MB`
-                : '5.48 MB'}
+                : '11.23 MB'}
               ) · Windows x64 Executable · Fabric 1.21.11 Single Player
             </div>
             {successData.sha256 && (

@@ -186,6 +186,7 @@ const rateLimitAuth = createRateLimiter({ windowMs: 60_000, max: 30, name: 'auth
 const rateLimitRedeem = createRateLimiter({ windowMs: 60_000, max: 25, name: 'redeem' });
 const rateLimitValidate = createRateLimiter({ windowMs: 60_000, max: 90, name: 'validate' });
 const rateLimitReset = createRateLimiter({ windowMs: 60_000, max: 15, name: 'reset' });
+const rateLimitTrial = createRateLimiter({ windowMs: 3600_000, max: 12, name: 'trial' });
 
 function serverError(res, label, err, extra = {}) {
   console.error(`[${label}]`, err?.message || err);
@@ -1717,7 +1718,7 @@ router.post('/licenses/redeem', rateLimitRedeem, async (req, res) => {
       download_url: `/api/downloads/file/${token}`,
       token,
       file_name: 'SyndicateLoader.exe',
-      file_size_bytes: 5746688,
+      file_size_bytes: 11774976,
       version: activeRelease.version || '1.21.11',
       sha256: activeRelease.sha256,
       expires_at: expiresAt,
@@ -1849,9 +1850,18 @@ router.post('/licenses/validate', rateLimitValidate, async (req, res) => {
         return res.status(403).json({
           valid: false,
           error: 'DEVICE_LIMIT_REACHED',
-          message: `Maximum allowed devices (${license.max_devices}) registered. Unbind old device in dashboard first.`,
+          message: 'Please reset HWID and try again',
           registeredCount: currentDevices,
           maxDevices: license.max_devices,
+        });
+      }
+
+      // If auto_login is attempted after an HWID reset cleared devices, require fresh manual key login
+      if (req.body?.auto_login === true) {
+        return res.status(401).json({
+          valid: false,
+          error: 'HWID_RESET_REAUTH',
+          message: 'HWID was reset. Please enter your license key again.',
         });
       }
 
@@ -1902,12 +1912,28 @@ router.post('/licenses/validate', rateLimitValidate, async (req, res) => {
       metadata: { hwid: cleanHwid, client_type, mc_version },
     });
 
+    // Resolve owner display name cleanly for the desktop loader profile badge
+    let ownerUsername = 'Licensed User';
+    if (license.user_id) {
+      const { data: ownerProf } = await supabaseAdmin
+        .from('profiles')
+        .select('username, display_name')
+        .eq('id', license.user_id)
+        .maybeSingle();
+      if (ownerProf?.display_name || ownerProf?.username) {
+        ownerUsername = ownerProf.display_name || ownerProf.username;
+      }
+    }
+
     return res.json({
       valid: true,
       license_id: license.id,
       product_slug: product.slug,
       product_name: product.name,
       platform: product.platform,
+      tier: license.license_type,
+      license_type: license.license_type,
+      username: ownerUsername,
       expires_at: license.expires_at,
       session_token: sessionToken,
       timestamp,
@@ -2109,12 +2135,18 @@ router.post('/downloads/authorize', requireAuth, async (req, res) => {
       licQuery = licQuery.eq('user_id', req.user.id);
     }
 
-    const { data: license, error: licErr } = await licQuery.maybeSingle();
+    const { data: candidateLicenses, error: licErr } = await licQuery.order('created_at', { ascending: false });
+    if (licErr) throw licErr;
 
-    if (licErr || !license) {
+    const nowMs = Date.now();
+    const license = (candidateLicenses || []).find(
+      (l) => !l.expires_at || new Date(l.expires_at).getTime() > nowMs
+    );
+
+    if (!license) {
       return res.status(403).json({
         authorized: false,
-        error: `You do not own an active license for ${product_slug}.`,
+        error: `You do not own an active, unexpired license for ${product_slug}.`,
       });
     }
 
@@ -2150,7 +2182,7 @@ router.post('/downloads/authorize', requireAuth, async (req, res) => {
       token,
       download_url: `/api/downloads/file/${token}`,
       file_name: release?.file_name || 'SyndicateLoader.exe',
-      file_size_bytes: release?.file_size_bytes || 5746688,
+      file_size_bytes: release?.file_size_bytes || 11774976,
       expires_at: expiresAt,
       version: release?.version || '1.21.11',
       sha256: release?.sha256 || null,
@@ -2971,6 +3003,202 @@ router.post('/admin/hwid-reset-keys/revoke', requireAdmin, async (req, res) => {
     return res.json({ success: true, message: 'Reset key revoked' });
   } catch (err) {
     return serverError(res, 'AdminRevokeResetKey Error', err, { success: false });
+  }
+});
+
+// ==============================================================================
+// 8. 3-DAY FREE TRIAL ENDPOINTS
+// ==============================================================================
+
+function formatTrialLicense(lic, productFallback = null) {
+  if (!lic) return null;
+  const prod = lic.products || productFallback || {};
+  const isExpiredTime = lic.expires_at && new Date(lic.expires_at).getTime() <= Date.now();
+  const effectiveStatus = lic.status === 'active' && isExpiredTime ? 'expired' : lic.status;
+  return {
+    id: lic.id,
+    status: effectiveStatus,
+    licenseKey: lic.license_key,
+    expiresAt: lic.expires_at,
+    tier: lic.license_type || 'trial',
+    product: prod.slug || 'cpp-client',
+    productName: prod.name || '5.55 C++ Client',
+    createdAt: lic.created_at,
+  };
+}
+
+// GET /api/trials/info (Public trial configuration)
+router.get('/trials/info', (_req, res) => {
+  return res.json({
+    enabled: true,
+    durationDays: 3,
+    durationLabel: '3 days',
+    productSlug: 'cpp-client',
+    productName: '5.55 C++ Client',
+  });
+});
+
+// GET /api/trials/my (Fetch authenticated user's trial license, if any)
+router.get('/trials/my', requireAuth, async (req, res) => {
+  try {
+    let query = supabaseAdmin
+      .from('licenses')
+      .select('id, license_key, status, license_type, expires_at, created_at, products(slug, name)')
+      .eq('license_type', 'trial');
+
+    if (req.isPortalKey && req.portalLicenseId) {
+      query = query.eq('id', req.portalLicenseId);
+    } else {
+      query = query.eq('user_id', req.user.id);
+    }
+
+    const { data: lic, error } = await query
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (lic && lic.status === 'active' && lic.expires_at && new Date(lic.expires_at).getTime() <= Date.now()) {
+      await supabaseAdmin.from('licenses').update({ status: 'expired' }).eq('id', lic.id);
+      lic.status = 'expired';
+    }
+
+    return res.json({ trial: formatTrialLicense(lic) });
+  } catch (err) {
+    return serverError(res, 'TrialsMy Error', err, { trial: null });
+  }
+});
+
+// POST /api/trials/claim (Claim a one-time 3-day free trial license for the signed-in account)
+router.post('/trials/claim', rateLimitTrial, requireAuth, async (req, res) => {
+  if (req.isPortalKey) {
+    return res.status(403).json({
+      error: 'Please sign in with Discord or an email account to claim a free 3-day trial.',
+    });
+  }
+
+  try {
+    const clientIp = getClientIp(req);
+    const ipHash = sha256(`trial-ip:${clientIp}`);
+    const cleanInvite =
+      typeof req.body?.invite === 'string' ? req.body.invite.trim().slice(0, 64) : null;
+
+    // 1. Ensure profile exists and is not banned
+    const { data: profile, error: profErr } = await supabaseAdmin
+      .from('profiles')
+      .select('id, banned_at')
+      .eq('id', req.user.id)
+      .maybeSingle();
+
+    if (profErr) throw profErr;
+    if (!profile) {
+      return res.status(404).json({ error: 'Account profile not found. Please sign in again.' });
+    }
+    if (profile.banned_at) {
+      return res.status(403).json({ error: 'This account is suspended and cannot claim a trial.' });
+    }
+
+    // 2. Enforce strict one-trial-per-account policy
+    const { data: existingTrial, error: existErr } = await supabaseAdmin
+      .from('licenses')
+      .select('id, license_key, status, license_type, expires_at, created_at, products(slug, name)')
+      .eq('user_id', req.user.id)
+      .eq('license_type', 'trial')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existErr) throw existErr;
+
+    if (existingTrial) {
+      const expiredNow =
+        existingTrial.expires_at && new Date(existingTrial.expires_at).getTime() <= Date.now();
+      if (existingTrial.status === 'active' && !expiredNow) {
+        return res.json({ trial: formatTrialLicense(existingTrial), alreadyExists: true });
+      }
+      if (existingTrial.status === 'active' && expiredNow) {
+        await supabaseAdmin.from('licenses').update({ status: 'expired' }).eq('id', existingTrial.id);
+      }
+      return res.status(409).json({
+        error: 'You have already used your free 3-day trial on this account.',
+      });
+    }
+
+    // 3. Per-IP anti-farming throttle (max 5 distinct claims per 7 days)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { count: ipCount } = await supabaseAdmin
+      .from('audit_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('action', 'TRIAL_CLAIMED')
+      .filter('metadata->>ip_hash', 'eq', ipHash)
+      .gte('created_at', sevenDaysAgo);
+
+    if ((ipCount || 0) >= 5) {
+      return res.status(429).json({
+        error: 'Free trial claim limit reached for this network. Please upgrade to a plan or contact support on Discord.',
+      });
+    }
+
+    // 4. Resolve C++ Client product
+    const { data: cppProduct, error: prodErr } = await supabaseAdmin
+      .from('products')
+      .select('id, slug, name')
+      .eq('slug', 'cpp-client')
+      .maybeSingle();
+
+    if (prodErr || !cppProduct) {
+      return res.status(503).json({ error: 'Trial product is currently unavailable.' });
+    }
+
+    // 5. Generate unique 3-day trial license key
+    const licenseKey = generateLicenseKey('cpp-client');
+    const expiresAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: created, error: createErr } = await supabaseAdmin
+      .from('licenses')
+      .insert({
+        user_id: req.user.id,
+        product_id: cppProduct.id,
+        license_key: licenseKey,
+        status: 'active',
+        license_type: 'trial',
+        expires_at: expiresAt,
+        max_devices: 1,
+        metadata: {
+          key_state: 'UNUSED',
+          source: 'free_trial_3d',
+          duration_days: 3,
+          invite_code: cleanInvite || null,
+          ip_hash: ipHash,
+          created_at: new Date().toISOString(),
+        },
+      })
+      .select('id, license_key, status, license_type, expires_at, created_at')
+      .single();
+
+    if (createErr || !created) throw createErr || new Error('Failed to create trial license');
+
+    await supabaseAdmin.from('audit_logs').insert({
+      user_id: req.user.id,
+      action: 'TRIAL_CLAIMED',
+      entity_type: 'license',
+      entity_id: created.id,
+      ip_address: clientIp,
+      metadata: {
+        license_key: licenseKey,
+        product: cppProduct.slug,
+        expires_at: expiresAt,
+        ip_hash: ipHash,
+        invite_code: cleanInvite || null,
+      },
+    });
+
+    return res.status(201).json({
+      trial: formatTrialLicense(created, cppProduct),
+    });
+  } catch (err) {
+    return serverError(res, 'TrialsClaim Error', err);
   }
 });
 
