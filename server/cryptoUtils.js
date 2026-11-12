@@ -69,6 +69,55 @@ export function signEd25519(data) {
 }
 
 /**
+ * Get Base64-encoded SPKI DER public key for client token validation
+ * @returns {string}
+ */
+export function getPublicKeySpkiDerBase64() {
+  const pub = getPublicKey();
+  if (typeof pub === 'string') {
+    return pub
+      .replace(/-----BEGIN PUBLIC KEY-----/g, '')
+      .replace(/-----END PUBLIC KEY-----/g, '')
+      .replace(/[\r\n\s]/g, '');
+  }
+  return pub.export({ type: 'spki', format: 'der' }).toString('base64');
+}
+
+/**
+ * Generate cryptographically signed client authorization token
+ * @param {Object} options
+ * @param {string} options.nonce
+ * @param {string} options.hwid
+ * @param {string} options.licenseKey
+ * @param {number} [options.durationSeconds=7200]
+ * @returns {{ authorizationToken: string, tokenPublicKey: string, validUntil: string }}
+ */
+export function createClientToken({ nonce, hwid, licenseKey, durationSeconds = 7200 }) {
+  const privateKey = getPrivateKey();
+  if (!privateKey) {
+    throw new Error('ED25519_PRIVATE_KEY or server signing secret is not configured on the server');
+  }
+  const validUntil = new Date(Date.now() + durationSeconds * 1000).toISOString();
+  const payloadObj = {
+    nonce: nonce || '',
+    validUntil,
+    hwid: hwid || '',
+    licenseKey: licenseKey || '',
+  };
+  const payloadJson = JSON.stringify(payloadObj);
+  const payloadBytes = Buffer.from(payloadJson, 'utf-8');
+  const signatureBytes = crypto.sign(null, payloadBytes, privateKey);
+  const authorizationToken = `${payloadBytes.toString('base64')}.${signatureBytes.toString('base64')}`;
+
+  return {
+    authorizationToken,
+    tokenPublicKey: getPublicKeySpkiDerBase64(),
+    validUntil,
+    payloadObj,
+  };
+}
+
+/**
  * Verify Ed25519 signature
  * @param {string|Buffer} data
  * @param {string} signatureBase64

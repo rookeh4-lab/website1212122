@@ -18,6 +18,8 @@ import {
   generateToken,
   verifySellAuthWebhook,
   signPortalToken,
+  createClientToken,
+  getPublicKeySpkiDerBase64,
 } from './cryptoUtils.js';
 
 const router = express.Router();
@@ -2022,6 +2024,237 @@ router.post('/licenses/validate', rateLimitValidate, async (req, res) => {
   } catch (err) {
     return serverError(res, 'ValidateLicense Error', err, { valid: false });
   }
+});
+
+// ==============================================================================
+// 4.1 CLIENT VERIFICATION & AUTOMATIC HWID BINDING (FABRIC JAVA & C++ PROTOCOL)
+// ==============================================================================
+
+const handleClientVerification = async (req, res) => {
+  const {
+    licenseKey,
+    deviceFingerprint,
+    clientVersion = '1.0.0',
+    minecraftVersion = '1.21.11',
+    nonce,
+    timestamp,
+    sync = false,
+  } = req.body || {};
+
+  const cleanHwid = (deviceFingerprint || '').trim().toLowerCase();
+  const rawKey = (licenseKey || '').trim().toUpperCase();
+  const clientIp = getClientIp(req);
+
+  if (!cleanHwid || cleanHwid.length < 8) {
+    return res.status(400).json({
+      valid: false,
+      code: 'MISSING_HWID',
+      errorCode: 'MISSING_HWID',
+      message: 'Machine HWID (deviceFingerprint) is required.',
+    });
+  }
+
+  try {
+    let license = null;
+
+    if (rawKey) {
+      // 1. Look up license by key
+      const { data: lic, error: licErr } = await supabaseAdmin
+        .from('licenses')
+        .select('*, products(*)')
+        .eq('license_key', rawKey)
+        .maybeSingle();
+
+      if (licErr || !lic) {
+        return res.status(401).json({
+          valid: false,
+          code: 'INVALID_KEY',
+          errorCode: 'INVALID_KEY',
+          message: 'Invalid or unknown license key.',
+        });
+      }
+      license = lic;
+    } else {
+      // 2. Hardware-only lookup: find license bound to this HWID
+      const { data: dev, error: devErr } = await supabaseAdmin
+        .from('devices')
+        .select('*, licenses(*, products(*))')
+        .eq('hwid', cleanHwid)
+        .order('last_seen_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (dev && dev.licenses) {
+        license = dev.licenses;
+      } else {
+        return res.status(401).json({
+          valid: false,
+          code: 'INVALID_KEY',
+          errorCode: 'INVALID_KEY',
+          message: 'No license key provided and machine hardware is not bound to any license.',
+        });
+      }
+    }
+
+    // Status checks
+    if (license.status === 'revoked') {
+      return res.status(403).json({
+        valid: false,
+        code: 'LICENSE_REVOKED',
+        errorCode: 'LICENSE_REVOKED',
+        message: 'This license has been revoked by administration.',
+      });
+    }
+
+    if (license.status === 'suspended') {
+      return res.status(403).json({
+        valid: false,
+        code: 'LICENSE_SUSPENDED',
+        errorCode: 'LICENSE_SUSPENDED',
+        message: 'This license is currently suspended.',
+      });
+    }
+
+    if (license.expires_at && new Date(license.expires_at) < new Date()) {
+      return res.status(403).json({
+        valid: false,
+        code: 'LICENSE_EXPIRED',
+        errorCode: 'LICENSE_EXPIRED',
+        message: 'This license has expired.',
+      });
+    }
+
+    // Check device binding in `devices` table for this license
+    const { data: existingDevices, error: dErr } = await supabaseAdmin
+      .from('devices')
+      .select('*')
+      .eq('license_id', license.id);
+
+    if (dErr) throw dErr;
+
+    const boundDevice = existingDevices && existingDevices.length > 0 ? existingDevices[0] : null;
+
+    if (!boundDevice) {
+      // FIRST LAUNCH! Automatically bind machine HWID to this license!
+      const newDevice = {
+        license_id: license.id,
+        user_id: license.user_id,
+        hwid: cleanHwid,
+        device_name: `PC-${cleanHwid.substring(0, 8)}`,
+        ip_address: clientIp,
+        client_type: 'java',
+        registered_at: new Date().toISOString(),
+        last_seen_at: new Date().toISOString(),
+      };
+
+      await supabaseAdmin.from('devices').insert(newDevice);
+
+      // Update license metadata
+      await supabaseAdmin
+        .from('licenses')
+        .update({
+          updated_at: new Date().toISOString(),
+          metadata: {
+            ...(license.metadata || {}),
+            key_state: 'ACTIVE',
+            first_activated_at: new Date().toISOString(),
+            last_activated_hwid: cleanHwid,
+          },
+        })
+        .eq('id', license.id);
+    } else {
+      // Device already bound! Validate exact HWID match
+      const existingHwid = boundDevice.hwid.toLowerCase();
+      if (existingHwid !== cleanHwid) {
+        // HWID MISMATCH - another PC is trying to use this jar / key!
+        return res.status(403).json({
+          valid: false,
+          code: 'HWID_MISMATCH',
+          errorCode: 'HWID_MISMATCH',
+          message: 'Hardware ID mismatch. This license is bound to another PC. You can reset your HWID once per month on https://www.555client.xyz/dashboard.',
+        });
+      }
+
+      // HWID matches: update heartbeat / last_seen_at
+      await supabaseAdmin
+        .from('devices')
+        .update({
+          last_seen_at: new Date().toISOString(),
+          ip_address: clientIp || boundDevice.ip_address,
+        })
+        .eq('id', boundDevice.id);
+    }
+
+    // Load user profile details for client overlay / watermark
+    let profile = null;
+    if (license.user_id) {
+      const { data: prof } = await supabaseAdmin
+        .from('profiles')
+        .select('id, email, username, display_name, avatar_url, role')
+        .eq('id', license.user_id)
+        .maybeSingle();
+      profile = prof;
+    }
+
+    // Cryptographic Ed25519 token generation
+    const requestNonce = nonce || crypto.randomUUID();
+    const { authorizationToken, tokenPublicKey } = createClientToken({
+      nonce: requestNonce,
+      hwid: cleanHwid,
+      licenseKey: license.license_key,
+      durationSeconds: 7200,
+    });
+
+    const durationLabel = license.license_type === 'lifetime'
+      ? 'Lifetime'
+      : (license.expires_at ? `Expires ${license.expires_at.substring(0, 10)}` : 'Active');
+
+    return res.json({
+      valid: true,
+      status: 'ACTIVE',
+      authorizationToken,
+      tokenPublicKey,
+      licenseKey: license.license_key,
+      duration: durationLabel,
+      plan: durationLabel,
+      tier: license.license_type,
+      expiresAt: license.expires_at || null,
+      user: {
+        id: profile?.id || license.user_id || '555-user',
+        username: profile?.username || profile?.email?.split('@')[0] || '555Client User',
+        displayName: profile?.display_name || profile?.username || '5.55 Client',
+        email: profile?.email || '',
+        avatarUrl: profile?.avatar_url || 'https://www.555client.xyz/logo.png',
+        role: profile?.role || 'Member',
+        duration: durationLabel,
+      },
+    });
+  } catch (err) {
+    return serverError(res, 'ClientVerify Error', err, {
+      valid: false,
+      code: 'SERVER_ERROR',
+      errorCode: 'SERVER_ERROR',
+    });
+  }
+};
+
+router.post(['/v1/client/verify', '/api/v1/client/verify'], handleClientVerification);
+router.post(['/v1/client/register', '/api/v1/client/register'], handleClientVerification);
+
+router.post(['/v1/client/heartbeat', '/api/v1/client/heartbeat'], async (req, res) => {
+  const { authorizationToken, deviceFingerprint } = req.body || {};
+  const cleanHwid = (deviceFingerprint || '').trim().toLowerCase();
+  if (cleanHwid) {
+    try {
+      await supabaseAdmin
+        .from('devices')
+        .update({ last_seen_at: new Date().toISOString() })
+        .eq('hwid', cleanHwid);
+    } catch {
+      // Non-critical
+    }
+  }
+  return res.json({ status: 'ACTIVE', ok: true });
 });
 
 // POST /api/devices/register
