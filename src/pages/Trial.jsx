@@ -308,7 +308,10 @@ export default function Trial() {
 
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               {statusStr === 'active' && (
-                <Link to="/download" style={{ ...buttonStyle, background: '#6d28d9' }}>
+                <Link
+                  to={trial?.licenseKey ? `/download?key=${encodeURIComponent(trial.licenseKey)}` : '/download'}
+                  style={{ ...buttonStyle, background: '#6d28d9' }}
+                >
                   Download Loader →
                 </Link>
               )}

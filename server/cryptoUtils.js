@@ -1,19 +1,56 @@
 import crypto from 'crypto';
 
-// Ed25519 keys loaded strictly from environment variables (never hardcode private keys in source control)
+// Ed25519 keys loaded from environment variables, with deterministic PKCS#8 fallback
+// derived from server-side secrets when ED25519_PRIVATE_KEY is omitted in hosting env.
 const DEFAULT_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEARd55FQilrg341RLIhPT3uNjimFGB283jN5YQYJJeH80=
 -----END PUBLIC KEY-----
 `;
 
+const ED25519_PKCS8_PREFIX = Buffer.from('302e020100300506032b657004220420', 'hex');
+
+const getDerivedPrivateKey = () => {
+  const secret =
+    process.env.GRANT_SIGNING_SECRET ||
+    process.env.PORTAL_SESSION_SECRET ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!secret) {
+    return null;
+  }
+  const seed = crypto
+    .createHash('sha256')
+    .update('555client-ed25519-grant-v1:')
+    .update(secret)
+    .digest();
+  return crypto.createPrivateKey({
+    key: Buffer.concat([ED25519_PKCS8_PREFIX, seed]),
+    format: 'der',
+    type: 'pkcs8',
+  });
+};
+
 const getPrivateKey = () => {
   const raw = process.env.ED25519_PRIVATE_KEY;
-  return raw ? raw.replace(/\\n/g, '\n') : '';
+  if (raw && raw.trim()) {
+    return raw.replace(/\\n/g, '\n');
+  }
+  return getDerivedPrivateKey();
 };
 
 const getPublicKey = () => {
-  const raw = process.env.ED25519_PUBLIC_KEY || DEFAULT_PUBLIC_KEY;
-  return raw.replace(/\\n/g, '\n');
+  const rawPub = process.env.ED25519_PUBLIC_KEY;
+  if (rawPub && rawPub.trim()) {
+    return rawPub.replace(/\\n/g, '\n');
+  }
+  const rawPriv = process.env.ED25519_PRIVATE_KEY;
+  if (rawPriv && rawPriv.trim()) {
+    return DEFAULT_PUBLIC_KEY.replace(/\\n/g, '\n');
+  }
+  const derivedPriv = getDerivedPrivateKey();
+  if (derivedPriv) {
+    return crypto.createPublicKey(derivedPriv);
+  }
+  return DEFAULT_PUBLIC_KEY.replace(/\\n/g, '\n');
 };
 
 /**
@@ -24,7 +61,7 @@ const getPublicKey = () => {
 export function signEd25519(data) {
   const privateKey = getPrivateKey();
   if (!privateKey) {
-    throw new Error('ED25519_PRIVATE_KEY is not configured on the server');
+    throw new Error('ED25519_PRIVATE_KEY or server signing secret is not configured on the server');
   }
   const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data, 'utf-8');
   const signature = crypto.sign(null, buffer, privateKey);

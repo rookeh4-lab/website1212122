@@ -1718,7 +1718,7 @@ router.post('/licenses/redeem', rateLimitRedeem, async (req, res) => {
       download_url: `/api/downloads/file/${token}`,
       token,
       file_name: 'SyndicateLoader.exe',
-      file_size_bytes: 11774976,
+      file_size_bytes: 11772416,
       version: activeRelease.version || '1.21.11',
       sha256: activeRelease.sha256,
       expires_at: expiresAt,
@@ -1741,7 +1741,7 @@ router.post('/licenses/validate', rateLimitValidate, async (req, res) => {
 
   const cleanKey = license_key.trim().toUpperCase();
   const cleanHwid = hwid.trim();
-  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const clientIp = getClientIp(req);
 
   try {
     // 1. Fetch license + product details
@@ -1808,21 +1808,7 @@ router.post('/licenses/validate', rateLimitValidate, async (req, res) => {
       });
     }
 
-    // 5. First activation transition from UNUSED to ACTIVE
-    if (license.metadata?.key_state === 'UNUSED' || !license.metadata?.first_activated_at) {
-      await supabaseAdmin
-        .from('licenses')
-        .update({
-          metadata: {
-            ...license.metadata,
-            key_state: 'ACTIVE',
-            first_activated_at: new Date().toISOString(),
-          },
-        })
-        .eq('id', license.id);
-    }
-
-    // 6. Device check & registration
+    // 5. Device check & registration (before marking key active / first_activated_at)
     const { data: existingDevice } = await supabaseAdmin
       .from('devices')
       .select('*')
@@ -1830,6 +1816,7 @@ router.post('/licenses/validate', rateLimitValidate, async (req, res) => {
       .eq('hwid', cleanHwid)
       .maybeSingle();
 
+    let activeDeviceId = existingDevice?.id || null;
     if (existingDevice) {
       // Update last seen
       await supabaseAdmin
@@ -1866,27 +1853,49 @@ router.post('/licenses/validate', rateLimitValidate, async (req, res) => {
       }
 
       // Register new device
-      await supabaseAdmin.from('devices').insert({
-        license_id: license.id,
-        user_id: license.user_id,
-        hwid: cleanHwid,
-        client_type: client_type === 'cpp' ? 'cpp' : 'java',
-        ip_address: clientIp,
-        device_name: req.body.device_name || `PC-${cleanHwid.substring(0, 8)}`,
-      });
+      const { data: insertedDevice, error: devInsertErr } = await supabaseAdmin
+        .from('devices')
+        .insert({
+          license_id: license.id,
+          user_id: license.user_id,
+          hwid: cleanHwid,
+          client_type: client_type === 'cpp' ? 'cpp' : 'java',
+          ip_address: clientIp,
+          device_name: req.body.device_name || `PC-${cleanHwid.substring(0, 8)}`,
+        })
+        .select('id')
+        .single();
+      if (devInsertErr) {
+        throw devInsertErr;
+      }
+      activeDeviceId = insertedDevice?.id || null;
     }
 
-    // 6. Record heartbeat session
+    // 6. First activation transition from UNUSED to ACTIVE (only after device checks succeed)
+    if (license.metadata?.key_state === 'UNUSED' || !license.metadata?.first_activated_at) {
+      await supabaseAdmin
+        .from('licenses')
+        .update({
+          metadata: {
+            ...license.metadata,
+            key_state: 'ACTIVE',
+            first_activated_at: new Date().toISOString(),
+          },
+        })
+        .eq('id', license.id);
+    }
+
+    // 7. Record heartbeat session
     const sessionToken = generateToken(16);
     const sessionExpiry = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(); // 6 hours
 
     await supabaseAdmin.from('sessions').insert({
       user_id: license.user_id,
       license_id: license.id,
-      device_id: existingDevice?.id || (await supabaseAdmin.from('devices').select('id').eq('license_id', license.id).eq('hwid', cleanHwid).single()).data?.id,
+      device_id: activeDeviceId,
       session_token: sessionToken,
       client_type,
-      mc_version: mc_version || '1.21.4',
+      mc_version: mc_version || '1.21.11',
       ip_address: clientIp,
       expires_at: sessionExpiry,
     });
@@ -2182,7 +2191,7 @@ router.post('/downloads/authorize', requireAuth, async (req, res) => {
       token,
       download_url: `/api/downloads/file/${token}`,
       file_name: release?.file_name || 'SyndicateLoader.exe',
-      file_size_bytes: release?.file_size_bytes || 11774976,
+      file_size_bytes: release?.file_size_bytes || 11772416,
       expires_at: expiresAt,
       version: release?.version || '1.21.11',
       sha256: release?.sha256 || null,

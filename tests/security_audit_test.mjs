@@ -5,6 +5,7 @@ import path from 'node:path';
 import http from 'node:http';
 import crypto from 'node:crypto';
 import app from '../api/index.js';
+import { signEd25519, verifyEd25519 } from '../server/cryptoUtils.js';
 
 const ROOT = process.cwd();
 
@@ -366,8 +367,35 @@ async function runHttpSecurityTests() {
   }
 }
 
+function runEd25519FallbackTest() {
+  const prevPriv = process.env.ED25519_PRIVATE_KEY;
+  const prevPub = process.env.ED25519_PUBLIC_KEY;
+  const prevGrantSecret = process.env.GRANT_SIGNING_SECRET;
+  try {
+    delete process.env.ED25519_PRIVATE_KEY;
+    delete process.env.ED25519_PUBLIC_KEY;
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.PORTAL_SESSION_SECRET) {
+      process.env.GRANT_SIGNING_SECRET = 'audit-fallback-test-secret';
+    }
+    const payload = JSON.stringify({ test: 'ed25519-fallback', ts: Date.now() });
+    const sig = signEd25519(payload);
+    assert.ok(sig && sig.length > 20, 'Fallback Ed25519 signing must produce signature');
+    assert.equal(verifyEd25519(payload, sig), true, 'Fallback Ed25519 public key must verify derived signature');
+    assert.equal(verifyEd25519(payload + 'tamper', sig), false, 'Tampered payload must fail Ed25519 verification');
+    console.log('[PASS] Deterministic Ed25519 fallback signing when ED25519_PRIVATE_KEY is unset');
+  } finally {
+    if (prevPriv !== undefined) process.env.ED25519_PRIVATE_KEY = prevPriv;
+    else delete process.env.ED25519_PRIVATE_KEY;
+    if (prevPub !== undefined) process.env.ED25519_PUBLIC_KEY = prevPub;
+    else delete process.env.ED25519_PUBLIC_KEY;
+    if (prevGrantSecret !== undefined) process.env.GRANT_SIGNING_SECRET = prevGrantSecret;
+    else delete process.env.GRANT_SIGNING_SECRET;
+  }
+}
+
 async function main() {
   runStaticSecurityScan();
+  runEd25519FallbackTest();
   await runHttpSecurityTests();
   console.log('\nALL SECURITY AUDIT CHECKS PASSED.');
 }
