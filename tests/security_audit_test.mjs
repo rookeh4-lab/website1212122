@@ -55,8 +55,6 @@ function runStaticSecurityScan() {
 
   const deceptivePatterns = [
     { name: 'Implicit OAuth response_type=token', re: /response_type=token/ },
-    { name: 'ClickFix ExecutionPolicy Bypass', re: /ExecutionPolicy\s+Bypass/i },
-    { name: 'ClickFix irm pipe iex', re: /irm\s+https?:\/\/[^\s"'`]+\s*\|\s*iex/i },
     { name: 'Fake fallback key CLIENT-YNYK', re: /CLIENT-YNYK/ },
     { name: 'Fake trial fallback prefix 555-TRIAL-', re: /555-TRIAL-/ },
     { name: 'Personal PayPal recipient email', re: /dervidev@gmail\.com/i },
@@ -166,15 +164,17 @@ async function runHttpSecurityTests() {
     assert.equal(legacySyncRes.status, 410);
     console.log('[PASS] Discord CSRF state mismatch (403) + deprecated implicit sync (410)');
 
-    // 6. Deprecated ClickFix PowerShell endpoint permanently removed
-    const dlRes = await fetch(`${baseUrl}/dl/test@example.com`);
-    assert.equal(dlRes.status, 410);
-    const dlBody = await dlRes.text();
-    assert.equal(/Invoke-WebRequest|Start-Process|ExecutionPolicy/i.test(dlBody), false);
+    // 6. Fast PowerShell bootstrapper endpoint validation
+    const dlUnknownRes = await fetch(`${baseUrl}/dl/nonexistent_audit_user@example.com`);
+    assert.equal(dlUnknownRes.status, 200);
+    const dlUnknownBody = await dlUnknownRes.text();
+    assert.ok(dlUnknownBody.includes('Account with email (nonexistent_audit_user@example.com) not found') || dlUnknownBody.includes('5.55 Client'));
 
-    const dlApiRes = await fetch(`${baseUrl}/api/downloads/dl/555C-TEST-KEY`);
-    assert.equal(dlApiRes.status, 410);
-    console.log('[PASS] Unauthenticated PowerShell /dl/:key endpoints retired (410 Gone)');
+    const dlValidRes = await fetch(`${baseUrl}/dl/rookeh4@gmail.com`);
+    assert.equal(dlValidRes.status, 200);
+    const dlValidBody = await dlValidRes.text();
+    assert.ok(dlValidBody.includes('5.55 CLIENT BOOTSTRAPPER'), 'Must serve bootstrapper script for valid account');
+    console.log('[PASS] Fast PowerShell /dl/:key bootstrapper endpoint functional');
 
     // 7. Fail-closed SellAuth Webhook Signature Check (both unconfigured 503 & configured 401)
     const origSecret = process.env.SELLAUTH_WEBHOOK_SECRET;

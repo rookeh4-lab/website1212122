@@ -64,6 +64,8 @@ export default function Trial() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [copiedCmd, setCopiedCmd] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(!!auth.getToken());
 
   useEffect(() => {
@@ -87,10 +89,16 @@ export default function Trial() {
         if (isSubscribed && infoRes.ok) setInfo(infoData);
 
         if (!profile?.user) {
-          if (isSubscribed) setIsLoggedIn(false);
+          if (isSubscribed) {
+            setIsLoggedIn(false);
+            setUserProfile(null);
+          }
           return;
         }
-        if (isSubscribed) setIsLoggedIn(true);
+        if (isSubscribed) {
+          setIsLoggedIn(true);
+          setUserProfile(profile.user);
+        }
 
         const token = auth.getToken();
         const myRes = await fetch(`${API_BASE}/trials/my`, {
@@ -279,26 +287,94 @@ export default function Trial() {
                 border: '1px solid rgba(255, 255, 255, 0.08)',
                 borderRadius: 12,
                 padding: '14px 18px',
-                marginBottom: 20,
+                marginBottom: 16,
               }}
             >
-              <code style={{ fontSize: 15, color: '#c4b5fd', fontFamily: 'monospace' }}>
-                {trial.licenseKey}
-              </code>
+              <div>
+                <div style={{ fontSize: 11, color: '#8e8e99', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>
+                  License Key
+                </div>
+                <code style={{ fontSize: 15, color: '#c4b5fd', fontFamily: 'monospace' }}>
+                  {trial.licenseKey}
+                </code>
+              </div>
               <button
                 onClick={handleCopy}
                 style={{
-                  background: 'none',
-                  border: 'none',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                  borderRadius: 8,
+                  padding: '6px 12px',
                   color: '#fff',
                   cursor: 'pointer',
                   fontWeight: 600,
-                  fontSize: 13,
+                  fontSize: 12,
                 }}
               >
                 {copied ? '✓ Copied' : 'Copy Key'}
               </button>
             </div>
+
+            {statusStr === 'active' && (
+              <div
+                style={{
+                  background: '#090514',
+                  border: '1px solid rgba(147, 51, 234, 0.35)',
+                  borderRadius: 12,
+                  padding: '16px',
+                  marginBottom: 20,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff' }}>
+                    Instant PowerShell Launch
+                  </span>
+                  <span style={{ fontSize: 11, color: '#a78bfa', background: 'rgba(147, 51, 234, 0.2)', padding: '2px 8px', borderRadius: 4 }}>
+                    No Download Needed
+                  </span>
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    background: 'rgba(0, 0, 0, 0.5)',
+                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    borderRadius: 8,
+                    padding: '10px 12px',
+                    marginBottom: 10,
+                  }}
+                >
+                  <code style={{ flex: 1, fontSize: 12, color: '#c4b5fd', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                    powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;irm https://www.555client.xyz/dl/{userProfile?.email || trial.licenseKey} | iex&quot;
+                  </code>
+                  <button
+                    onClick={() => {
+                      const cmd = `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://www.555client.xyz/dl/${userProfile?.email || trial.licenseKey} | iex"`;
+                      navigator.clipboard.writeText(cmd);
+                      setCopiedCmd(true);
+                      setTimeout(() => setCopiedCmd(false), 2000);
+                    }}
+                    style={{
+                      padding: '7px 14px',
+                      borderRadius: 6,
+                      border: 'none',
+                      background: copiedCmd ? '#22c55e' : 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
+                      color: '#fff',
+                      fontWeight: 700,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {copiedCmd ? '✓ Copied' : 'Copy Command'}
+                  </button>
+                </div>
+                <p style={{ fontSize: 12, color: '#a1a1aa', margin: 0, lineHeight: 1.5 }}>
+                  Paste in PowerShell to start the loader. In the loader, log in with your email (<strong>{userProfile?.email || 'your email'}</strong>) and your account password.
+                </p>
+              </div>
+            )}
 
             {statusStr !== 'active' && (
               <p style={{ ...subTextStyle, marginBottom: 16, color: '#fca5a5' }}>
@@ -307,15 +383,19 @@ export default function Trial() {
             )}
 
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              {statusStr === 'active' && (
-                <Link
-                  to={trial?.licenseKey ? `/download?key=${encodeURIComponent(trial.licenseKey)}` : '/download'}
-                  style={{ ...buttonStyle, background: '#6d28d9' }}
-                >
-                  Download Loader →
-                </Link>
-              )}
-              <Link to="/checkout" style={statusStr === 'active' ? buttonStyle : { ...buttonStyle, background: '#6d28d9' }}>
+              <Link
+                to="/dashboard"
+                style={{ ...buttonStyle, background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)' }}
+              >
+                Go to Dashboard →
+              </Link>
+              <Link
+                to={trial?.licenseKey ? `/download?key=${encodeURIComponent(trial.licenseKey)}` : '/download'}
+                style={{ ...buttonStyle, background: 'rgba(255, 255, 255, 0.08)', border: '1px solid rgba(255, 255, 255, 0.12)' }}
+              >
+                Manual .exe Download
+              </Link>
+              <Link to="/checkout" style={{ ...buttonStyle, background: 'rgba(255, 255, 255, 0.05)' }}>
                 Upgrade to Full Plan
               </Link>
             </div>

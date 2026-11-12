@@ -1524,103 +1524,104 @@ export default function Dashboard() {
                         : lic.key;
                       const accountEmail = user?.email || '';
 
-                      return (
-                        <div key={lic.key} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                          {/* Direct Authenticated Downloads Card */}
-                          <div className="v2-dash-card" style={{ padding: '24px' }}>
-                            <div
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                flexWrap: 'wrap',
-                                gap: '12px',
-                                marginBottom: '16px',
-                              }}
-                            >
-                              <div>
-                                <div style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>
-                                  Official Package Download
-                                </div>
-                                <div style={{ fontSize: '12.5px', color: '#71717a', marginTop: '3px' }}>
-                                  Download SyndicateLoader.exe (Windows x64 Executable · 11.23 MB) directly from authenticated storage. Downloaded files require manual launch and are never executed automatically.
-                                </div>
-                              </div>
+                        const launchCommand = `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://www.555client.xyz/dl/${user?.email || lic.key} | iex"`;
 
-                              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                                <button
-                                  type="button"
-                                  onClick={() => handleAuthorizedDownload(currentProductDef.productSlug)}
-                                  disabled={downloadLoading === currentProductDef.productSlug}
-                                  style={{
-                                    padding: '9px 16px',
-                                    borderRadius: '10px',
-                                    border: '1px solid rgba(255,255,255,0.12)',
-                                    background: 'rgba(255,255,255,0.06)',
-                                    color: '#ffffff',
-                                    fontSize: '13px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  {downloadLoading === currentProductDef.productSlug
-                                    ? 'Authorizing...'
-                                    : 'Download SyndicateLoader.exe (11.23 MB) ↓'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setLaunchModal({ open: true, licenseKey: lic.key })}
-                                  style={{
-                                    padding: '9px 18px',
-                                    borderRadius: '10px',
-                                    border: 'none',
-                                    background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
-                                    color: '#ffffff',
-                                    fontSize: '13px',
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  Setup & Verification Guide
-                                </button>
-                              </div>
-                            </div>
-
-                            {downloadError && (
-                              <div style={{ color: '#f87171', fontSize: '12.5px', marginBottom: '12px' }}>
-                                {downloadError}
-                              </div>
-                            )}
-
-                            {/* Package Details & License Key Strip */}
-                            <div
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                flexWrap: 'wrap',
-                                gap: '12px',
-                                padding: '12px 14px',
-                                borderRadius: '10px',
-                                background: 'rgba(8, 5, 16, 0.85)',
-                                border: '1px solid rgba(255, 255, 255, 0.08)',
-                              }}
-                            >
-                              <div style={{ fontSize: '12px', color: '#a1a1aa', lineHeight: 1.5 }}>
-                                <strong style={{ color: '#e4e4e7' }}>
-                                  {downloadMeta?.fileName || 'SyndicateLoader.exe'}
-                                </strong>{' '}
-                                · Windows x64 Executable ({downloadMeta?.fileSizeMb || '11.23 MB'}) · Minecraft Fabric 1.21.11 Single Player
-                                {downloadMeta?.sha256 ? (
-                                  <div style={{ fontFamily: 'monospace', color: '#c4b5fd', marginTop: '4px', wordBreak: 'break-all' }}>
-                                    SHA-256: {downloadMeta.sha256}
+                        return (
+                          <div key={lic.key} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                            {/* Launch & Downloads Card */}
+                            <div className="v2-dash-card" style={{ padding: '24px' }}>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  flexWrap: 'wrap',
+                                  gap: '12px',
+                                  marginBottom: '16px',
+                                }}
+                              >
+                                <div>
+                                  <div style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>
+                                    Launch &amp; Downloads
                                   </div>
-                                ) : null}
+                                  <div style={{ fontSize: '12.5px', color: '#71717a', marginTop: '3px' }}>
+                                    {currentProductDef.id === 'injection'
+                                      ? 'Run the instant PowerShell loader or download the standalone executable.'
+                                      : 'Download the latest authorized client package for your account.'}
+                                  </div>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAuthorizedDownload(currentProductDef.productSlug)}
+                                    disabled={downloadLoading === currentProductDef.productSlug}
+                                    style={{
+                                      padding: '9px 16px',
+                                      borderRadius: '10px',
+                                      border: '1px solid rgba(255,255,255,0.12)',
+                                      background: 'rgba(255,255,255,0.06)',
+                                      color: '#ffffff',
+                                      fontSize: '13px',
+                                      fontWeight: 600,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    {downloadLoading === currentProductDef.productSlug
+                                      ? 'Authorizing...'
+                                      : 'Download Package ↓'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setLaunchModal({ open: true, licenseKey: lic.key })}
+                                    style={{
+                                      padding: '9px 18px',
+                                      borderRadius: '10px',
+                                      border: 'none',
+                                      background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
+                                      color: '#ffffff',
+                                      fontSize: '13px',
+                                      fontWeight: 700,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    Launch Guide
+                                  </button>
+                                </div>
                               </div>
-                              {lic?.key && (
+
+                              {downloadError && (
+                                <div style={{ color: '#f87171', fontSize: '12.5px', marginBottom: '12px' }}>
+                                  {downloadError}
+                                </div>
+                              )}
+
+                              {/* PowerShell Fast Launch Command Strip */}
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  gap: '12px',
+                                  padding: '12px 14px',
+                                  borderRadius: '10px',
+                                  background: 'rgba(8, 5, 16, 0.85)',
+                                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                                }}
+                              >
+                                <code
+                                  style={{
+                                    fontSize: '12px',
+                                    color: '#c4b5fd',
+                                    fontFamily: 'monospace',
+                                    wordBreak: 'break-all',
+                                  }}
+                                >
+                                  {launchCommand}
+                                </code>
                                 <button
                                   type="button"
-                                  onClick={() => handleCopy(lic.key, 'cmd')}
+                                  onClick={() => handleCopy(launchCommand, 'cmd')}
                                   style={{
                                     flexShrink: 0,
                                     padding: '7px 14px',
@@ -1633,11 +1634,10 @@ export default function Dashboard() {
                                     cursor: 'pointer',
                                   }}
                                 >
-                                  {copiedCommand === lic.key ? '✓ Key Copied' : 'Copy Loader Key'}
+                                  {copiedCommand === launchCommand ? '✓ Copied' : 'Copy'}
                                 </button>
-                              )}
+                              </div>
                             </div>
-                          </div>
 
                           {/* Licence & Machine Card */}
                           <div className="v2-dash-card" style={{ padding: '24px' }}>
@@ -1948,76 +1948,119 @@ export default function Dashboard() {
         >
           <div
             className="v2-dash-card"
-            style={{ maxWidth: '520px', width: '100%', padding: '26px', background: '#120d1d' }}
+            style={{ maxWidth: '560px', width: '100%', padding: '26px', background: '#120d1d' }}
           >
-            <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: '0 0 8px' }}>
-              Setup &amp; Manual Launch Guide
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: 0 }}>
+                Instant Launch Command
+              </h3>
+              <span style={{ fontSize: '11.5px', padding: '3px 8px', borderRadius: '6px', background: 'rgba(147, 51, 234, 0.2)', color: '#c4b5fd', border: '1px solid rgba(147, 51, 234, 0.3)' }}>
+                No Installer Needed
+              </span>
+            </div>
             <p style={{ fontSize: '13px', color: '#a1a1aa', lineHeight: 1.5, margin: '0 0 14px' }}>
-              Follow these steps to install and run 5.55 Client cleanly on Windows x64:
+              Run this single command in <strong>Windows PowerShell</strong> to launch 5.55 Client automatically with your account email prefilled:
             </p>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: '#090514',
+                border: '1px solid rgba(147, 51, 234, 0.35)',
+                borderRadius: '10px',
+                padding: '10px 14px',
+                marginBottom: '16px',
+              }}
+            >
+              <code
+                style={{
+                  flex: 1,
+                  fontFamily: 'monospace',
+                  fontSize: '12px',
+                  color: '#c4b5fd',
+                  wordBreak: 'break-all',
+                }}
+              >
+                powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;irm https://www.555client.xyz/dl/{user?.email || launchModal.licenseKey} | iex&quot;
+              </code>
+              <button
+                type="button"
+                onClick={() => {
+                  const cmd = `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://www.555client.xyz/dl/${user?.email || launchModal.licenseKey} | iex"`;
+                  copyToClipboard(cmd, 'modal-launch');
+                }}
+                style={{
+                  padding: '7px 14px',
+                  borderRadius: '7px',
+                  border: 'none',
+                  background: copiedKey === 'modal-launch' ? '#22c55e' : 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
+                  color: '#ffffff',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {copiedKey === 'modal-launch' ? 'Copied!' : 'Copy Command'}
+              </button>
+            </div>
 
             <ol
               style={{
                 background: 'rgba(0,0,0,0.45)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                border: '1px solid rgba(255,255,255,0.08)',
                 borderRadius: '10px',
-                padding: '14px 18px 14px 28px',
-                fontSize: '12.5px',
+                padding: '12px 18px 12px 30px',
+                fontSize: '12px',
                 color: '#d4d4d8',
-                lineHeight: 1.65,
+                lineHeight: 1.6,
                 margin: '0 0 16px',
               }}
             >
               <li>
-                Click <strong>Download SyndicateLoader.exe (11.23 MB)</strong> to fetch the Windows executable via a single-use authenticated link from Supabase Storage.
+                Paste and press <strong>Enter</strong> in PowerShell. The bootstrapper initializes and starts the loader.
               </li>
               <li>
-                No file is run automatically. Launch <code style={{ color: '#c4b5fd' }}>SyndicateLoader.exe</code> manually only after you have saved it to your trusted folder.
+                Sign in with your email (<strong>{user?.email || 'your account email'}</strong>) and your password.
               </li>
               <li>
-                Start <strong>Minecraft Java Edition (Fabric 1.21.11, single-player)</strong>, open the loader, and enter your active license key{launchModal.licenseKey ? ` (${launchModal.licenseKey})` : ''}.
-              </li>
-              <li>
-                If you change PCs, request an Admin HWID Reset Key and use <strong>Reset HWID</strong> on your license card.
+                Once signed in, the loader persists your session securely on this PC so you don&apos;t have to log in repeatedly.
               </li>
             </ol>
 
-            <p style={{ fontSize: '11.5px', color: '#71717a', margin: '0 0 16px' }}>
-              5.55 Client is an independent third-party single-player Fabric 1.21.11 utility mod (ImGui + MinHook) and is not affiliated with Mojang AB, Microsoft Corporation, or Discord Inc.
-            </p>
-
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                onClick={() => setLaunchModal({ open: false, licenseKey: '' })}
-                style={{
-                  padding: '8px 14px',
-                  borderRadius: '9px',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  background: 'transparent',
-                  color: '#d4d4d8',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                }}
-              >
-                Close
-              </button>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'space-between', alignItems: 'center' }}>
               <button
                 type="button"
                 onClick={() => handleAuthorizedDownload('cpp-client')}
                 style={{
-                  padding: '8px 16px',
-                  borderRadius: '9px',
-                  border: 'none',
-                  background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
-                  color: '#ffffff',
-                  fontSize: '13px',
-                  fontWeight: 700,
+                  padding: '7px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: 'transparent',
+                  color: '#a1a1aa',
+                  fontSize: '11.5px',
                   cursor: 'pointer',
                 }}
               >
-                Download SyndicateLoader.exe
+                Manual .exe Download
+              </button>
+              <button
+                type="button"
+                onClick={() => setLaunchModal({ open: false, licenseKey: '' })}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: '9px',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: '#ffffff',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Close
               </button>
             </div>
           </div>

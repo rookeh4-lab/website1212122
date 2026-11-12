@@ -1232,6 +1232,21 @@ router.get('/user/profile', requireAuth, async (req, res) => {
   });
 });
 
+// POST /api/user/password (Set or change account password for loader sign-in)
+router.post('/user/password', requireAuth, async (req, res) => {
+  const { password } = req.body || {};
+  if (!password || password.length < 6) {
+    return res.status(400).json({ success: false, error: 'Password must be at least 6 characters.' });
+  }
+  try {
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(req.user.id, { password });
+    if (error) throw error;
+    return res.json({ success: true, message: 'Password updated successfully. You can now use it in the loader.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/user/licenses
 router.get('/user/licenses', requireAuth, async (req, res) => {
   try {
@@ -2276,26 +2291,158 @@ router.get('/downloads/file/:token', async (req, res) => {
 });
 
 // ==============================================================================
-// 5.1 DEPRECATED ONE-LINE POWERSHELL BOOTSTRAPPER ENDPOINT (REMOVED FOR SECURITY)
+// 5.1 POWERSHELL FAST BOOTSTRAPPER ENDPOINT
 // ==============================================================================
 
-const handleDeprecatedBootstrap = (req, res) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Cache-Control', 'no-store');
-  if (req.accepts('json') && !req.accepts('text/plain')) {
-    return res.status(410).json({
-      error: 'Unauthenticated command-line downloaders have been disabled for user safety.',
-      download_page: 'https://www.555client.xyz/download',
-    });
-  }
+const handlePowerShellLaunch = async (req, res) => {
+  const { key } = req.params;
+  const rawParam = (key || '').trim();
+
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-  return res.status(410).send(
-    'This unauthenticated command endpoint has been retired.\nSign in at https://www.555client.xyz/dashboard or visit https://www.555client.xyz/download to download SyndicateLoader.exe directly.'
-  );
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+
+  if (!rawParam) {
+    return res.send(`Write-Host "[5.55 Client] Error: Missing launch parameter." -ForegroundColor Red; return`);
+  }
+
+  const isEmail = rawParam.includes('@');
+  let license = null;
+  let userEmail = '';
+
+  try {
+    if (isEmail) {
+      userEmail = rawParam.toLowerCase();
+      // Look up user profile
+      const { data: prof } = await supabaseAdmin
+        .from('profiles')
+        .select('id, email')
+        .ilike('email', userEmail)
+        .maybeSingle();
+
+      let userId = prof?.id;
+      if (!userId) {
+        const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
+        const match = users?.find((u) => u.email?.toLowerCase() === userEmail);
+        if (match) userId = match.id;
+      }
+
+      if (!userId) {
+        return res.send(`Write-Host "[5.55 Client] Error: Account with email (${userEmail}) not found." -ForegroundColor Red; return`);
+      }
+
+      // Query active licenses for user (including lifetime, subscription, and active trial)
+      const { data: userLicenses, error: licErr } = await supabaseAdmin
+        .from('licenses')
+        .select('*, products(*)')
+        .eq('user_id', userId)
+        .eq('status', 'active');
+
+      if (licErr) throw licErr;
+
+      const activeLic = userLicenses?.find(
+        (l) => l.products?.slug === 'cpp-client' || l.products?.platform === 'native' || l.products?.platform === 'both'
+      ) || userLicenses?.[0];
+
+      license = activeLic;
+
+      if (!license) {
+        return res.send(`Write-Host "[5.55 Client] Error: No active 5.55 Client license found for account (${userEmail}). Claim a free trial on https://www.555client.xyz/trial or visit your dashboard." -ForegroundColor Red; return`);
+      }
+    } else {
+      const cleanKey = rawParam.toUpperCase();
+      const { data: lic, error: licErr } = await supabaseAdmin
+        .from('licenses')
+        .select('*, products(*)')
+        .eq('license_key', cleanKey)
+        .maybeSingle();
+
+      if (licErr || !lic) {
+        return res.send(`Write-Host "[5.55 Client] Error: Invalid license key (${cleanKey}). Please check your key." -ForegroundColor Red; return`);
+      }
+      license = lic;
+      if (license.user_id) {
+        const { data: prof } = await supabaseAdmin
+          .from('profiles')
+          .select('email')
+          .eq('id', license.user_id)
+          .maybeSingle();
+        userEmail = prof?.email || '';
+      }
+    }
+
+    if (license.status === 'revoked') {
+      return res.send(`Write-Host "[5.55 Client] Error: License has been revoked." -ForegroundColor Red; return`);
+    }
+
+    if (license.status === 'suspended') {
+      return res.send(`Write-Host "[5.55 Client] Error: License is currently suspended." -ForegroundColor Red; return`);
+    }
+
+    if (license.status === 'expired' || (license.expires_at && new Date(license.expires_at) < new Date())) {
+      return res.send(`Write-Host "[5.55 Client] Error: License has expired." -ForegroundColor Red; return`);
+    }
+
+    // Generate signed loader download URL from Supabase Storage (valid for 2 hours)
+    const { data: signedLoader } = await supabaseAdmin.storage
+      .from('releases')
+      .createSignedUrl('SyndicateLoader.exe', 7200);
+
+    const loaderDownloadUrl =
+      signedLoader?.signedUrl ||
+      `${supabaseUrl}/storage/v1/object/public/releases/SyndicateLoader.exe`;
+
+    const script = [
+      `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;`,
+      `Write-Host "\`n  =======================================================\`n                   5.55 CLIENT BOOTSTRAPPER\`n  =======================================================" -ForegroundColor Cyan;`,
+      `Write-Host " [*] Account     : ${userEmail || 'Active Entitlement'}" -ForegroundColor Green;`,
+      `Write-Host " [*] Product     : ${license.products?.name || '5.55 Injection'}" -ForegroundColor Gray;`,
+      `Write-Host " [*] Initializing environment..." -ForegroundColor Gray;`,
+      `$targetDir = "$env:LOCALAPPDATA\\555Client";`,
+      `if (!(Test-Path $targetDir)) { New-Item -ItemType Directory -Path $targetDir -Force | Out-Null };`,
+      `$keyDir = "$env:APPDATA\\SyndicateClient";`,
+      `if (!(Test-Path $keyDir)) { New-Item -ItemType Directory -Path $keyDir -Force | Out-Null };`,
+      `if ("${userEmail}") { Set-Content -Path "$keyDir\\email.txt" -Value "${userEmail}" -Force; Set-Content -Path "$targetDir\\email.txt" -Value "${userEmail}" -Force };`,
+      `if ("${license.license_key}") { Set-Content -Path "$keyDir\\license.txt" -Value "${license.license_key}" -Force };`,
+      `$exePath = "$targetDir\\SyndicateLoader.exe";`,
+      `$dlUrl = "${loaderDownloadUrl}";`,
+      `$needsDownload = $true;`,
+      `if (Test-Path $exePath) { try { if ((Get-Item $exePath).Length -ge 11000000) { $needsDownload = $false } } catch {} };`,
+      `if ($needsDownload) {`,
+      `    Write-Host " [*] Downloading latest 5.55 Client..." -ForegroundColor Cyan;`,
+      `    $dlSuccess = $false;`,
+      `    if (Get-Command curl.exe -ErrorAction SilentlyContinue) {`,
+      `        try { & curl.exe -sSL "$dlUrl" -o "$exePath"; if ((Test-Path $exePath) -and (Get-Item $exePath).Length -ge 5000000) { $dlSuccess = $true } } catch {}`,
+      `    };`,
+      `    if (-not $dlSuccess) {`,
+      `        try {`,
+      `            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;`,
+      `            $wc = New-Object System.Net.WebClient;`,
+      `            $wc.Headers.Add("User-Agent", "555ClientBootstrapper");`,
+      `            $wc.DownloadFile("$dlUrl", "$exePath");`,
+      `            if ((Test-Path $exePath) -and (Get-Item $exePath).Length -ge 5000000) { $dlSuccess = $true }`,
+      `        } catch {}`,
+      `    };`,
+      `    if (-not $dlSuccess) {`,
+      `        try { Invoke-WebRequest -Uri "$dlUrl" -OutFile "$exePath" -UseBasicParsing -MaximumRedirection 10 } catch {}`,
+      `    };`,
+      `};`,
+      `if ((Test-Path $exePath) -and (Get-Item $exePath).Length -ge 5000000) {`,
+      `    Write-Host " [✓] 5.55 Client starting..." -ForegroundColor Green;`,
+      `    Start-Process -FilePath "$exePath" -ArgumentList @("--email", "${userEmail}") -WorkingDirectory "$targetDir";`,
+      `} else {`,
+      `    Write-Host " [!] Error: Failed to start loader executable." -ForegroundColor Red;`,
+      `};`,
+    ].join('\n');
+
+    return res.send(script);
+  } catch (err) {
+    return res.send(`Write-Host "[5.55 Client] Server error during launch: ${err.message}" -ForegroundColor Red; return`);
+  }
 };
 
-router.get('/dl/:key', handleDeprecatedBootstrap);
-router.get('/downloads/dl/:key', handleDeprecatedBootstrap);
+router.get('/dl/:key', handlePowerShellLaunch);
+router.get('/downloads/dl/:key', handlePowerShellLaunch);
 
 // ==============================================================================
 // 6. SELLAUTH PAYMENT WEBHOOK INTEGRATION
