@@ -17,9 +17,9 @@ export default function Home() {
             data-aos="fade-up"
             data-aos-duration="600"
           >
-            5.55 —
+            5.55 Client —
             <br />
-            <span className="hero-gradient">Best 1.21.11 PVP Hack Client.</span>
+            <span className="hero-gradient">Best 1.21.11 PVP Client.</span>
           </h1>
 
           <p
