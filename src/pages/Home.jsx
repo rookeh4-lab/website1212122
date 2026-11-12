@@ -17,9 +17,9 @@ export default function Home() {
             data-aos="fade-up"
             data-aos-duration="600"
           >
-            5.55 — Best PvP
+            5.55 Client —
             <br />
-            <span className="hero-gradient">Client For 1.21.11.</span>
+            <span className="hero-gradient">Best 1.21.11 Client.</span>
           </h1>
 
           <p
@@ -28,7 +28,7 @@ export default function Home() {
             data-aos-delay="100"
             data-aos-duration="600"
           >
-            Independent third-party Fabric 1.21.11 single-player utility mod for Minecraft (Windows x64). Not affiliated with Mojang AB or Microsoft.
+            Win more fights without it ever looking like cheating. Works on every version from 1.21.
           </p>
 
           <div

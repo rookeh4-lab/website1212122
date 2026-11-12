@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://www.555client.xyz/</loc>
+    <loc>https://555client.xyz/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://www.555client.xyz/login</loc>
+    <loc>https://555client.xyz/login</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://www.555client.xyz/trial</loc>
+    <loc>https://555client.xyz/trial</loc>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://www.555client.xyz/affiliates</loc>
+    <loc>https://555client.xyz/affiliates</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://www.555client.xyz/stats</loc>
+    <loc>https://555client.xyz/stats</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>

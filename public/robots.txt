@@ -5,4 +5,4 @@ Disallow: /dl/
 Disallow: /downloads/
 Disallow: /admin
 
-Sitemap: https://www.555client.xyz/sitemap.xml
+Sitemap: https://555client.xyz/sitemap.xml
