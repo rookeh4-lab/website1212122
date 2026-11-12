@@ -17,9 +17,9 @@ export default function Home() {
             data-aos="fade-up"
             data-aos-duration="600"
           >
-            The best ghost
+            5.55 — Best PvP
             <br />
-            <span className="hero-gradient">client for Minecraft.</span>
+            <span className="hero-gradient">Client For 1.21.11.</span>
           </h1>
 
           <p

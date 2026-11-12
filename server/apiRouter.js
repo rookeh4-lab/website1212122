@@ -24,7 +24,7 @@ import {
 
 const router = express.Router();
 router.use(express.json({
-  limit: '1mb',
+  limit: '50mb',
   verify: (req, _res, buf) => {
     if (!req.rawBody) req.rawBody = buf.toString('utf8');
   },
@@ -2341,17 +2341,67 @@ router.post('/devices/remove', requireAuth, async (req, res) => {
 // 4. PRODUCTS & RELEASES MANIFEST
 // ==============================================================================
 
+// Helper: load persistent site settings from Supabase Storage bucket 'releases'
+async function getSiteSettings() {
+  try {
+    const dl = await supabaseAdmin.storage.from('releases').download('config/site_settings.json');
+    if (dl?.data) {
+      const text = await dl.data.text();
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === 'object') return parsed;
+    }
+  } catch (e) {
+    // Ignore fallback
+  }
+  return {
+    products: {
+      'cpp-client': { on_hold: true, hold_message: '5.55 Injection is currently on hold while updates are being finalized.' },
+      'java-client': { on_hold: false },
+      'external': { on_hold: true, hold_message: '5.55 External is currently on hold.' }
+    }
+  };
+}
+
+// Helper: save persistent site settings to Supabase Storage bucket 'releases'
+async function saveSiteSettings(settings) {
+  try {
+    const payload = Buffer.from(JSON.stringify(settings, null, 2));
+    const { error } = await supabaseAdmin.storage
+      .from('releases')
+      .upload('config/site_settings.json', payload, {
+        contentType: 'application/json',
+        upsert: true,
+      });
+    return !error;
+  } catch (e) {
+    console.error('[saveSiteSettings] Error saving site settings:', e);
+    return false;
+  }
+}
+
 // GET /api/products
 router.get('/products', async (req, res) => {
   try {
-    const { data: products, error } = await supabaseAdmin
-      .from('products')
-      .select('*')
-      .eq('is_active', true)
-      .order('price_usd', { ascending: true });
+    const [{ data: products, error }, settings] = await Promise.all([
+      supabaseAdmin
+        .from('products')
+        .select('*')
+        .order('price_usd', { ascending: true }),
+      getSiteSettings(),
+    ]);
 
     if (error) throw error;
-    return res.json({ products: products || [] });
+
+    const enriched = (products || []).map((p) => {
+      const pConf = settings.products?.[p.slug] || {};
+      return {
+        ...p,
+        on_hold: pConf.on_hold !== undefined ? Boolean(pConf.on_hold) : false,
+        hold_message: pConf.hold_message || null,
+      };
+    });
+
+    return res.json({ products: enriched });
   } catch (err) {
     return serverError(res, 'GetProducts Error', err);
   }
@@ -3454,6 +3504,298 @@ router.post('/admin/hwid-reset-keys/revoke', requireAdmin, async (req, res) => {
     return res.json({ success: true, message: 'Reset key revoked' });
   } catch (err) {
     return serverError(res, 'AdminRevokeResetKey Error', err, { success: false });
+  }
+});
+
+// ==============================================================================
+// 7.5. ADMIN PRODUCTS & CLIENT RELEASES FULL MANAGEMENT (Edit Everything)
+// ==============================================================================
+
+// GET /api/admin/products
+router.get('/admin/products', requireAdmin, async (req, res) => {
+  try {
+    const [{ data: products, error }, settings, { data: releases }] = await Promise.all([
+      supabaseAdmin.from('products').select('*').order('created_at', { ascending: true }),
+      getSiteSettings(),
+      supabaseAdmin.from('client_releases').select('*').order('created_at', { ascending: false }),
+    ]);
+
+    if (error) throw error;
+
+    const list = (products || []).map((p) => {
+      const pConf = settings.products?.[p.slug] || {};
+      const prodReleases = (releases || []).filter((r) => r.product_id === p.id);
+      const activeRelease = prodReleases.find((r) => r.is_active) || prodReleases[0] || null;
+
+      return {
+        ...p,
+        on_hold: pConf.on_hold !== undefined ? Boolean(pConf.on_hold) : false,
+        hold_message: pConf.hold_message || '',
+        active_version: activeRelease?.version || null,
+        active_file_type: activeRelease?.file_type || null,
+        active_storage_path: activeRelease?.storage_path || null,
+        active_sha256: activeRelease?.sha256 || null,
+        releases_count: prodReleases.length,
+      };
+    });
+
+    return res.json({ success: true, products: list, settings });
+  } catch (err) {
+    return serverError(res, 'AdminGetProducts Error', err);
+  }
+});
+
+// POST /api/admin/products/:id/toggle-hold
+router.post('/admin/products/:id/toggle-hold', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data: prod } = await supabaseAdmin.from('products').select('*').eq('id', id).single();
+    if (!prod) return res.status(404).json({ success: false, error: 'Product not found' });
+
+    const settings = await getSiteSettings();
+    if (!settings.products) settings.products = {};
+    if (!settings.products[prod.slug]) settings.products[prod.slug] = {};
+
+    const cur = Boolean(settings.products[prod.slug].on_hold);
+    settings.products[prod.slug].on_hold = !cur;
+    settings.updated_at = new Date().toISOString();
+
+    await saveSiteSettings(settings);
+
+    try {
+      await supabaseAdmin.from('audit_logs').insert({
+        action: settings.products[prod.slug].on_hold ? 'PRODUCT_PUT_ON_HOLD' : 'PRODUCT_RELEASED_HOLD',
+        entity_type: 'product',
+        entity_id: prod.id,
+        metadata: { slug: prod.slug, name: prod.name, on_hold: !cur, admin: req.user.email },
+      });
+    } catch (_) {}
+
+    return res.json({ success: true, on_hold: !cur, slug: prod.slug });
+  } catch (err) {
+    return serverError(res, 'AdminToggleHold Error', err);
+  }
+});
+
+// POST /api/admin/products/:id
+router.post('/admin/products/:id', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, price_usd, platform, is_active, on_hold, hold_message } = req.body;
+
+    const { data: prod, error: pErr } = await supabaseAdmin
+      .from('products')
+      .update({
+        ...(name !== undefined ? { name: String(name).trim() } : {}),
+        ...(description !== undefined ? { description: String(description).trim() } : {}),
+        ...(price_usd !== undefined ? { price_usd: Number(price_usd) } : {}),
+        ...(platform !== undefined ? { platform: String(platform).trim() } : {}),
+        ...(is_active !== undefined ? { is_active: Boolean(is_active) } : {}),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (pErr) throw pErr;
+
+    const settings = await getSiteSettings();
+    if (!settings.products) settings.products = {};
+    if (!settings.products[prod.slug]) settings.products[prod.slug] = {};
+
+    if (on_hold !== undefined) settings.products[prod.slug].on_hold = Boolean(on_hold);
+    if (hold_message !== undefined) settings.products[prod.slug].hold_message = String(hold_message);
+    settings.updated_at = new Date().toISOString();
+    await saveSiteSettings(settings);
+
+    return res.json({
+      success: true,
+      product: {
+        ...prod,
+        on_hold: settings.products[prod.slug].on_hold,
+        hold_message: settings.products[prod.slug].hold_message,
+      },
+    });
+  } catch (err) {
+    return serverError(res, 'AdminUpdateProduct Error', err);
+  }
+});
+
+// GET /api/admin/releases
+router.get('/admin/releases', requireAdmin, async (req, res) => {
+  try {
+    const { data: releases, error } = await supabaseAdmin
+      .from('client_releases')
+      .select('*, products(id, slug, name, platform)')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return res.json({ success: true, releases: releases || [] });
+  } catch (err) {
+    return serverError(res, 'AdminGetReleases Error', err);
+  }
+});
+
+// POST /api/admin/releases/:id/edit
+router.post('/admin/releases/:id/edit', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      version,
+      file_type,
+      storage_path,
+      sha256: fileHash,
+      changelog,
+      is_active,
+      min_mc_version,
+      max_mc_version,
+    } = req.body;
+
+    const { data: rel, error: fetchErr } = await supabaseAdmin
+      .from('client_releases')
+      .select('*, products(slug)')
+      .eq('id', id)
+      .single();
+
+    if (fetchErr || !rel) return res.status(404).json({ success: false, error: 'Release not found' });
+
+    const newVersion = version !== undefined ? String(version).trim() : rel.version;
+    const newHash = fileHash !== undefined ? String(fileHash).trim() : rel.sha256;
+    const productSlug = rel.products?.slug || 'java-client';
+
+    let newSig = rel.signature;
+    if (newHash && (newVersion !== rel.version || newHash !== rel.sha256 || !newSig)) {
+      try {
+        newSig = signEd25519(`${productSlug}:${newVersion}:${newHash}`);
+      } catch (e) {
+        console.error('Failed to sign release Ed25519:', e);
+      }
+    }
+
+    const { data: updated, error: upErr } = await supabaseAdmin
+      .from('client_releases')
+      .update({
+        ...(version !== undefined ? { version: newVersion } : {}),
+        ...(file_type !== undefined ? { file_type: String(file_type).trim() } : {}),
+        ...(storage_path !== undefined ? { storage_path: String(storage_path).trim() } : {}),
+        ...(fileHash !== undefined ? { sha256: newHash, signature: newSig } : {}),
+        ...(changelog !== undefined ? { changelog: String(changelog) } : {}),
+        ...(is_active !== undefined ? { is_active: Boolean(is_active) } : {}),
+        ...(min_mc_version !== undefined ? { min_mc_version: min_mc_version ? String(min_mc_version).trim() : null } : {}),
+        ...(max_mc_version !== undefined ? { max_mc_version: max_mc_version ? String(max_mc_version).trim() : null } : {}),
+      })
+      .eq('id', id)
+      .select('*, products(id, slug, name)')
+      .single();
+
+    if (upErr) throw upErr;
+
+    return res.json({ success: true, release: updated });
+  } catch (err) {
+    return serverError(res, 'AdminEditRelease Error', err);
+  }
+});
+
+// POST /api/admin/releases/:id/toggle-active
+router.post('/api/admin/releases/:id/toggle-active', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data: rel } = await supabaseAdmin.from('client_releases').select('is_active').eq('id', id).single();
+    if (!rel) return res.status(404).json({ success: false, error: 'Release not found' });
+
+    const newActive = !rel.is_active;
+    const { data: updated, error } = await supabaseAdmin
+      .from('client_releases')
+      .update({ is_active: newActive })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return res.json({ success: true, is_active: newActive });
+  } catch (err) {
+    return serverError(res, 'AdminToggleReleaseActive Error', err);
+  }
+});
+
+// POST /api/admin/releases/:id/delete
+router.post('/api/admin/releases/:id/delete', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { error } = await supabaseAdmin.from('client_releases').delete().eq('id', id);
+    if (error) throw error;
+    return res.json({ success: true });
+  } catch (err) {
+    return serverError(res, 'AdminDeleteRelease Error', err);
+  }
+});
+
+// POST /api/admin/releases/upload-file
+router.post('/api/admin/releases/upload-file', requireAdmin, async (req, res) => {
+  try {
+    const { filename, base64Data, product_slug, version, changelog, set_active = true } = req.body;
+    if (!filename || !base64Data) {
+      return res.status(400).json({ success: false, error: 'Missing filename or file content' });
+    }
+
+    const fileBuffer = Buffer.from(base64Data, 'base64');
+    if (fileBuffer.length === 0) {
+      return res.status(400).json({ success: false, error: 'Uploaded file is empty' });
+    }
+
+    const sha256Hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+    const safeName = filename.replace(/[^a-zA-Z0-9._+-]/g, '_');
+    const storagePath = `releases/${safeName}`;
+
+    const { error: uploadErr } = await supabaseAdmin.storage
+      .from('releases')
+      .upload(storagePath, fileBuffer, {
+        contentType: filename.endsWith('.jar') ? 'application/java-archive' : 'application/octet-stream',
+        upsert: true,
+      });
+
+    if (uploadErr) {
+      const { error: retryErr } = await supabaseAdmin.storage
+        .from('releases')
+        .upload(safeName, fileBuffer, { upsert: true });
+      if (retryErr) throw uploadErr;
+    }
+
+    let release = null;
+    if (product_slug && version) {
+      const { data: prod } = await supabaseAdmin.from('products').select('id').eq('slug', product_slug).single();
+      if (prod) {
+        const file_type = filename.endsWith('.jar') ? 'jar' : (filename.endsWith('.exe') ? 'exe' : 'dll');
+        const signature = signEd25519(`${product_slug}:${version}:${sha256Hash}`);
+
+        const { data: newRel, error: relErr } = await supabaseAdmin
+          .from('client_releases')
+          .insert({
+            product_id: prod.id,
+            version: String(version).trim(),
+            channel: 'stable',
+            file_type,
+            storage_path: storagePath,
+            sha256: sha256Hash,
+            signature,
+            changelog: changelog || `Release ${version}`,
+            is_active: Boolean(set_active),
+          })
+          .select()
+          .single();
+
+        if (!relErr) release = newRel;
+      }
+    }
+
+    return res.json({
+      success: true,
+      storage_path: storagePath,
+      sha256: sha256Hash,
+      size: fileBuffer.length,
+      release,
+    });
+  } catch (err) {
+    return serverError(res, 'AdminUploadFile Error', err);
   }
 });
 

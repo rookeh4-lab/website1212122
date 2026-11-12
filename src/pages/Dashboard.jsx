@@ -25,7 +25,7 @@ const PRODUCT_CATALOG = [
     productSlug: 'cpp-client',
     placeholder: '555C-XXXX-XXXX-XXXX',
     checkoutUrl: 'https://lama-co.mysellauth.com/checkout/8bfd882b2959f-0000017323965',
-    onHold: false,
+    onHold: true,
     matches: (lic) =>
       lic.product === 'cpp-client' ||
       lic.platform === 'native' ||
@@ -67,6 +67,7 @@ export default function Dashboard() {
   const [activeView, setActiveView] = useState('home'); // 'home' | 'client' | 'injection' | 'external'
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [productHoldState, setProductHoldState] = useState({ 'cpp-client': true, 'external': true });
 
   // Key redemption state (shared cleanly with inline view feedback)
   const [redeemKey, setRedeemKey] = useState('');
@@ -149,7 +150,22 @@ export default function Dashboard() {
         }
         setUser(data.user);
         const currentToken = (await auth.getAsyncToken?.()) || auth.getToken();
-        await Promise.all([loadLicenses(currentToken), refreshServiceStatus()]);
+        await Promise.all([
+          loadLicenses(currentToken),
+          refreshServiceStatus(),
+          fetch(`${API_BASE}/products`)
+            .then((r) => r.json())
+            .then((d) => {
+              if (d?.products && Array.isArray(d.products)) {
+                const hMap = {};
+                d.products.forEach((p) => {
+                  hMap[p.slug] = Boolean(p.on_hold);
+                });
+                setProductHoldState((prev) => ({ ...prev, ...hMap }));
+              }
+            })
+            .catch(() => {}),
+        ]);
       } catch {
         if (active) navigate('/login', { replace: true });
       } finally {
@@ -538,6 +554,7 @@ export default function Dashboard() {
               {PRODUCT_CATALOG.map((prod) => {
                 const isSelected = activeView === prod.id;
                 const isOwned = getProductActiveLicenses(prod).length > 0;
+                const isProdOnHold = productHoldState[prod.productSlug] !== undefined ? productHoldState[prod.productSlug] : prod.onHold;
 
                 return (
                   <button
@@ -557,21 +574,21 @@ export default function Dashboard() {
                       background: isSelected
                         ? 'linear-gradient(135deg, rgba(147, 51, 234, 0.22) 0%, rgba(124, 58, 237, 0.10) 100%)'
                         : 'transparent',
-                      color: prod.onHold
+                      color: isProdOnHold
                         ? '#71717a'
                         : isSelected
                         ? '#ffffff'
                         : '#d4d4d8',
                       fontSize: '13.5px',
                       fontWeight: isSelected ? 700 : 500,
-                      fontStyle: prod.onHold ? 'italic' : 'normal',
+                      fontStyle: isProdOnHold ? 'italic' : 'normal',
                       cursor: 'pointer',
                       textAlign: 'left',
                       transition: 'all 0.15s ease',
                     }}
                   >
                     <span>{prod.title}</span>
-                    {prod.onHold ? (
+                    {isProdOnHold ? (
                       <span
                         style={{
                           fontSize: '11px',
@@ -923,31 +940,36 @@ export default function Dashboard() {
                 .
               </h1>
 
-              {/* Amber External On Hold Notice Banner */}
-              <div
-                onClick={() => selectView('external')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '12px 16px',
-                  borderRadius: '12px',
-                  background: 'rgba(120, 74, 10, 0.22)',
-                  border: '1px solid rgba(245, 158, 11, 0.34)',
-                  color: '#fbbf24',
-                  fontSize: '13.5px',
-                  fontWeight: 500,
-                  marginBottom: '22px',
-                  cursor: 'pointer',
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ flexShrink: 0 }}>
-                  <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-                  <line x1="12" y1="9" x2="12" y2="13" />
-                  <line x1="12" y1="17" x2="12.01" y2="17" />
-                </svg>
-                <span>5.55 External is currently on hold.</span>
-              </div>
+              {/* On Hold Product Notices */}
+              {PRODUCT_CATALOG.filter((p) => {
+                return productHoldState[p.productSlug] !== undefined ? productHoldState[p.productSlug] : p.onHold;
+              }).map((held) => (
+                <div
+                  key={held.id}
+                  onClick={() => selectView(held.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    background: 'rgba(120, 74, 10, 0.22)',
+                    border: '1px solid rgba(245, 158, 11, 0.34)',
+                    color: '#fbbf24',
+                    fontSize: '13.5px',
+                    fontWeight: 500,
+                    marginBottom: '14px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ flexShrink: 0 }}>
+                    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                  <span>{held.title} is currently on hold.</span>
+                </div>
+              ))}
 
               {/* 2-Column Main Home Grid */}
               <div className="v2-dash-grid">
@@ -1247,7 +1269,7 @@ export default function Dashboard() {
           {activeView !== 'home' && currentProductDef && (() => {
             const productLicenses = getProductActiveLicenses(currentProductDef);
             const isOwned = productLicenses.length > 0;
-            const isOnHold = currentProductDef.onHold;
+            const isOnHold = productHoldState[currentProductDef.productSlug] !== undefined ? productHoldState[currentProductDef.productSlug] : currentProductDef.onHold;
 
             return (
               <div>
@@ -1345,7 +1367,7 @@ export default function Dashboard() {
                     </div>
 
                     <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#ffffff', margin: '0 0 8px' }}>
-                      5.55 External is on hold.
+                      {currentProductDef.title} is on hold.
                     </h2>
                     <p
                       style={{
@@ -1356,7 +1378,7 @@ export default function Dashboard() {
                         lineHeight: 1.6,
                       }}
                     >
-                      Access, key redemption, and downloads for 5.55 External are temporarily paused while builds are finalized.
+                      Access, key redemption, and downloads for {currentProductDef.title} are temporarily paused while builds are finalized.
                     </p>
 
                     <a
@@ -1527,6 +1549,32 @@ export default function Dashboard() {
                 {/* STATE 3: OWNED PRODUCT VIEW (License, Launch, Downloads & HWID Machine) */}
                 {isOwned && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                    {isOnHold && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          padding: '14px 18px',
+                          borderRadius: '12px',
+                          background: 'rgba(120, 74, 10, 0.22)',
+                          border: '1px solid rgba(245, 158, 11, 0.35)',
+                          color: '#fbbf24',
+                          fontSize: '13.5px',
+                          fontWeight: 500,
+                        }}
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ flexShrink: 0 }}>
+                          <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                          <line x1="12" y1="9" x2="12" y2="13" />
+                          <line x1="12" y1="17" x2="12.01" y2="17" />
+                        </svg>
+                        <span>
+                          <strong>{currentProductDef.title} is currently on hold.</strong> Downloads and loader launching are temporarily paused while updates are finalized. Your license remains active and safe.
+                        </span>
+                      </div>
+                    )}
+
                     {productLicenses.map((lic) => {
                       const isHidden = !visibleKeys[lic.key];
                       const displayKey = isHidden
@@ -1562,44 +1610,65 @@ export default function Dashboard() {
                                 </div>
 
                                 <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleAuthorizedDownload(currentProductDef.productSlug)}
-                                    disabled={downloadLoading === currentProductDef.productSlug}
-                                    style={{
-                                      padding: '9px 18px',
-                                      borderRadius: '10px',
-                                      border: 'none',
-                                      background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
-                                      color: '#ffffff',
-                                      fontSize: '13px',
-                                      fontWeight: 700,
-                                      cursor: 'pointer',
-                                    }}
-                                  >
-                                    {downloadLoading === currentProductDef.productSlug
-                                      ? 'Authorizing...'
-                                      : currentProductDef.id === 'client'
-                                      ? 'Download Mod (.jar) ↓'
-                                      : 'Download SyndicateLoader.exe ↓'}
-                                  </button>
-                                  {currentProductDef.id === 'injection' && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setLaunchModal({ open: true, licenseKey: lic.key })}
+                                  {isOnHold ? (
+                                    <div
                                       style={{
-                                        padding: '9px 16px',
+                                        padding: '9px 18px',
                                         borderRadius: '10px',
-                                        border: '1px solid rgba(255,255,255,0.12)',
-                                        background: 'rgba(255,255,255,0.06)',
-                                        color: '#ffffff',
+                                        background: 'rgba(245, 158, 11, 0.14)',
+                                        border: '1px solid rgba(245, 158, 11, 0.35)',
+                                        color: '#fbbf24',
                                         fontSize: '13px',
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
+                                        fontWeight: 700,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
                                       }}
                                     >
-                                      Launch Guide
-                                    </button>
+                                      <span>⏸ Downloads On Hold</span>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleAuthorizedDownload(currentProductDef.productSlug)}
+                                        disabled={downloadLoading === currentProductDef.productSlug}
+                                        style={{
+                                          padding: '9px 18px',
+                                          borderRadius: '10px',
+                                          border: 'none',
+                                          background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
+                                          color: '#ffffff',
+                                          fontSize: '13px',
+                                          fontWeight: 700,
+                                          cursor: 'pointer',
+                                        }}
+                                      >
+                                        {downloadLoading === currentProductDef.productSlug
+                                          ? 'Authorizing...'
+                                          : currentProductDef.id === 'client'
+                                          ? 'Download Mod (.jar) ↓'
+                                          : 'Download SyndicateLoader.exe ↓'}
+                                      </button>
+                                      {currentProductDef.id === 'injection' && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setLaunchModal({ open: true, licenseKey: lic.key })}
+                                          style={{
+                                            padding: '9px 16px',
+                                            borderRadius: '10px',
+                                            border: '1px solid rgba(255,255,255,0.12)',
+                                            background: 'rgba(255,255,255,0.06)',
+                                            color: '#ffffff',
+                                            fontSize: '13px',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                          }}
+                                        >
+                                          Launch Guide
+                                        </button>
+                                      )}
+                                    </>
                                   )}
                                 </div>
                               </div>
@@ -1628,6 +1697,20 @@ export default function Dashboard() {
                                   <div style={{ color: '#71717a', fontSize: '11.5px', marginTop: '4px' }}>
                                     Start Minecraft Fabric 1.21.11. Your machine hardware binds automatically on first launch.
                                   </div>
+                                </div>
+                              ) : isOnHold ? (
+                                <div
+                                  style={{
+                                    padding: '12px 14px',
+                                    borderRadius: '10px',
+                                    background: 'rgba(8, 5, 16, 0.85)',
+                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                    color: '#fbbf24',
+                                    fontSize: '12.5px',
+                                    fontStyle: 'italic',
+                                  }}
+                                >
+                                  ⏸ PowerShell loader command is temporarily on hold while updates are being finalized.
                                 </div>
                               ) : (
                                 /* PowerShell Fast Launch Command Strip for Injection */
