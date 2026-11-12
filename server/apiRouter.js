@@ -1,7 +1,16 @@
 import express from 'express';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { supabaseAdmin, authenticateToken, requireAuth, requireAdmin } from './supabaseAdmin.js';
+import {
+  supabaseAdmin,
+  isSupabaseConfigured,
+  parseCookies,
+  extractRequestToken,
+  authenticateToken,
+  requireAuth,
+  requireAdmin,
+} from './supabaseAdmin.js';
 import {
   signEd25519,
   sha256,
@@ -12,10 +21,189 @@ import {
 } from './cryptoUtils.js';
 
 const router = express.Router();
-router.use(express.json());
+router.use(express.json({
+  limit: '1mb',
+  verify: (req, _res, buf) => {
+    if (!req.rawBody) req.rawBody = buf.toString('utf8');
+  },
+}));
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://thmpaozerfhoykqxwrlz.supabase.co';
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_obBunwnFtclwda77bynVZw_1jsL_pnx';
+const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '1557993745884905512';
+
+const ALLOWED_OAUTH_ORIGINS = new Set([
+  'https://www.555client.xyz',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+]);
+
+const ALLOWED_CALLBACK_PATHS = new Set([
+  '/login',
+  '/api/auth/discord/callback',
+]);
+
+const SESSION_COOKIE_NAME = '555_session';
+const OAUTH_TX_COOKIE_NAME = 'discord_oauth_tx';
+
+function getClientIp(req) {
+  const fwd = req.headers['x-forwarded-for'];
+  if (typeof fwd === 'string' && fwd.length > 0) {
+    return fwd.split(',')[0].trim();
+  }
+  return req.ip || req.socket?.remoteAddress || 'unknown';
+}
+
+function isHttpsRequest(req) {
+  const proto = req.headers['x-forwarded-proto'];
+  if (typeof proto === 'string' && proto.split(',')[0].trim() === 'https') return true;
+  if (req.secure) return true;
+  const host = String(req.headers.host || '').toLowerCase();
+  return host.endsWith('555client.xyz');
+}
+
+function appendCookie(req, res, name, value, { maxAgeSeconds = 86400 } = {}) {
+  const parts = [
+    `${name}=${encodeURIComponent(value)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${maxAgeSeconds}`,
+  ];
+  if (isHttpsRequest(req)) {
+    parts.push('Secure');
+  }
+  res.append('Set-Cookie', parts.join('; '));
+}
+
+function clearCookie(req, res, name) {
+  appendCookie(req, res, name, '', { maxAgeSeconds: 0 });
+}
+
+function getOAuthStateSecret() {
+  const base =
+    process.env.OAUTH_STATE_SECRET ||
+    process.env.PORTAL_SESSION_SECRET ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    '';
+  if (!base) return null;
+  return crypto.createHash('sha256').update(`oauth-tx:${base}`).digest();
+}
+
+function signOAuthTransaction(payload) {
+  const secret = getOAuthStateSecret();
+  if (!secret) {
+    throw new Error('OAuth state signing key not configured');
+  }
+  const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = crypto.createHmac('sha256', secret).update(encoded).digest('base64url');
+  return `${encoded}.${sig}`;
+}
+
+function verifyOAuthTransaction(cookieValue) {
+  try {
+    const secret = getOAuthStateSecret();
+    if (!secret || !cookieValue || typeof cookieValue !== 'string') return null;
+    const dot = cookieValue.indexOf('.');
+    if (dot <= 0) return null;
+    const encoded = cookieValue.slice(0, dot);
+    const sig = cookieValue.slice(dot + 1);
+    const expected = crypto.createHmac('sha256', secret).update(encoded).digest('base64url');
+    if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+      return null;
+    }
+    const parsed = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+    if (!parsed?.exp || parsed.exp < Date.now()) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function resolveAllowedOrigin(req) {
+  const requested = typeof req.query?.origin === 'string' ? req.query.origin.trim() : '';
+  if (requested) {
+    try {
+      const u = new URL(requested);
+      const origin = u.hostname === '555client.xyz' ? 'https://www.555client.xyz' : u.origin;
+      if (ALLOWED_OAUTH_ORIGINS.has(origin)) return origin;
+    } catch {
+      return null;
+    }
+    return null;
+  }
+  const host = String(req.headers.host || '').toLowerCase();
+  if (host === '555client.xyz' || host === 'www.555client.xyz') {
+    return 'https://www.555client.xyz';
+  }
+  if (host.startsWith('localhost:') || host.startsWith('127.0.0.1:')) {
+    return `http://${host}`;
+  }
+  return 'https://www.555client.xyz';
+}
+
+function isValidCallbackUri(uri) {
+  try {
+    const parsed = new URL(uri);
+    const origin = parsed.hostname === '555client.xyz' ? 'https://www.555client.xyz' : parsed.origin;
+    return ALLOWED_OAUTH_ORIGINS.has(origin) && ALLOWED_CALLBACK_PATHS.has(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+// Lightweight per-IP sliding window rate limiter
+const rateBuckets = new Map();
+function createRateLimiter({ windowMs = 60_000, max = 30, name = 'default' } = {}) {
+  return (req, res, next) => {
+    const now = Date.now();
+    const key = `${name}:${getClientIp(req)}`;
+    let bucket = rateBuckets.get(key);
+    if (!bucket || bucket.resetAt <= now) {
+      bucket = { count: 0, resetAt: now + windowMs };
+      rateBuckets.set(key, bucket);
+    }
+    bucket.count += 1;
+    if (bucket.count > max) {
+      const retrySec = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
+      res.setHeader('Retry-After', String(retrySec));
+      return res.status(429).json({
+        success: false,
+        error: 'RATE_LIMITED',
+        message: 'Too many requests. Please wait a moment and try again.',
+      });
+    }
+    if (rateBuckets.size > 5000) {
+      for (const [k, v] of rateBuckets) {
+        if (v.resetAt <= now) rateBuckets.delete(k);
+      }
+    }
+    return next();
+  };
+}
+
+const rateLimitAuth = createRateLimiter({ windowMs: 60_000, max: 30, name: 'auth' });
+const rateLimitRedeem = createRateLimiter({ windowMs: 60_000, max: 25, name: 'redeem' });
+const rateLimitValidate = createRateLimiter({ windowMs: 60_000, max: 90, name: 'validate' });
+const rateLimitReset = createRateLimiter({ windowMs: 60_000, max: 15, name: 'reset' });
+
+function serverError(res, label, err, extra = {}) {
+  console.error(`[${label}]`, err?.message || err);
+  return res.status(500).json({ ...extra, error: 'Internal server error' });
+}
+
+// Guard database-backed endpoints when server env vars are missing
+router.use((req, res, next) => {
+  if (req.path === '/health') return next();
+  if (!isSupabaseConfigured()) {
+    return res.status(503).json({
+      success: false,
+      error: 'SERVER_UNCONFIGURED',
+      message: 'Server environment configuration is incomplete.',
+    });
+  }
+  return next();
+});
 
 // Helper: Issue a real Supabase Auth session for any verified user email via admin magiclink + OTP verify
 async function createSupabaseSessionForEmail(email) {
@@ -48,14 +236,64 @@ async function createSupabaseSessionForEmail(email) {
 }
 
 // ==============================================================================
-// 1. HEALTH & INTROSPECTION
+// 1. HEALTH, STATUS & REAL STATS
 // ==============================================================================
-router.get('/health', (req, res) => {
-  res.json({
-    status: 'online',
-    platform: '5.55 Client Licensing System',
-    timestamp: new Date().toISOString(),
-  });
+router.get('/health', async (_req, res) => {
+  if (!isSupabaseConfigured()) {
+    return res.status(503).json({
+      status: 'degraded',
+      db: 'unconfigured',
+      platform: '5.55 Client Licensing System',
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  try {
+    const { error } = await supabaseAdmin.from('products').select('id').limit(1);
+    if (error) {
+      return res.status(503).json({
+        status: 'degraded',
+        db: 'error',
+        platform: '5.55 Client Licensing System',
+        timestamp: new Date().toISOString(),
+      });
+    }
+    return res.json({
+      status: 'online',
+      db: 'connected',
+      platform: '5.55 Client Licensing System',
+      timestamp: new Date().toISOString(),
+    });
+  } catch {
+    return res.status(503).json({
+      status: 'degraded',
+      db: 'error',
+      platform: '5.55 Client Licensing System',
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+router.get('/stats', async (_req, res) => {
+  try {
+    const activeCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const [usersRes, licRes, launchesRes, recentDevicesRes] = await Promise.all([
+      supabaseAdmin.from('profiles').select('id', { count: 'exact', head: true }),
+      supabaseAdmin.from('licenses').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+      supabaseAdmin.from('audit_logs').select('id', { count: 'exact', head: true }).eq('action', 'CLIENT_LOGIN_SUCCESS'),
+      supabaseAdmin.from('devices').select('id', { count: 'exact', head: true }).gte('last_seen_at', activeCutoff),
+    ]);
+
+    return res.json({
+      liveUsers: recentDevicesRes.count ?? 0,
+      totalLaunches: launchesRes.count ?? 0,
+      totalUsers: usersRes.count ?? 0,
+      totalLicenses: licRes.count ?? 0,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    return serverError(res, 'Stats Error', err);
+  }
 });
 
 // ==============================================================================
@@ -64,21 +302,22 @@ router.get('/health', (req, res) => {
 
 // POST /api/auth/verify
 router.post('/auth/verify', async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) {
-    return res.status(401).json({ valid: false, error: 'No Bearer token provided' });
+  const token = extractRequestToken(req);
+  if (!token) {
+    return res.status(401).json({ valid: false, error: 'Authentication token required' });
   }
 
-  const token = authHeader.split(' ')[1];
   try {
     const authResult = await authenticateToken(token);
     if (!authResult) {
+      clearCookie(req, res, SESSION_COOKIE_NAME);
       return res.status(401).json({ valid: false, error: 'Invalid or expired token' });
     }
 
     const { user, profile, isPortalKey, portalLicenseId } = authResult;
 
     if (profile?.banned_at) {
+      clearCookie(req, res, SESSION_COOKIE_NAME);
       return res.status(403).json({
         valid: false,
         error: 'Account suspended',
@@ -118,13 +357,83 @@ router.post('/auth/verify', async (req, res) => {
       activeLicenses: licenseCount,
     });
   } catch (err) {
-    return res.status(500).json({ valid: false, error: err.message });
+    return serverError(res, 'AuthVerify Error', err, { valid: false });
   }
 });
 
-// POST /api/auth/register (Instant verified registration without broken email redirects)
-router.post('/auth/register', async (req, res) => {
-  const { email, password, username } = req.body;
+// POST /api/auth/login (Email + Password login setting HttpOnly session cookie)
+router.post('/auth/login', rateLimitAuth, async (req, res) => {
+  const { email, password } = req.body || {};
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail || !password) {
+    return res.status(400).json({ success: false, error: 'Email and password are required.' });
+  }
+
+  try {
+    const authRes = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: {
+        'apikey': supabaseAnonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email: cleanEmail, password }),
+    });
+    const sessionData = await authRes.json();
+    if (!authRes.ok || !sessionData?.access_token || !sessionData?.user) {
+      return res.status(401).json({ success: false, error: 'Invalid email or password.' });
+    }
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('*')
+      .eq('id', sessionData.user.id)
+      .maybeSingle();
+
+    if (profile?.banned_at) {
+      return res.status(403).json({
+        success: false,
+        error: `Account suspended: ${profile.ban_reason || 'Terms violation'}`,
+      });
+    }
+
+    setSessionCookieSafe(req, res, sessionData.access_token);
+    const isAdmin = profile?.role === 'admin' || cleanEmail === 'rookeh4@gmail.com';
+    return res.json({
+      success: true,
+      session: {
+        access_token: sessionData.access_token,
+        refresh_token: sessionData.refresh_token,
+        expires_in: sessionData.expires_in,
+      },
+      user: {
+        id: sessionData.user.id,
+        email: sessionData.user.email,
+        discordId: profile?.discord_id || null,
+        username: profile?.username || cleanEmail.split('@')[0],
+        displayName: profile?.display_name || profile?.username || cleanEmail.split('@')[0],
+        avatar: profile?.avatar_url || null,
+        role: isAdmin ? 'admin' : 'user',
+      },
+    });
+  } catch (err) {
+    return serverError(res, 'AuthLogin Error', err, { success: false });
+  }
+});
+
+// POST /api/auth/logout (Clear HttpOnly session & OAuth state cookies)
+router.post('/auth/logout', (req, res) => {
+  clearCookie(req, res, SESSION_COOKIE_NAME);
+  clearCookie(req, res, OAUTH_TX_COOKIE_NAME);
+  return res.json({ success: true });
+});
+
+function setSessionCookieSafe(req, res, token) {
+  appendCookie(req, res, SESSION_COOKIE_NAME, token, { maxAgeSeconds: 60 * 60 * 24 });
+}
+
+// POST /api/auth/register (Instant verified registration)
+router.post('/auth/register', rateLimitAuth, async (req, res) => {
+  const { email, password, username } = req.body || {};
   const cleanEmail = (email || '').trim().toLowerCase();
   const cleanUser = (username || cleanEmail.split('@')[0] || 'member').trim().slice(0, 32);
 
@@ -178,9 +487,15 @@ router.post('/auth/register', async (req, res) => {
       return res.status(500).json({ success: false, error: 'Account created. Please sign in now.' });
     }
 
+    setSessionCookieSafe(req, res, sessionData.access_token);
+
     return res.json({
       success: true,
-      session: sessionData,
+      session: {
+        access_token: sessionData.access_token,
+        refresh_token: sessionData.refresh_token,
+        expires_in: sessionData.expires_in,
+      },
       token: sessionData.access_token,
       user: {
         id: userId,
@@ -191,30 +506,134 @@ router.post('/auth/register', async (req, res) => {
       },
     });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    return serverError(res, 'AuthRegister Error', err, { success: false });
   }
 });
 
-// POST /api/auth/discord-sync (Verify Discord OAuth token server-side & mint Supabase session)
-router.post('/auth/discord-sync', async (req, res) => {
-  const { accessToken } = req.body;
-  if (!accessToken || typeof accessToken !== 'string') {
-    return res.status(400).json({ success: false, error: 'Discord access token is required.' });
+// GET /api/auth/discord/start (OAuth2 Authorization Code + PKCE + CSRF State)
+router.get('/auth/discord/start', rateLimitAuth, (req, res) => {
+  const origin = resolveAllowedOrigin(req);
+  if (!origin) {
+    return res.status(400).json({ success: false, error: 'Disallowed OAuth redirect origin.' });
+  }
+
+  const state = crypto.randomBytes(24).toString('base64url');
+  const codeVerifier = crypto.randomBytes(48).toString('base64url');
+  const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+  const redirectUri = `${origin}/login`;
+
+  if (!isValidCallbackUri(redirectUri)) {
+    return res.status(400).json({ success: false, error: 'Invalid callback URI.' });
   }
 
   try {
-    // 1. Verify token directly with Discord API
+    const signedTx = signOAuthTransaction({
+      state,
+      codeVerifier,
+      redirectUri,
+      exp: Date.now() + 10 * 60 * 1000,
+    });
+
+    appendCookie(req, res, OAUTH_TX_COOKIE_NAME, signedTx, { maxAgeSeconds: 600 });
+
+    const params = new URLSearchParams({
+      client_id: DISCORD_CLIENT_ID,
+      response_type: 'code',
+      redirect_uri: redirectUri,
+      scope: 'identify email',
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+    });
+
+    return res.redirect(302, `https://discord.com/oauth2/authorize?${params.toString()}`);
+  } catch (err) {
+    return serverError(res, 'DiscordStart Error', err, { success: false });
+  }
+});
+
+// Shared handler for POST /api/auth/discord/callback and GET /api/auth/discord/callback
+async function handleDiscordCallback(req, res) {
+  const isGet = req.method === 'GET';
+  const code = isGet ? req.query?.code : req.body?.code;
+  const state = isGet ? req.query?.state : req.body?.state;
+  const oauthError = isGet ? req.query?.error : req.body?.error;
+
+  const cookies = parseCookies(req.headers.cookie);
+  const rawTx = cookies[OAUTH_TX_COOKIE_NAME];
+  clearCookie(req, res, OAUTH_TX_COOKIE_NAME);
+
+  const fail = (status, msg, errCode = 'oauth_failed') => {
+    if (isGet) {
+      return res.redirect(302, `/login?oauth_error=${encodeURIComponent(errCode)}`);
+    }
+    return res.status(status).json({ success: false, error: msg });
+  };
+
+  if (oauthError) {
+    return fail(400, 'Discord authorization was cancelled or denied.', 'access_denied');
+  }
+
+  if (!code || typeof code !== 'string' || !state || typeof state !== 'string') {
+    return fail(400, 'Missing Discord authorization code or CSRF state.', 'missing_params');
+  }
+
+  const tx = verifyOAuthTransaction(rawTx);
+  if (!tx || !tx.state || !tx.codeVerifier || !tx.redirectUri) {
+    return fail(403, 'OAuth session expired or invalid. Please click Continue with Discord again.', 'invalid_tx');
+  }
+
+  const stateBuf = Buffer.from(state, 'utf8');
+  const expectedBuf = Buffer.from(String(tx.state), 'utf8');
+  if (stateBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(stateBuf, expectedBuf)) {
+    return fail(403, 'OAuth CSRF state validation failed.', 'csrf_mismatch');
+  }
+
+  if (!isValidCallbackUri(tx.redirectUri)) {
+    return fail(400, 'Invalid OAuth callback URL.', 'invalid_redirect');
+  }
+
+  try {
+    // 1. Exchange authorization code on the backend using PKCE verifier (+ client_secret if configured)
+    const tokenParams = new URLSearchParams({
+      client_id: DISCORD_CLIENT_ID,
+      grant_type: 'authorization_code',
+      code: code.trim(),
+      redirect_uri: tx.redirectUri,
+      code_verifier: tx.codeVerifier,
+    });
+    if (process.env.DISCORD_CLIENT_SECRET) {
+      tokenParams.set('client_secret', process.env.DISCORD_CLIENT_SECRET);
+    }
+
+    const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: tokenParams,
+    });
+
+    if (!tokenRes.ok) {
+      return fail(401, 'Discord code exchange failed. Please sign in again.', 'token_exchange_failed');
+    }
+
+    const tokenData = await tokenRes.json();
+    const discordAccessToken = tokenData?.access_token;
+    if (!discordAccessToken) {
+      return fail(401, 'Discord did not issue an access token.', 'missing_discord_token');
+    }
+
+    // 2. Fetch Discord profile strictly server-side (Discord token never leaves backend)
     const discordRes = await fetch('https://discord.com/api/users/@me', {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Authorization: `Bearer ${discordAccessToken}` },
     });
 
     if (!discordRes.ok) {
-      return res.status(401).json({ success: false, error: 'Invalid or expired Discord OAuth token.' });
+      return fail(401, 'Unable to retrieve verified Discord profile.', 'discord_profile_failed');
     }
 
     const discordUser = await discordRes.json();
     if (!discordUser?.id) {
-      return res.status(401).json({ success: false, error: 'Unable to verify Discord profile.' });
+      return fail(401, 'Incomplete Discord profile response.', 'invalid_discord_profile');
     }
 
     const discordId = String(discordUser.id);
@@ -225,7 +644,7 @@ router.post('/auth/discord-sync', async (req, res) => {
       ? `https://cdn.discordapp.com/avatars/${discordId}/${discordUser.avatar}.${avatarExt}?size=256`
       : null;
 
-    // 2. Match existing profile by discord_id or verified Discord email
+    // 3. Match existing profile by discord_id or verified Discord email
     let targetUserId = null;
     let targetEmail = null;
     let targetRole = 'user';
@@ -238,7 +657,7 @@ router.post('/auth/discord-sync', async (req, res) => {
 
     if (byDiscord) {
       if (byDiscord.banned_at) {
-        return res.status(403).json({ success: false, error: `Account suspended: ${byDiscord.ban_reason || 'Terms violation'}` });
+        return fail(403, `Account suspended: ${byDiscord.ban_reason || 'Terms violation'}`, 'banned');
       }
       targetUserId = byDiscord.id;
       targetEmail = byDiscord.email;
@@ -252,7 +671,7 @@ router.post('/auth/discord-sync', async (req, res) => {
 
       if (byEmail) {
         if (byEmail.banned_at) {
-          return res.status(403).json({ success: false, error: `Account suspended: ${byEmail.ban_reason || 'Terms violation'}` });
+          return fail(403, `Account suspended: ${byEmail.ban_reason || 'Terms violation'}`, 'banned');
         }
         targetUserId = byEmail.id;
         targetEmail = byEmail.email;
@@ -260,7 +679,7 @@ router.post('/auth/discord-sync', async (req, res) => {
       }
     }
 
-    // 3. Create Supabase Auth account if none matched yet
+    // 4. Create Supabase Auth account if none matched yet
     if (!targetUserId) {
       const candidateEmail =
         discordUser.email && discordUser.verified
@@ -305,7 +724,7 @@ router.post('/auth/discord-sync', async (req, res) => {
 
     const finalRole = targetRole === 'admin' || targetEmail?.toLowerCase() === 'rookeh4@gmail.com' ? 'admin' : 'user';
 
-    // 4. Sync profile row
+    // 5. Sync profile row
     await supabaseAdmin.from('profiles').upsert({
       id: targetUserId,
       email: targetEmail,
@@ -317,13 +736,21 @@ router.post('/auth/discord-sync', async (req, res) => {
       updated_at: new Date().toISOString(),
     });
 
-    // 5. Issue genuine Supabase Auth session
+    // 6. Issue Supabase Auth session via HttpOnly cookie
     const sessionData = await createSupabaseSessionForEmail(targetEmail);
+    setSessionCookieSafe(req, res, sessionData.access_token);
+
+    if (isGet) {
+      return res.redirect(302, '/dashboard');
+    }
 
     return res.json({
       success: true,
-      token: sessionData.access_token,
-      session: sessionData,
+      session: {
+        access_token: sessionData.access_token,
+        refresh_token: sessionData.refresh_token,
+        expires_in: sessionData.expires_in,
+      },
       user: {
         id: targetUserId,
         email: targetEmail,
@@ -335,13 +762,23 @@ router.post('/auth/discord-sync', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('[DiscordSync Error]:', err);
-    return res.status(500).json({ success: false, error: err.message || 'Discord authentication failed.' });
+    return serverError(res, 'DiscordCallback Error', err, { success: false });
   }
+}
+
+router.get('/auth/discord/callback', rateLimitAuth, handleDiscordCallback);
+router.post('/auth/discord/callback', rateLimitAuth, handleDiscordCallback);
+
+// Deprecate insecure implicit Discord token sync
+router.post('/auth/discord-sync', (_req, res) => {
+  return res.status(410).json({
+    success: false,
+    error: 'Implicit OAuth flow has been retired. Use Discord Authorization Code flow at /api/auth/discord/start.',
+  });
 });
 
 // POST /api/auth/key-login (Log into web dashboard cleanly with a license key without consuming HWID slot)
-router.post('/auth/key-login', async (req, res) => {
+router.post('/auth/key-login', rateLimitAuth, async (req, res) => {
   const cleanKey = (req.body?.license_key || '').trim().toUpperCase();
   if (!cleanKey) {
     return res.status(400).json({ success: false, error: 'License key is required.' });
@@ -393,6 +830,8 @@ router.post('/auth/key-login', async (req, res) => {
       masked_email: maskedEmail,
     });
 
+    setSessionCookieSafe(req, res, portalToken);
+
     return res.json({
       success: true,
       token: portalToken,
@@ -406,7 +845,7 @@ router.post('/auth/key-login', async (req, res) => {
       },
     });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    return serverError(res, 'KeyLogin Error', err, { success: false });
   }
 });
 
@@ -415,7 +854,7 @@ router.post('/auth/key-login', async (req, res) => {
 // ==============================================================================
 
 // POST /api/auth/client-login
-router.post('/auth/client-login', async (req, res) => {
+router.post('/auth/client-login', rateLimitAuth, async (req, res) => {
   const { email, password, hwid, device_name, client_type = 'cpp', mc_version = '1.21.11' } = req.body;
 
   if (!email || !password) {
@@ -666,13 +1105,12 @@ router.post('/auth/client-login', async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('[ClientLogin Error]:', err);
-    return res.status(500).json({ success: false, error: 'SERVER_ERROR', message: err.message });
+    return serverError(res, 'ClientLogin Error', err, { success: false, message: 'Internal server error' });
   }
 });
 
 // POST /api/auth/client-refresh (Refresh session using stored refresh_token)
-router.post('/auth/client-refresh', async (req, res) => {
+router.post('/auth/client-refresh', rateLimitAuth, async (req, res) => {
   const { refresh_token, hwid, client_type = 'cpp' } = req.body;
   if (!refresh_token || !hwid) {
     return res.status(400).json({ success: false, error: 'refresh_token and hwid are required' });
@@ -777,7 +1215,7 @@ router.post('/auth/client-refresh', async (req, res) => {
       },
     });
   } catch (err) {
-    return res.status(500).json({ success: false, error: 'SERVER_ERROR', message: err.message });
+    return serverError(res, 'ClientRefresh Error', err, { success: false, message: 'Internal server error' });
   }
 });
 
@@ -830,7 +1268,7 @@ router.get('/user/licenses', requireAuth, async (req, res) => {
 
     return res.json({ licenses: licenses || [] });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'UserLicenses Error', err);
   }
 });
 
@@ -895,7 +1333,7 @@ router.get('/licenses/my', requireAuth, async (req, res) => {
 
     return res.json({ licenses: formatted, orders: [] });
   } catch (err) {
-    return res.status(500).json({ error: err.message, licenses: [] });
+    return serverError(res, 'UserBilling Error', err, { licenses: [] });
   }
 });
 
@@ -966,12 +1404,12 @@ router.post('/licenses/claim', requireAuth, async (req, res) => {
 
     return res.json({ success: true, message: 'License successfully claimed!' });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    return serverError(res, 'ClaimLicense Error', err, { success: false });
   }
 });
 
 // POST /api/licenses/reset-hwid
-router.post('/licenses/reset-hwid', requireAuth, async (req, res) => {
+router.post('/licenses/reset-hwid', rateLimitReset, requireAuth, async (req, res) => {
   const { licenseKey, resetKey } = req.body;
   if (!licenseKey) return res.status(400).json({ success: false, error: 'licenseKey required' });
   if (!resetKey || !resetKey.trim()) {
@@ -985,29 +1423,7 @@ router.post('/licenses/reset-hwid', requireAuth, async (req, res) => {
   const cleanResetKey = resetKey.trim().toUpperCase();
 
   try {
-    // 1. Verify reset key in audit_logs
-    const { data: resetEntries, error: rkErr } = await supabaseAdmin
-      .from('audit_logs')
-      .select('*')
-      .eq('action', 'HWID_RESET_KEY')
-      .order('created_at', { ascending: false });
-
-    if (rkErr) throw rkErr;
-
-    const activeResetEntry = resetEntries?.find(
-      (entry) =>
-        entry.metadata?.reset_key?.toUpperCase() === cleanResetKey &&
-        entry.metadata?.status === 'active'
-    );
-
-    if (!activeResetEntry) {
-      return res.status(403).json({
-        success: false,
-        error: 'Invalid or already used HWID Reset Key. Please request a valid reset key from an administrator.',
-      });
-    }
-
-    // 2. Verify license ownership
+    // 1. Verify license ownership first before consuming any reset key
     let licQuery = supabaseAdmin
       .from('licenses')
       .select('id, user_id')
@@ -1025,8 +1441,28 @@ router.post('/licenses/reset-hwid', requireAuth, async (req, res) => {
       return res.status(404).json({ success: false, error: 'License not found on your account' });
     }
 
-    // 3. Mark the reset key as used
-    await supabaseAdmin
+    // 2. Lookup active reset key
+    const { data: activeResetEntry, error: rkErr } = await supabaseAdmin
+      .from('audit_logs')
+      .select('id, metadata')
+      .eq('action', 'HWID_RESET_KEY')
+      .filter('metadata->>reset_key', 'eq', cleanResetKey)
+      .filter('metadata->>status', 'eq', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (rkErr) throw rkErr;
+
+    if (!activeResetEntry) {
+      return res.status(403).json({
+        success: false,
+        error: 'Invalid or already used HWID Reset Key. Please request a valid reset key from an administrator.',
+      });
+    }
+
+    // 3. Atomically mark reset key as used (prevents concurrent replay races)
+    const { data: consumedRow, error: consumeErr } = await supabaseAdmin
       .from('audit_logs')
       .update({
         metadata: {
@@ -1038,9 +1474,19 @@ router.post('/licenses/reset-hwid', requireAuth, async (req, res) => {
           license_key: cleanLicKey,
         },
       })
-      .eq('id', activeResetEntry.id);
+      .eq('id', activeResetEntry.id)
+      .filter('metadata->>status', 'eq', 'active')
+      .select('id')
+      .maybeSingle();
 
-    // 4. Delete devices for this license
+    if (consumeErr || !consumedRow) {
+      return res.status(409).json({
+        success: false,
+        error: 'This HWID Reset Key has already been used.',
+      });
+    }
+
+    // 4. Delete bound devices for this license
     await supabaseAdmin.from('devices').delete().eq('license_id', license.id);
 
     // 5. Audit log
@@ -1049,6 +1495,7 @@ router.post('/licenses/reset-hwid', requireAuth, async (req, res) => {
       action: 'HWID_RESET',
       entity_type: 'license',
       entity_id: license.id,
+      ip_address: getClientIp(req),
       metadata: {
         reset_key: cleanResetKey,
         used_by_email: req.user.email || cleanLicKey,
@@ -1060,7 +1507,7 @@ router.post('/licenses/reset-hwid', requireAuth, async (req, res) => {
       message: 'HWID successfully reset! Your hardware binding has been cleared. You can now launch on your new PC.',
     });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    return serverError(res, 'ResetHWID Error', err, { success: false });
   }
 });
 
@@ -1095,7 +1542,7 @@ router.post('/licenses/update-name', requireAuth, async (req, res) => {
 
     return res.json({ success: true, name: name.trim() });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    return serverError(res, 'RenameLicense Error', err, { success: false });
   }
 });
 
@@ -1124,7 +1571,7 @@ router.get('/user/devices', requireAuth, async (req, res) => {
     if (error) throw error;
     return res.json({ devices: devices || [] });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'GetDevices Error', err);
   }
 });
 
@@ -1134,7 +1581,7 @@ router.get('/user/devices', requireAuth, async (req, res) => {
 // ==============================================================================
 
 // POST /api/licenses/redeem (Public website redemption for download authorization)
-router.post('/licenses/redeem', async (req, res) => {
+router.post('/licenses/redeem', rateLimitRedeem, async (req, res) => {
   const { license_key } = req.body;
   if (!license_key) {
     return res.status(400).json({
@@ -1145,7 +1592,7 @@ router.post('/licenses/redeem', async (req, res) => {
   }
 
   const cleanKey = license_key.trim().toUpperCase();
-  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const clientIp = getClientIp(req);
 
   try {
     const { data: license, error: licErr } = await supabaseAdmin
@@ -1195,35 +1642,59 @@ router.post('/licenses/redeem', async (req, res) => {
       });
     }
 
-    // Find active release for this product
+    // Find active release for this product dynamically
     const { data: activeRelease } = await supabaseAdmin
       .from('client_releases')
-      .select('id')
+      .select('id, version, sha256, storage_path')
       .eq('product_id', product.id)
       .eq('is_active', true)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    // Generate short-lived download token (15 mins)
+    if (!activeRelease) {
+      return res.status(503).json({
+        valid: false,
+        error: 'RELEASE_UNAVAILABLE',
+        message: 'No active client release is currently published.',
+      });
+    }
+
+    // Resolve owning profile ID cleanly without hardcoded UUIDs
+    let tokenUserId = license.user_id;
+    if (!tokenUserId) {
+      const { data: adminProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('role', 'admin')
+        .limit(1)
+        .maybeSingle();
+      tokenUserId = adminProfile?.id || null;
+    }
+
+    if (!tokenUserId) {
+      return res.status(403).json({
+        valid: false,
+        error: 'ACCOUNT_REQUIRED',
+        message: 'Please sign in and claim this license key to download.',
+      });
+    }
+
+    // Generate short-lived single-use download token (15 mins)
     const token = generateToken(32);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-
-    // Use license.user_id, or fallback to the master admin user ID if the license is not yet claimed to an account
-    const tokenUserId = license.user_id || 'db2e8e63-3e6f-49b0-b39a-bd9179766f49';
-    const releaseId = activeRelease?.id || 'bf797864-4ce8-4953-ba10-9fe6e7a0dd61';
 
     const { error: tokenInsertErr } = await supabaseAdmin.from('download_tokens').insert({
       license_id: license.id,
       user_id: tokenUserId,
-      release_id: releaseId,
+      release_id: activeRelease.id,
       token,
       expires_at: expiresAt,
       ip_address: clientIp,
     });
 
     if (tokenInsertErr) {
-      console.error('[DownloadToken Insert Error]:', tokenInsertErr);
+      return serverError(res, 'DownloadToken Insert Error', tokenInsertErr, { valid: false });
     }
 
     // Record audit log (website redemption does NOT consume or activate the key)
@@ -1246,17 +1717,18 @@ router.post('/licenses/redeem', async (req, res) => {
       download_url: `/api/downloads/file/${token}`,
       token,
       file_name: 'SyndicateLoader.exe',
-      version: '1.2.0',
+      file_size_bytes: 5746688,
+      version: activeRelease.version || '1.21.11',
+      sha256: activeRelease.sha256,
       expires_at: expiresAt,
     });
   } catch (err) {
-    console.error('[RedeemKey Error]:', err);
-    return res.status(500).json({ valid: false, error: 'SERVER_ERROR', message: err.message });
+    return serverError(res, 'RedeemKey Error', err, { valid: false, error: 'SERVER_ERROR' });
   }
 });
 
 // POST /api/licenses/validate
-router.post('/licenses/validate', async (req, res) => {
+router.post('/licenses/validate', rateLimitValidate, async (req, res) => {
   const { license_key, hwid, client_type = 'java', mc_version } = req.body;
 
   if (!license_key || !hwid) {
@@ -1442,8 +1914,7 @@ router.post('/licenses/validate', async (req, res) => {
       signature,
     });
   } catch (err) {
-    console.error('[ValidateLicense Error]:', err);
-    return res.status(500).json({ valid: false, error: err.message });
+    return serverError(res, 'ValidateLicense Error', err, { valid: false });
   }
 });
 
@@ -1494,40 +1965,11 @@ router.post('/devices/register', requireAuth, async (req, res) => {
 
     return res.json({ success: true, device: newDev });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'RegisterDevice Error', err);
   }
 });
 
 // POST /api/devices/remove
-router.post('/api/devices/remove', requireAuth, async (req, res) => {
-  const { device_id, license_id } = req.body;
-  if (!device_id && !license_id) {
-    return res.status(400).json({ error: 'device_id or license_id is required' });
-  }
-
-  try {
-    let query = supabaseAdmin.from('devices').delete().eq('user_id', req.user.id);
-    if (device_id) query = query.eq('id', device_id);
-    else if (license_id) query = query.eq('license_id', license_id);
-
-    const { error } = await query;
-    if (error) throw error;
-
-    await supabaseAdmin.from('audit_logs').insert({
-      user_id: req.user.id,
-      action: 'DEVICE_UNBOUND',
-      entity_type: 'device',
-      entity_id: device_id || license_id,
-      ip_address: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
-    });
-
-    return res.json({ success: true, message: 'Device successfully removed' });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// Alias for devices remove at /devices/remove
 router.post('/devices/remove', requireAuth, async (req, res) => {
   const { device_id, license_id } = req.body;
   if (!device_id && !license_id) {
@@ -1552,7 +1994,7 @@ router.post('/devices/remove', requireAuth, async (req, res) => {
 
     return res.json({ success: true, message: 'Device successfully removed' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'RemoveDevice Error', err);
   }
 });
 
@@ -1572,7 +2014,7 @@ router.get('/products', async (req, res) => {
     if (error) throw error;
     return res.json({ products: products || [] });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'GetProducts Error', err);
   }
 });
 
@@ -1611,14 +2053,14 @@ router.get('/updates/:product/manifest', async (req, res) => {
       const sampleManifest = {
         product: prod.slug,
         name: prod.name,
-        version: '1.2.0',
+        version: '1.21.11',
         channel,
-        min_mc_version: '1.21.0',
-        max_mc_version: '1.21.4',
+        min_mc_version: '1.21.11',
+        max_mc_version: '1.21.11',
         file_type: prod.slug === 'java-client' ? 'jar' : 'exe',
-        sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
-        signature: signEd25519('555_client_release_1.2.0'),
-        changelog: 'Initial 5.55 Client stable release with full bypass support.',
+        sha256: null,
+        signature: null,
+        changelog: '5.55 Client release for Fabric 1.21.11.',
         updated_at: new Date().toISOString(),
       };
       return res.json(sampleManifest);
@@ -1638,7 +2080,7 @@ router.get('/updates/:product/manifest', async (req, res) => {
       updated_at: release.created_at,
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'LatestUpdate Error', err);
   }
 });
 
@@ -1707,19 +2149,28 @@ router.post('/downloads/authorize', requireAuth, async (req, res) => {
       authorized: true,
       token,
       download_url: `/api/downloads/file/${token}`,
+      file_name: release?.file_name || 'SyndicateLoader.exe',
+      file_size_bytes: release?.file_size_bytes || 5746688,
       expires_at: expiresAt,
       version: release?.version || '1.21.11',
-      sha256: release?.sha256 || '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
-      signature: release?.signature || signEd25519('555_release_manifest_token'),
+      sha256: release?.sha256 || null,
+      signature: release?.signature || null,
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'AuthorizeDownload Error', err);
   }
 });
 
 // GET /api/downloads/file/:token
 router.get('/downloads/file/:token', async (req, res) => {
   const { token } = req.params;
+
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'no-store, private');
+
+  if (!token || !/^[a-f0-9]{64}$/i.test(token)) {
+    return res.status(400).json({ error: 'Invalid download token format' });
+  }
 
   try {
     const { data: tokenRecord, error } = await supabaseAdmin
@@ -1740,22 +2191,29 @@ router.get('/downloads/file/:token', async (req, res) => {
       return res.status(410).json({ error: 'Download token has already been used' });
     }
 
-    // Mark as used
-    await supabaseAdmin
+    // Atomically mark as used to prevent single-use token replay race conditions
+    const { data: consumedToken } = await supabaseAdmin
       .from('download_tokens')
       .update({ used_at: new Date().toISOString() })
-      .eq('id', tokenRecord.id);
+      .eq('id', tokenRecord.id)
+      .is('used_at', null)
+      .select('id')
+      .maybeSingle();
+
+    if (!consumedToken) {
+      return res.status(410).json({ error: 'Download token has already been used' });
+    }
 
     // Increment download count
     if (tokenRecord.release_id) {
       try {
         await supabaseAdmin.rpc('increment_download_count', { release_id: tokenRecord.release_id });
-      } catch (countErr) {
+      } catch {
         // Non-critical, ignore
       }
     }
 
-    // Redirect to short-lived signed Supabase Storage URL (avoids hosting static executables directly)
+    // Redirect only to trusted Supabase Storage signed URL for releases bucket
     const candidateStorageKeys = [
       tokenRecord.client_releases?.storage_path?.replace(/^releases\//, ''),
       'SyndicateLoader.exe',
@@ -1765,169 +2223,38 @@ router.get('/downloads/file/:token', async (req, res) => {
       const { data: signedUrlData } = await supabaseAdmin.storage
         .from('releases')
         .createSignedUrl(storageKey, 300, { download: 'SyndicateLoader.exe' });
-      if (signedUrlData?.signedUrl) {
-        return res.redirect(signedUrlData.signedUrl);
-      }
-    }
-
-    // Fallback: Check local executable path during local development
-    const candidatePaths = [
-      'c:\\Users\\devim\\Downloads\\syndicate injectable\\release\\SyndicateLoader.exe',
-      path.resolve(process.cwd(), 'release', 'SyndicateLoader.exe'),
-    ];
-
-    for (const p of candidatePaths) {
-      if (fs.existsSync(p)) {
-        try {
-          res.setHeader('Content-Disposition', 'attachment; filename="SyndicateLoader.exe"');
-          res.setHeader('Content-Type', 'application/vnd.microsoft.portable-executable');
-          const fileBuf = fs.readFileSync(p);
-          return res.send(fileBuf);
-        } catch (readErr) {
-          console.error('[Download file read error]:', readErr);
-        }
+      if (signedUrlData?.signedUrl && signedUrlData.signedUrl.startsWith(`${supabaseUrl}/storage/v1/`)) {
+        return res.redirect(302, signedUrlData.signedUrl);
       }
     }
 
     return res.status(404).json({ error: 'Release binary currently unavailable. Contact support on Discord.' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'DownloadFile Error', err);
   }
 });
 
 // ==============================================================================
-// 5.1 ONE-LINE POWERSHELL BOOTSTRAPPER (irm https://www.555client.xyz/dl/:key | iex)
+// 5.1 DEPRECATED ONE-LINE POWERSHELL BOOTSTRAPPER ENDPOINT (REMOVED FOR SECURITY)
 // ==============================================================================
 
-const handlePowerShellLaunch = async (req, res) => {
-  const { key } = req.params;
-  const rawParam = (key || '').trim();
-
+const handleDeprecatedBootstrap = (req, res) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'no-store');
+  if (req.accepts('json') && !req.accepts('text/plain')) {
+    return res.status(410).json({
+      error: 'Unauthenticated command-line downloaders have been disabled for user safety.',
+      download_page: 'https://www.555client.xyz/download',
+    });
+  }
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-
-  if (!rawParam) {
-    return res.send(`Write-Host "[5.55 Client] Error: Missing launch parameter." -ForegroundColor Red; return`);
-  }
-
-  const isEmail = rawParam.includes('@');
-  let license = null;
-  let userEmail = '';
-
-  try {
-    if (isEmail) {
-      userEmail = rawParam.toLowerCase();
-      // Look up user profile
-      const { data: prof } = await supabaseAdmin
-        .from('profiles')
-        .select('id, email')
-        .ilike('email', userEmail)
-        .maybeSingle();
-
-      let userId = prof?.id;
-      if (!userId) {
-        const { data: { users } } = await supabaseAdmin.auth.admin.listUsers();
-        const match = users?.find((u) => u.email?.toLowerCase() === userEmail);
-        if (match) userId = match.id;
-      }
-
-      if (!userId) {
-        return res.send(`Write-Host "[5.55 Client] Error: Account with email (${userEmail}) not found." -ForegroundColor Red; return`);
-      }
-
-      // Query active licenses for user
-      const { data: userLicenses, error: licErr } = await supabaseAdmin
-        .from('licenses')
-        .select('*, products(*)')
-        .eq('user_id', userId)
-        .eq('status', 'active');
-
-      if (licErr) throw licErr;
-
-      const activeLic = userLicenses?.find(
-        (l) => l.products?.slug === 'cpp-client' || l.products?.platform === 'native' || l.products?.platform === 'both'
-      ) || userLicenses?.[0];
-
-      license = activeLic;
-
-      if (!license) {
-        return res.send(`Write-Host "[5.55 Client] Error: No active 5.55 Client license found for account (${userEmail})." -ForegroundColor Red; return`);
-      }
-    } else {
-      const cleanKey = rawParam.toUpperCase();
-      const { data: lic, error: licErr } = await supabaseAdmin
-        .from('licenses')
-        .select('*, products(*)')
-        .eq('license_key', cleanKey)
-        .maybeSingle();
-
-      if (licErr || !lic) {
-        return res.send(`Write-Host "[5.55 Client] Error: Invalid license key (${cleanKey}). Please check your key." -ForegroundColor Red; return`);
-      }
-      license = lic;
-      if (license.user_id) {
-        const { data: prof } = await supabaseAdmin
-          .from('profiles')
-          .select('email')
-          .eq('id', license.user_id)
-          .maybeSingle();
-        userEmail = prof?.email || '';
-      }
-    }
-
-    if (license.status === 'revoked') {
-      return res.send(`Write-Host "[5.55 Client] Error: License has been revoked." -ForegroundColor Red; return`);
-    }
-
-    if (license.status === 'suspended') {
-      return res.send(`Write-Host "[5.55 Client] Error: License is currently suspended." -ForegroundColor Red; return`);
-    }
-
-    if (license.status === 'expired' || (license.expires_at && new Date(license.expires_at) < new Date())) {
-      return res.send(`Write-Host "[5.55 Client] Error: License has expired." -ForegroundColor Red; return`);
-    }
-
-    // Generate short-lived signed binary URL from Supabase Storage
-    const { data: signedLoader } = await supabaseAdmin.storage
-      .from('releases')
-      .createSignedUrl('SyndicateLoader.exe', 3600);
-
-    const loaderDownloadUrl =
-      signedLoader?.signedUrl ||
-      `${supabaseUrl}/storage/v1/object/public/releases/SyndicateLoader.exe`;
-
-    const script = [
-      `[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;`,
-      `Write-Host "\`n  =======================================================\`n                   5.55 CLIENT BOOTSTRAPPER\`n  =======================================================" -ForegroundColor Cyan;`,
-      `Write-Host " [*] Account     : ${userEmail || 'Active Entitlement'}" -ForegroundColor Green;`,
-      `Write-Host " [*] Product     : ${license.products?.name || '5.55 Injection'}" -ForegroundColor Gray;`,
-      `Write-Host " [*] Initializing environment..." -ForegroundColor Gray;`,
-      `$targetDir = "$env:LOCALAPPDATA\\555Client";`,
-      `if (!(Test-Path $targetDir)) { New-Item -ItemType Directory -Path $targetDir -Force | Out-Null };`,
-      `$targetAssets = "$targetDir\\assets";`,
-      `if (!(Test-Path $targetAssets)) { New-Item -ItemType Directory -Path $targetAssets -Force | Out-Null };`,
-      `$keyDir = "$env:APPDATA\\SyndicateClient";`,
-      `if (!(Test-Path $keyDir)) { New-Item -ItemType Directory -Path $keyDir -Force | Out-Null };`,
-      `if ("${userEmail}") { Set-Content -Path "$keyDir\\email.txt" -Value "${userEmail}" -Force; Set-Content -Path "$targetDir\\email.txt" -Value "${userEmail}" -Force };`,
-      `if ("${license.license_key}") { Set-Content -Path "$keyDir\\license.txt" -Value "${license.license_key}" -Force };`,
-      `$vidPath = "$targetAssets\\bg.mp4";`,
-      `$vidUrl = "https://www.555client.xyz/assets/bg.mp4";`,
-      `if (!(Test-Path $vidPath)) { Write-Host " [*] Downloading visual assets..." -ForegroundColor Cyan; try { if (Get-Command curl.exe -ErrorAction SilentlyContinue) { & curl.exe -sL "$vidUrl" -o "$vidPath" } else { (New-Object System.Net.WebClient).DownloadFile("$vidUrl", "$vidPath") } } catch {} };`,
-      `$exePath = "$targetDir\\SyndicateLoader.exe";`,
-      `$dlUrl = "${loaderDownloadUrl}";`,
-      `$needsDownload = $true;`,
-      `if (Test-Path $exePath) { try { if ((Get-Item $exePath).Length -ge 5500000) { $needsDownload = $false } } catch {} };`,
-      `if ($needsDownload) { Write-Host " [*] Downloading latest 5.55 Client..." -ForegroundColor Cyan; try { if (Get-Command curl.exe -ErrorAction SilentlyContinue) { & curl.exe -sL "$dlUrl" -o "$exePath" } else { (New-Object System.Net.WebClient).DownloadFile("$dlUrl", "$exePath") } } catch { try { Invoke-WebRequest -Uri "$dlUrl" -OutFile "$exePath" -UseBasicParsing -MaximumRedirection 5 } catch {} } };`,
-      `if (Test-Path $exePath) { Write-Host " [✓] 5.55 Client starting..." -ForegroundColor Green; Start-Process -FilePath "$exePath" -ArgumentList "--email ${userEmail}" -WorkingDirectory "$targetDir" } else { Write-Host " [!] Error: Failed to start loader executable." -ForegroundColor Red };`,
-    ].join('\n');
-
-    return res.send(script);
-  } catch (err) {
-    return res.send(`Write-Host "[5.55 Client] Server error during launch: ${err.message}" -ForegroundColor Red; return`);
-  }
+  return res.status(410).send(
+    'This unauthenticated command endpoint has been retired.\nSign in at https://www.555client.xyz/dashboard or visit https://www.555client.xyz/download to download SyndicateLoader.exe directly.'
+  );
 };
 
-router.get('/dl/:key', handlePowerShellLaunch);
-router.get('/downloads/dl/:key', handlePowerShellLaunch);
+router.get('/dl/:key', handleDeprecatedBootstrap);
+router.get('/downloads/dl/:key', handleDeprecatedBootstrap);
 
 // ==============================================================================
 // 6. SELLAUTH PAYMENT WEBHOOK INTEGRATION
@@ -1938,13 +2265,20 @@ router.post('/webhooks/sellauth', async (req, res) => {
   const signature = req.headers['x-sellauth-signature'] || req.headers['sellauth-signature'];
   const webhookSecret = process.env.SELLAUTH_WEBHOOK_SECRET;
 
-  // 1. Signature Verification
-  if (webhookSecret && signature) {
-    const isValid = verifySellAuthWebhook(req.body, signature, webhookSecret);
-    if (!isValid) {
-      console.warn('[SellAuth Webhook] Signature verification failed!');
-      return res.status(401).json({ error: 'Invalid webhook signature' });
-    }
+  // 1. Fail-closed Signature Verification
+  if (!webhookSecret) {
+    console.error('[SellAuth Webhook] SELLAUTH_WEBHOOK_SECRET is not configured.');
+    return res.status(503).json({ error: 'Webhook verification is not configured' });
+  }
+
+  if (!signature) {
+    return res.status(401).json({ error: 'Missing webhook signature' });
+  }
+
+  const isValid = verifySellAuthWebhook(req.rawBody || req.body, signature, webhookSecret);
+  if (!isValid) {
+    console.warn('[SellAuth Webhook] Signature verification failed!');
+    return res.status(401).json({ error: 'Invalid webhook signature' });
   }
 
   const { id: eventId, event: eventType, data } = req.body;
@@ -2093,7 +2427,7 @@ router.post('/webhooks/sellauth', async (req, res) => {
       })
       .eq('event_id', String(eventIdentifier));
 
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'SellAuthWebhook Error', err);
   }
 });
 
@@ -2112,7 +2446,7 @@ router.get('/admin/users', requireAdmin, async (req, res) => {
     if (error) throw error;
     return res.json({ users: users || [] });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'AdminUsers Error', err);
   }
 });
 
@@ -2146,7 +2480,7 @@ router.post('/admin/users/:id/ban', requireAdmin, async (req, res) => {
 
     return res.json({ success: true, message: 'User banned and licenses suspended' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'AdminBanUser Error', err);
   }
 });
 
@@ -2227,7 +2561,7 @@ router.get('/admin/licenses', requireAdmin, async (req, res) => {
 
     return res.json({ success: true, licenses });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'AdminListLicenses Error', err);
   }
 });
 
@@ -2284,7 +2618,7 @@ router.post('/admin/licenses/create', requireAdmin, async (req, res) => {
 
     return res.json({ success: true, license });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'AdminLicenseDetail Error', err);
   }
 });
 
@@ -2351,7 +2685,7 @@ router.post('/admin/licenses/bulk', requireAdmin, async (req, res) => {
       licenses: created,
     });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'AdminCreateLicense Error', err);
   }
 });
 
@@ -2416,7 +2750,7 @@ router.post('/admin/licenses/action', requireAdmin, async (req, res) => {
 
     return res.status(400).json({ error: `Unknown action '${action}'` });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'AdminLicenseAction Error', err);
   }
 });
 
@@ -2441,7 +2775,7 @@ router.post('/admin/licenses/:id/revoke', requireAdmin, async (req, res) => {
 
     return res.json({ success: true, message: 'License revoked' });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'AdminRevokeLicense Error', err);
   }
 });
 
@@ -2493,7 +2827,7 @@ router.post('/admin/releases/upload', requireAdmin, async (req, res) => {
     if (error) throw error;
     return res.json({ success: true, release });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'AdminPublishRelease Error', err);
   }
 });
 
@@ -2509,7 +2843,7 @@ router.get('/admin/audit-logs', requireAdmin, async (req, res) => {
     if (error) throw error;
     return res.json({ logs: logs || [] });
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return serverError(res, 'AdminLogs Error', err);
   }
 });
 
@@ -2523,11 +2857,16 @@ router.post('/admin/hwid-reset-keys/create', requireAdmin, async (req, res) => {
     const { count = 1, note = '' } = req.body;
     const num = Math.min(Math.max(1, parseInt(count, 10) || 1), 50);
     const createdKeys = [];
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const randomChunk = (len = 4) => {
+      const bytes = crypto.randomBytes(len);
+      let s = '';
+      for (let i = 0; i < len; i++) s += chars[bytes[i] % chars.length];
+      return s;
+    };
 
     for (let i = 0; i < num; i++) {
-      const p1 = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const p2 = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const resetKey = `555R-${p1}-${p2}`;
+      const resetKey = `555R-${randomChunk(4)}-${randomChunk(4)}`;
 
       const { data, error } = await supabaseAdmin
         .from('audit_logs')
@@ -2540,14 +2879,14 @@ router.post('/admin/hwid-reset-keys/create', requireAdmin, async (req, res) => {
             status: 'active',
             created_by: req.user.email || req.profile?.email || 'admin',
             created_at: new Date().toISOString(),
-            note: (note || '').trim(),
+            note: (note || '').trim().slice(0, 200),
           },
         })
         .select()
         .single();
 
       if (error) {
-        console.error('[hwid-reset-keys/create] Insert error:', error);
+        console.error('[hwid-reset-keys/create] Insert error:', error.message);
       }
       if (!error && data) {
         createdKeys.push(resetKey);
@@ -2556,7 +2895,7 @@ router.post('/admin/hwid-reset-keys/create', requireAdmin, async (req, res) => {
 
     return res.json({ success: true, count: createdKeys.length, keys: createdKeys });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    return serverError(res, 'AdminCreateResetKeys Error', err, { success: false });
   }
 });
 
@@ -2586,7 +2925,7 @@ router.get('/admin/hwid-reset-keys', requireAdmin, async (req, res) => {
 
     return res.json({ success: true, keys });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    return serverError(res, 'AdminListResetKeys Error', err, { success: false });
   }
 });
 
@@ -2631,7 +2970,7 @@ router.post('/admin/hwid-reset-keys/revoke', requireAdmin, async (req, res) => {
 
     return res.json({ success: true, message: 'Reset key revoked' });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    return serverError(res, 'AdminRevokeResetKey Error', err, { success: false });
   }
 });
 

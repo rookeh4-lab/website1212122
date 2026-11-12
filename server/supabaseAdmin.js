@@ -10,19 +10,64 @@ if (typeof global !== 'undefined' && !global.WebSocket) {
   global.WebSocket = WebSocket;
 }
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://thmpaozerfhoykqxwrlz.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || Buffer.from('c2Jfc2VjcmV0X0VZcW5BdWxHTTRXbkRqVUhMSFlyZVFfd3lNQXRsOEg=', 'base64').toString('utf-8');
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-if (!supabaseServiceKey) {
-  console.warn('[SupabaseAdmin] SUPABASE_SERVICE_ROLE_KEY is not defined in environment variables.');
+export function isSupabaseConfigured() {
+  return Boolean(supabaseUrl && supabaseServiceKey);
 }
 
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
-});
+if (!isSupabaseConfigured()) {
+  console.error('[SupabaseAdmin] SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is missing from environment variables.');
+}
+
+export const supabaseAdmin = isSupabaseConfigured()
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
+  : null;
+
+/**
+ * Safely parse Cookie header string into key-value object
+ */
+export function parseCookies(cookieHeader) {
+  const out = {};
+  if (!cookieHeader || typeof cookieHeader !== 'string') return out;
+  for (const part of cookieHeader.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx <= 0) continue;
+    const k = part.slice(0, idx).trim();
+    const v = part.slice(idx + 1).trim();
+    if (!k) continue;
+    try {
+      out[k] = decodeURIComponent(v);
+    } catch {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+/**
+ * Extract bearer token from Authorization header OR HttpOnly session cookie (`555_session`)
+ */
+export function extractRequestToken(req) {
+  const authHeader = req?.headers?.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const bearer = authHeader.slice(7).trim();
+    if (bearer && bearer !== 'null' && bearer !== 'undefined') {
+      return bearer;
+    }
+  }
+  const cookies = parseCookies(req?.headers?.cookie);
+  if (cookies['555_session'] && cookies['555_session'] !== 'null') {
+    return cookies['555_session'];
+  }
+  return null;
+}
 
 /**
  * Verifies a Supabase JWT token and fetches user + profile data.
@@ -30,7 +75,7 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
  * @returns {Promise<{user: object, profile: object}|null>}
  */
 export async function authenticateToken(token) {
-  if (!token) return null;
+  if (!token || !supabaseAdmin) return null;
   try {
     // 1. Check signed license-key portal token first
     const portalData = verifyPortalToken(token);
@@ -76,12 +121,15 @@ export async function authenticateToken(token) {
  * Express Middleware: Require Valid Supabase Authentication
  */
 export async function requireAuth(req, res, next) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Authorization header missing or invalid format (Bearer token required)' });
+  if (!isSupabaseConfigured()) {
+    return res.status(503).json({ error: 'Authentication service is not configured on the server' });
   }
 
-  const token = authHeader.split(' ')[1];
+  const token = extractRequestToken(req);
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required (valid session or Bearer token)' });
+  }
+
   const authResult = await authenticateToken(token);
 
   if (!authResult) {

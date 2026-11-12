@@ -64,7 +64,7 @@ export default function Trial() {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [copied, setCopied] = useState(false);
-  const isLoggedIn = !!auth.getToken();
+  const [isLoggedIn, setIsLoggedIn] = useState(!!auth.getToken());
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -79,22 +79,33 @@ export default function Trial() {
 
     async function loadTrialData() {
       try {
-        const infoRes = await fetch(`${API_BASE}/trials/info`, { cache: 'no-store' });
+        const [infoRes, profile] = await Promise.all([
+          fetch(`${API_BASE}/trials/info`, { cache: 'no-store' }),
+          auth.getProfile().catch(() => null),
+        ]);
         const infoData = await infoRes.json().catch(() => ({}));
         if (isSubscribed && infoRes.ok) setInfo(infoData);
 
-        if (!auth.getToken()) return;
+        if (!profile?.user) {
+          if (isSubscribed) setIsLoggedIn(false);
+          return;
+        }
+        if (isSubscribed) setIsLoggedIn(true);
 
+        const token = auth.getToken();
         const myRes = await fetch(`${API_BASE}/trials/my`, {
-          headers: { Authorization: `Bearer ${auth.getToken()}` },
+          credentials: 'include',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
           cache: 'no-store',
         });
         const myData = await myRes.json().catch(() => ({}));
         if (isSubscribed && myRes.ok && myData.trial) {
           setTrial(myData.trial);
         }
-      } catch (err) {
-        // Fallback for standalone demo
+      } catch {
+        if (isSubscribed) {
+          setErrorMsg('Trial status endpoint is currently unavailable.');
+        }
       } finally {
         if (isSubscribed) setInitialLoading(false);
       }
@@ -111,13 +122,15 @@ export default function Trial() {
     setErrorMsg('');
     try {
       const invite = sessionStorage.getItem(TRIAL_INVITE_KEY);
+      const token = auth.getToken();
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
       const res = await fetch(`${API_BASE}/trials/claim`, {
         method: 'POST',
+        credentials: 'include',
         cache: 'no-store',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${auth.getToken()}`,
-        },
+        headers,
         body: JSON.stringify(invite ? { invite } : {}),
       });
       const data = await res.json().catch(() => ({}));
@@ -125,25 +138,13 @@ export default function Trial() {
         sessionStorage.removeItem(TRIAL_INVITE_KEY);
         setTrial(data.trial);
       } else {
-        // Fallback for standalone demo
-        const demoTrial = {
-          id: 'trial_demo',
-          status: 'active',
-          licenseKey: `555-TRIAL-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-          expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-          tier: 'trial',
-        };
-        setTrial(demoTrial);
+        setErrorMsg(
+          data?.error ||
+            'Automated self-serve trial keys are currently disabled. Please sign in or contact staff on Discord for an invitation key.'
+        );
       }
     } catch {
-      const demoTrial = {
-        id: 'trial_demo',
-        status: 'active',
-        licenseKey: `555-TRIAL-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-        expiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-        tier: 'trial',
-      };
-      setTrial(demoTrial);
+      setErrorMsg('Unable to reach trial activation service right now.');
     } finally {
       setLoading(false);
     }

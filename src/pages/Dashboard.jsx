@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { auth, copyText, API_BASE } from '../utils/api';
 
 const PRODUCT_CATALOG = [
@@ -59,7 +59,6 @@ const MOTES = [
 ];
 
 export default function Dashboard() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const [user, setUser] = useState(null);
@@ -84,6 +83,7 @@ export default function Dashboard() {
   const [copiedCommand, setCopiedCommand] = useState(null);
   const [downloadLoading, setDownloadLoading] = useState(null);
   const [downloadError, setDownloadError] = useState('');
+  const [downloadMeta, setDownloadMeta] = useState(null);
 
   // Modals
   const [renameModal, setRenameModal] = useState({
@@ -110,8 +110,10 @@ export default function Dashboard() {
 
   const loadLicenses = useCallback(async (token) => {
     try {
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const res = await fetch(`${API_BASE}/licenses/my`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+        headers,
       });
       const data = await res.json();
       setLicenses(data.licenses || []);
@@ -135,12 +137,6 @@ export default function Dashboard() {
   useEffect(() => {
     let active = true;
     const init = async () => {
-      const token = searchParams.get('token');
-      if (token) {
-        auth.setToken(token);
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
-
       try {
         const data = await auth.getProfile();
         if (!active) return;
@@ -161,7 +157,7 @@ export default function Dashboard() {
 
     init();
     return () => { active = false; };
-  }, [searchParams, navigate, loadLicenses, refreshServiceStatus]);
+  }, [navigate, loadLicenses, refreshServiceStatus]);
 
   const isLicenseActive = (lic) => {
     if (!lic || lic.status !== 'active') return false;
@@ -213,12 +209,13 @@ export default function Dashboard() {
     const token = (await auth.getAsyncToken?.()) || auth.getToken();
 
     try {
+      const claimHeaders = { 'Content-Type': 'application/json' };
+      if (token) claimHeaders.Authorization = `Bearer ${token}`;
+
       const res = await fetch(`${API_BASE}/licenses/claim`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
+        headers: claimHeaders,
         body: JSON.stringify({ key: clean }),
       });
       const data = await res.json();
@@ -231,6 +228,7 @@ export default function Dashboard() {
         if (freshToken && freshToken !== token) {
           const retryRes = await fetch(`${API_BASE}/licenses/claim`, {
             method: 'POST',
+            credentials: 'include',
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${freshToken}`,
@@ -261,12 +259,13 @@ export default function Dashboard() {
     setRenameModal((prev) => ({ ...prev, loading: true, error: '' }));
     const token = (await auth.getAsyncToken?.()) || auth.getToken();
     try {
+      const renameHeaders = { 'Content-Type': 'application/json' };
+      if (token) renameHeaders.Authorization = `Bearer ${token}`;
+
       const res = await fetch(`${API_BASE}/licenses/update-name`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
+        headers: renameHeaders,
         body: JSON.stringify({ licenseKey: renameModal.key, name: renameModal.name.trim() }),
       });
       const data = await res.json().catch(() => ({}));
@@ -294,12 +293,13 @@ export default function Dashboard() {
     setHwidModalState((prev) => ({ ...prev, loading: true, error: '', msg: '' }));
     const token = (await auth.getAsyncToken?.()) || auth.getToken();
     try {
+      const resetHeaders = { 'Content-Type': 'application/json' };
+      if (token) resetHeaders.Authorization = `Bearer ${token}`;
+
       const res = await fetch(`${API_BASE}/licenses/reset-hwid`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
+        headers: resetHeaders,
         body: JSON.stringify({
           licenseKey: hwidModalState.key,
           resetKey: hwidModalState.resetKey.trim(),
@@ -337,16 +337,23 @@ export default function Dashboard() {
     setDownloadError('');
     const token = (await auth.getAsyncToken?.()) || auth.getToken();
     try {
+      const dlHeaders = { 'Content-Type': 'application/json' };
+      if (token) dlHeaders.Authorization = `Bearer ${token}`;
+
       const res = await fetch(`${API_BASE}/downloads/authorize`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
+        headers: dlHeaders,
         body: JSON.stringify({ product_slug: productSlug }),
       });
       const data = await res.json();
       if (res.ok && data.authorized && data.download_url) {
+        setDownloadMeta({
+          fileName: data.file_name || 'SyndicateLoader.exe',
+          fileSizeMb: data.file_size_bytes ? `${(data.file_size_bytes / (1024 * 1024)).toFixed(2)} MB` : '5.48 MB',
+          sha256: data.sha256 || null,
+          version: data.version || '1.21.11',
+        });
         window.location.href = `${API_BASE}${data.download_url.replace(/^\/api/, '')}`;
       } else {
         setDownloadError(data.error || 'Could not authorize download.');
@@ -1515,11 +1522,11 @@ export default function Dashboard() {
                       const displayKey = isHidden
                         ? `${lic.key.substring(0, 7)}••••-••••`
                         : lic.key;
-                      const launchCommand = `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://www.555client.xyz/dl/${user?.email || lic.key} | iex"`;
+                      const accountEmail = user?.email || '';
 
                       return (
                         <div key={lic.key} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                          {/* Launch & Downloads Card */}
+                          {/* Direct Authenticated Downloads Card */}
                           <div className="v2-dash-card" style={{ padding: '24px' }}>
                             <div
                               style={{
@@ -1533,12 +1540,10 @@ export default function Dashboard() {
                             >
                               <div>
                                 <div style={{ fontSize: '16px', fontWeight: 800, color: '#ffffff' }}>
-                                  Launch & Downloads
+                                  Official Package Download
                                 </div>
                                 <div style={{ fontSize: '12.5px', color: '#71717a', marginTop: '3px' }}>
-                                  {currentProductDef.id === 'injection'
-                                    ? 'Run the instant PowerShell loader or download the standalone executable.'
-                                    : 'Download the latest authorized client package for your account.'}
+                                  Download SyndicateLoader.exe (Windows x64 Executable · 5.48 MB) directly from authenticated storage. Downloaded files require manual launch and are never executed automatically.
                                 </div>
                               </div>
 
@@ -1560,7 +1565,7 @@ export default function Dashboard() {
                                 >
                                   {downloadLoading === currentProductDef.productSlug
                                     ? 'Authorizing...'
-                                    : 'Download Package ↓'}
+                                    : 'Download SyndicateLoader.exe (5.48 MB) ↓'}
                                 </button>
                                 <button
                                   type="button"
@@ -1576,7 +1581,7 @@ export default function Dashboard() {
                                     cursor: 'pointer',
                                   }}
                                 >
-                                  Launch Guide
+                                  Setup & Verification Guide
                                 </button>
                               </div>
                             </div>
@@ -1587,12 +1592,13 @@ export default function Dashboard() {
                               </div>
                             )}
 
-                            {/* Quick Command Strip */}
+                            {/* Package Details & Account Email Strip */}
                             <div
                               style={{
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
+                                flexWrap: 'wrap',
                                 gap: '12px',
                                 padding: '12px 14px',
                                 borderRadius: '10px',
@@ -1600,33 +1606,36 @@ export default function Dashboard() {
                                 border: '1px solid rgba(255, 255, 255, 0.08)',
                               }}
                             >
-                              <code
-                                style={{
-                                  fontSize: '12px',
-                                  color: '#c4b5fd',
-                                  fontFamily: 'monospace',
-                                  wordBreak: 'break-all',
-                                }}
-                              >
-                                {launchCommand}
-                              </code>
-                              <button
-                                type="button"
-                                onClick={() => handleCopy(launchCommand, 'cmd')}
-                                style={{
-                                  flexShrink: 0,
-                                  padding: '7px 14px',
-                                  borderRadius: '8px',
-                                  border: '1px solid rgba(168, 85, 247, 0.4)',
-                                  background: 'rgba(147, 51, 234, 0.2)',
-                                  color: '#e9d5ff',
-                                  fontSize: '12px',
-                                  fontWeight: 700,
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                {copiedCommand === launchCommand ? '✓ Copied' : 'Copy'}
-                              </button>
+                              <div style={{ fontSize: '12px', color: '#a1a1aa', lineHeight: 1.5 }}>
+                                <strong style={{ color: '#e4e4e7' }}>
+                                  {downloadMeta?.fileName || 'SyndicateLoader.exe'}
+                                </strong>{' '}
+                                · Windows x64 Executable ({downloadMeta?.fileSizeMb || '5.48 MB'}) · Minecraft Fabric 1.21.11 Single Player
+                                {downloadMeta?.sha256 ? (
+                                  <div style={{ fontFamily: 'monospace', color: '#c4b5fd', marginTop: '4px', wordBreak: 'break-all' }}>
+                                    SHA-256: {downloadMeta.sha256}
+                                  </div>
+                                ) : null}
+                              </div>
+                              {accountEmail && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopy(accountEmail, 'cmd')}
+                                  style={{
+                                    flexShrink: 0,
+                                    padding: '7px 14px',
+                                    borderRadius: '8px',
+                                    border: '1px solid rgba(168, 85, 247, 0.4)',
+                                    background: 'rgba(147, 51, 234, 0.2)',
+                                    color: '#e9d5ff',
+                                    fontSize: '12px',
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  {copiedCommand === accountEmail ? '✓ Email Copied' : 'Copy Login Email'}
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -1942,27 +1951,41 @@ export default function Dashboard() {
             style={{ maxWidth: '520px', width: '100%', padding: '26px', background: '#120d1d' }}
           >
             <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#ffffff', margin: '0 0 8px' }}>
-              Launch Command (PowerShell)
+              Setup &amp; Manual Launch Guide
             </h3>
-            <p style={{ fontSize: '13px', color: '#a1a1aa', lineHeight: 1.5, margin: '0 0 16px' }}>
-              Paste this command in Windows PowerShell to automatically initialize and start 5.55 Client:
+            <p style={{ fontSize: '13px', color: '#a1a1aa', lineHeight: 1.5, margin: '0 0 14px' }}>
+              Follow these steps to install and run 5.55 Client cleanly on Windows x64:
             </p>
 
-            <div
+            <ol
               style={{
-                background: 'rgba(0,0,0,0.55)',
+                background: 'rgba(0,0,0,0.45)',
                 border: '1px solid rgba(255,255,255,0.1)',
                 borderRadius: '10px',
-                padding: '12px',
-                fontFamily: 'monospace',
-                fontSize: '12px',
-                color: '#c4b5fd',
-                wordBreak: 'break-all',
-                marginBottom: '16px',
+                padding: '14px 18px 14px 28px',
+                fontSize: '12.5px',
+                color: '#d4d4d8',
+                lineHeight: 1.65,
+                margin: '0 0 16px',
               }}
             >
-              powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;irm https://www.555client.xyz/dl/{user?.email || launchModal.licenseKey} | iex&quot;
-            </div>
+              <li>
+                Click <strong>Download SyndicateLoader.exe (5.48 MB)</strong> to fetch the Windows executable via a single-use authenticated link from Supabase Storage.
+              </li>
+              <li>
+                No file is run automatically. Launch <code style={{ color: '#c4b5fd' }}>SyndicateLoader.exe</code> manually only after you have saved it to your trusted folder.
+              </li>
+              <li>
+                Start <strong>Minecraft Java Edition (Fabric 1.21.11, single-player)</strong>, open the loader, and sign in with your registered email{user?.email ? ` (${user.email})` : ''} and password.
+              </li>
+              <li>
+                If you change PCs, request an Admin HWID Reset Key and use <strong>Reset HWID</strong> on your license card.
+              </li>
+            </ol>
+
+            <p style={{ fontSize: '11.5px', color: '#71717a', margin: '0 0 16px' }}>
+              5.55 Client is an independent third-party single-player Fabric 1.21.11 utility mod (ImGui + MinHook) and is not affiliated with Mojang AB, Microsoft Corporation, or Discord Inc.
+            </p>
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button
@@ -1982,10 +2005,7 @@ export default function Dashboard() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  const cmd = `powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://www.555client.xyz/dl/${user?.email || launchModal.licenseKey} | iex"`;
-                  handleCopy(cmd, 'cmd');
-                }}
+                onClick={() => handleAuthorizedDownload('cpp-client')}
                 style={{
                   padding: '8px 16px',
                   borderRadius: '9px',
@@ -1997,7 +2017,7 @@ export default function Dashboard() {
                   cursor: 'pointer',
                 }}
               >
-                {copiedCommand ? '✓ Copied Command' : 'Copy Launch Command'}
+                Download SyndicateLoader.exe
               </button>
             </div>
           </div>

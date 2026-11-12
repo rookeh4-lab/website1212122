@@ -1,15 +1,13 @@
 import express from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
 import apiRouter from './apiRouter.js';
+import { applyAppSecurity } from './httpSecurity.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5352;
-
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+applyAppSecurity(app);
 
 app.use('/api', apiRouter);
 

@@ -23,7 +23,8 @@ export default function Download() {
         setIsLoggedIn(true);
         const token = await auth.getToken();
         const res = await fetch(`${API_BASE}/user/licenses`, {
-          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         const data = await res.json();
         if (active && data.licenses) {
@@ -371,7 +372,11 @@ export default function Download() {
           {/* Download Action Area */}
           <div style={{ textAlign: 'center', padding: '16px 0 24px' }}>
             <a
-              href={`${API_BASE}${successData.download_url}`}
+              href={
+                successData.download_url?.startsWith('/api')
+                  ? successData.download_url
+                  : `${API_BASE}${successData.download_url}`
+              }
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -393,11 +398,31 @@ export default function Download() {
                 <polyline points="7 10 12 15 17 10" />
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
-              <span>Download 555 Client Loader</span>
+              <span>Download SyndicateLoader.exe</span>
             </a>
 
             <div style={{ fontSize: '12px', color: 'var(--text-muted, #94a3b8)', marginTop: '12px' }}>
-              Package: <code>SyndicateLoader.exe</code> (5.28 MB) · Windows 64-bit · Fabric 1.21.11 Single Player
+              Package: <code>{successData.file_name || 'SyndicateLoader.exe'}</code> (
+              {successData.file_size_bytes
+                ? `${(successData.file_size_bytes / (1024 * 1024)).toFixed(2)} MB`
+                : '5.48 MB'}
+              ) · Windows x64 Executable · Fabric 1.21.11 Single Player
+            </div>
+            {successData.sha256 && (
+              <div
+                style={{
+                  fontSize: '11px',
+                  fontFamily: 'monospace',
+                  color: '#94a3b8',
+                  marginTop: '6px',
+                  wordBreak: 'break-all',
+                }}
+              >
+                SHA-256: {successData.sha256}
+              </div>
+            )}
+            <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '6px' }}>
+              Downloaded files require manual launch and are never executed automatically. Not affiliated with Mojang AB or Microsoft.
             </div>
           </div>
 

@@ -87,11 +87,19 @@ export default function Admin() {
     return () => { active = false; };
   }, [navigate]);
 
+  const adminHeaders = (t, json = false) => {
+    const h = {};
+    if (json) h['Content-Type'] = 'application/json';
+    const activeToken = t || token;
+    if (activeToken) h.Authorization = `Bearer ${activeToken}`;
+    return h;
+  };
+
   const loadAdminData = async (t) => {
     try {
       const [uRes, aRes] = await Promise.all([
-        fetch(`${API_BASE}/admin/users`, { headers: { Authorization: `Bearer ${t}` } }),
-        fetch(`${API_BASE}/admin/audit-logs`, { headers: { Authorization: `Bearer ${t}` } }),
+        fetch(`${API_BASE}/admin/users`, { credentials: 'include', headers: adminHeaders(t) }),
+        fetch(`${API_BASE}/admin/audit-logs`, { credentials: 'include', headers: adminHeaders(t) }),
       ]);
       const [uData, aData] = await Promise.all([uRes.json(), aRes.json()]);
       if (uData.users) setUsers(uData.users);
@@ -105,7 +113,8 @@ export default function Admin() {
     setLoadingResetKeys(true);
     try {
       const res = await fetch(`${API_BASE}/admin/hwid-reset-keys`, {
-        headers: { Authorization: `Bearer ${t || token}` },
+        credentials: 'include',
+        headers: adminHeaders(t),
       });
       const data = await res.json();
       if (data.success && data.keys) {
@@ -125,10 +134,8 @@ export default function Admin() {
     try {
       const res = await fetch(`${API_BASE}/admin/hwid-reset-keys/create`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
+        headers: adminHeaders(token, true),
         body: JSON.stringify({ count: genResetCount, note: genResetNote }),
       });
       const data = await res.json();
@@ -151,10 +158,8 @@ export default function Admin() {
     try {
       const res = await fetch(`${API_BASE}/admin/hwid-reset-keys/revoke`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
+        headers: adminHeaders(token, true),
         body: JSON.stringify({ id, resetKey: key }),
       });
       const data = await res.json();
@@ -178,7 +183,8 @@ export default function Admin() {
       if (prod && prod !== 'ALL') params.set('product', prod);
 
       const res = await fetch(`${API_BASE}/admin/licenses?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${t || token}` },
+        credentials: 'include',
+        headers: adminHeaders(t),
       });
       const data = await res.json();
       if (data.success && data.licenses) {
@@ -203,10 +209,8 @@ export default function Admin() {
 
       const res = await fetch(`${API_BASE}/admin/licenses/create`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
+        headers: adminHeaders(token, true),
         body: JSON.stringify({
           product_slug: newLicProduct,
           customer_email: newLicEmail.trim() || null,
@@ -239,10 +243,8 @@ export default function Admin() {
     try {
       const res = await fetch(`${API_BASE}/admin/licenses/bulk`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
+        headers: adminHeaders(token, true),
         body: JSON.stringify({
           count: parseInt(bulkCount, 10),
           product_slug: newLicProduct,
@@ -270,10 +272,8 @@ export default function Admin() {
     try {
       const res = await fetch(`${API_BASE}/admin/licenses/action`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
+        headers: adminHeaders(token, true),
         body: JSON.stringify({ license_id: licenseId, action }),
       });
       const data = await res.json();
@@ -294,10 +294,8 @@ export default function Admin() {
     try {
       const res = await fetch(`${API_BASE}/admin/users/${userId}/ban`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
+        headers: adminHeaders(token, true),
         body: JSON.stringify({ reason }),
       });
       const data = await res.json();
@@ -319,15 +317,13 @@ export default function Admin() {
     try {
       const res = await fetch(`${API_BASE}/admin/releases/upload`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
+        headers: adminHeaders(token, true),
         body: JSON.stringify({
           product_slug: relProduct,
           version: relVersion.trim(),
           file_type: relFileType,
-          sha256: relSha256.trim() || 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+          sha256: relSha256.trim() || null,
           storage_path: `releases/${relProduct}/${relVersion}/package.${relFileType}`,
           changelog: relChangelog.trim(),
         }),

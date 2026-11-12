@@ -70,16 +70,9 @@ export default function Stats() {
         }
       } catch {}
 
-      // Fallback realistic demo stats
+      // Leave null when stats endpoint is unavailable rather than showing synthetic figures
       if (!unmounted) {
-        setStats({
-          liveUsers: 148 + Math.floor(Math.random() * 25),
-          totalLaunches: 384210,
-          totalUsers: 14290,
-          totalLicenses: 8650,
-        });
-        setLastUpdated(new Date());
-        setCycle((c) => c + 1);
+        setStats(null);
       }
     };
 

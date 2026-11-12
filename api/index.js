@@ -1,6 +1,6 @@
 import express from 'express';
-import cors from 'cors';
 import apiRouter from '../server/apiRouter.js';
+import { applyAppSecurity } from '../server/httpSecurity.js';
 
 function unwrap(mod) {
   let target = mod;
@@ -11,9 +11,7 @@ function unwrap(mod) {
 }
 
 const app = express();
-
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+applyAppSecurity(app);
 
 const router = unwrap(apiRouter);
 if (typeof router === 'function') {

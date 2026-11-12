@@ -68,13 +68,8 @@ export default function PurchaseModal({ open, onClose, selectedTier = 'client-li
           setCouponValid(false);
         }
       } catch {
-        if (code === '555' || code === 'RELEASE50' || code === 'DISCORD') {
-          setCouponDiscount(50);
-          setCouponValid(true);
-        } else {
-          setCouponDiscount(0);
-          setCouponValid(false);
-        }
+        setCouponDiscount(0);
+        setCouponValid(false);
       }
     }, 250);
     return () => clearTimeout(timer);
@@ -100,13 +95,8 @@ export default function PurchaseModal({ open, onClose, selectedTier = 'client-li
           setRefValid(false);
         }
       } catch {
-        if (code.length >= 3) {
-          setRefDiscount(5);
-          setRefValid(true);
-        } else {
-          setRefDiscount(0);
-          setRefValid(false);
-        }
+        setRefDiscount(0);
+        setRefValid(false);
       }
     }, 250);
     return () => clearTimeout(timer);
@@ -142,6 +132,11 @@ export default function PurchaseModal({ open, onClose, selectedTier = 'client-li
       return;
     }
 
+    if (planInfo.checkoutUrl) {
+      window.location.href = planInfo.checkoutUrl;
+      return;
+    }
+
     setLoading(true);
     setErrorMsg('');
     try {
@@ -151,6 +146,7 @@ export default function PurchaseModal({ open, onClose, selectedTier = 'client-li
 
       const res = await fetch(`${API_BASE}/checkout/create-session`, {
         method: 'POST',
+        credentials: 'include',
         headers,
         body: JSON.stringify({
           tier: planInfo.id,
@@ -162,14 +158,20 @@ export default function PurchaseModal({ open, onClose, selectedTier = 'client-li
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (data.url) {
+      if (res.ok && data.url) {
         window.location.href = data.url;
       } else {
-        // Instant direct success redirect
-        window.location.href = `/checkout-success?key=CLIENT-${Math.random().toString(36).substring(2, 6).toUpperCase()}&tier=${planInfo.id}&order=ORD-${Date.now()}`;
+        setErrorMsg(
+          data?.error ||
+            'Monthly automated checkout is currently unavailable. Select a Lifetime plan on SellAuth or open a support ticket on Discord.'
+        );
       }
     } catch {
-      window.location.href = `/checkout-success?key=CLIENT-${Math.random().toString(36).substring(2, 6).toUpperCase()}&tier=${planInfo.id}&order=ORD-${Date.now()}`;
+      setErrorMsg(
+        'Checkout endpoint unavailable for monthly plans. Please choose a Lifetime SellAuth plan or open a support ticket on Discord.'
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -497,14 +499,14 @@ export default function PurchaseModal({ open, onClose, selectedTier = 'client-li
                     fontSize: '11px',
                     fontWeight: 800,
                     color: '#ffffff',
-                    background: '#635bff',
+                    background: '#6d28d9',
                     padding: '3px 7px',
                     borderRadius: '5px',
                   }}
                 >
-                  stripe
+                  SellAuth
                 </span>
-                <span style={{ fontSize: '14px', fontWeight: 600, color: '#ffffff' }}>Card</span>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#ffffff' }}>Hosted</span>
               </div>
               <div
                 style={{
@@ -526,8 +528,8 @@ export default function PurchaseModal({ open, onClose, selectedTier = 'client-li
             <div
               onClick={() => setPaymentMethod('paypal')}
               style={{
-                background: paymentMethod === 'paypal' ? 'rgba(0, 112, 186, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                border: paymentMethod === 'paypal' ? '1.5px solid #0070ba' : '1.5px solid rgba(255, 255, 255, 0.08)',
+                background: paymentMethod === 'paypal' ? 'rgba(88, 101, 242, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                border: paymentMethod === 'paypal' ? '1.5px solid #5865f2' : '1.5px solid rgba(255, 255, 255, 0.08)',
                 borderRadius: '14px',
                 padding: '14px 16px',
                 display: 'flex',
@@ -542,28 +544,28 @@ export default function PurchaseModal({ open, onClose, selectedTier = 'client-li
                     fontSize: '11px',
                     fontWeight: 800,
                     color: '#ffffff',
-                    background: '#003087',
+                    background: '#5865f2',
                     padding: '3px 7px',
                     borderRadius: '5px',
                   }}
                 >
-                  PayPal
+                  Discord
                 </span>
-                <span style={{ fontSize: '14px', fontWeight: 600, color: '#ffffff' }}>PayPal</span>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#ffffff' }}>Ticket</span>
               </div>
               <div
                 style={{
                   width: '16px',
                   height: '16px',
                   borderRadius: '50%',
-                  border: paymentMethod === 'paypal' ? '2px solid #38bdf8' : '2px solid rgba(255, 255, 255, 0.2)',
+                  border: paymentMethod === 'paypal' ? '2px solid #818cf8' : '2px solid rgba(255, 255, 255, 0.2)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
                 {paymentMethod === 'paypal' && (
-                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#38bdf8' }} />
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#818cf8' }} />
                 )}
               </div>
             </div>

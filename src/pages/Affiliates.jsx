@@ -11,51 +11,45 @@ export default function Affiliates() {
   const [resettingCode, setResettingCode] = useState(false);
 
   useEffect(() => {
-    const token = auth.getToken();
-    if (!token) return;
-
+    let active = true;
     async function loadAffiliateData() {
       try {
         const profile = await auth.getProfile();
-        if (profile?.user) setUser(profile.user);
+        if (!active || !profile?.user) return;
+        setUser(profile.user);
 
+        const token = auth.getToken();
         const res = await fetch(`${API_BASE}/affiliates/my`, {
-          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
-        const data = await res.json();
-        if (data.affiliate) {
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.affiliate) {
           setAffiliate(data.affiliate);
           setCustomCode((data.affiliate.code || '').toLowerCase());
         } else {
-          // Demo fallback
-          const code = (profile?.user?.username || 'partner').toLowerCase();
+          const code = (profile.user.username || 'partner').toLowerCase();
           setAffiliate({
             code,
-            clicks: 142,
-            total_sales: 18,
-            total_earned: 94.5,
-            total_paid: 50.0,
+            clicks: 0,
+            total_sales: 0,
+            total_earned: 0,
+            total_paid: 0,
           });
           setCustomCode(code);
         }
       } catch {
-        setAffiliate({
-          code: 'partner',
-          clicks: 142,
-          total_sales: 18,
-          total_earned: 94.5,
-          total_paid: 50.0,
-        });
-        setCustomCode('partner');
+        setStatus({ text: 'Affiliate tracking is not currently enabled on this server.', type: 'info' });
       }
     }
 
     loadAffiliateData();
+    return () => { active = false; };
   }, []);
 
   const showStatus = (text, type = 'success') => {
     setStatus({ text, type });
-    setTimeout(() => setStatus({ text: '', type: '' }), 2000);
+    setTimeout(() => setStatus({ text: '', type: '' }), 3000);
   };
 
   const referralUrl = affiliate?.code
@@ -74,26 +68,25 @@ export default function Affiliates() {
     setSavingCode(true);
     const token = auth.getToken();
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
       const res = await fetch(`${API_BASE}/affiliates/update-code`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
+        headers,
         body: JSON.stringify({ newCode: code }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
-        setAffiliate((prev) => ({ ...prev, code: data.code.toLowerCase() }));
+        setAffiliate((prev) => ({ ...(prev || {}), code: data.code.toLowerCase() }));
         setCustomCode(data.code.toLowerCase());
         showStatus('✓ Affiliate code updated successfully!', 'success');
       } else {
-        setAffiliate((prev) => ({ ...prev, code }));
-        showStatus('✓ Affiliate code updated successfully! (Demo)', 'success');
+        showStatus(data.error || 'Could not update affiliate code — partner program API is not active yet.', 'danger');
       }
     } catch {
-      setAffiliate((prev) => ({ ...prev, code }));
-      showStatus('✓ Affiliate code updated successfully! (Demo)', 'success');
+      showStatus('Unable to reach affiliate service.', 'danger');
     } finally {
       setSavingCode(false);
     }
@@ -103,30 +96,25 @@ export default function Affiliates() {
     setResettingCode(true);
     const token = auth.getToken();
     try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
       const res = await fetch(`${API_BASE}/affiliates/reset-code`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
+        headers,
       });
       const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success) {
+      if (res.ok && data.success && data.code) {
         const rand = data.code.toLowerCase();
-        setAffiliate((prev) => ({ ...prev, code: rand }));
+        setAffiliate((prev) => ({ ...(prev || {}), code: rand }));
         setCustomCode(rand);
         showStatus(`✓ Reset to randomized code: ${rand}`, 'success');
       } else {
-        const rand = 'ref' + Math.floor(1000 + Math.random() * 9000);
-        setAffiliate((prev) => ({ ...prev, code: rand }));
-        setCustomCode(rand);
-        showStatus(`✓ Reset to randomized code: ${rand}`, 'success');
+        showStatus(data.error || 'Could not reset affiliate code — partner program API is not active yet.', 'danger');
       }
     } catch {
-      const rand = 'ref' + Math.floor(1000 + Math.random() * 9000);
-      setAffiliate((prev) => ({ ...prev, code: rand }));
-      setCustomCode(rand);
-      showStatus(`✓ Reset to randomized code: ${rand}`, 'success');
+      showStatus('Unable to reach affiliate service.', 'danger');
     } finally {
       setResettingCode(false);
     }

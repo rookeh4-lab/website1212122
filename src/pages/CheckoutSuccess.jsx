@@ -47,8 +47,6 @@ export default function CheckoutSuccess() {
       if (attempts < 8) {
         timer = setTimeout(checkStatus, 1500);
       } else {
-        // Fallback demo key
-        setLicenseKey(`CLIENT-${Math.random().toString(36).substring(2, 6).toUpperCase()}`);
         setLoading(false);
       }
     };
@@ -148,35 +146,52 @@ export default function CheckoutSuccess() {
           </div>
         ) : (
           <div style={{ marginBottom: '28px' }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                background: 'rgba(0, 0, 0, 0.45)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '12px',
-                padding: '14px 18px',
-                marginBottom: '12px',
-              }}
-            >
-              <code style={{ fontSize: '15px', color: '#c4b5fd', fontFamily: 'monospace' }}>
-                {licenseKey || 'CLIENT-YNYK'}
-              </code>
-              <button
-                onClick={handleCopy}
+            {licenseKey ? (
+              <div
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  fontSize: '13px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: 'rgba(0, 0, 0, 0.45)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '12px',
+                  padding: '14px 18px',
+                  marginBottom: '12px',
                 }}
               >
-                {copied ? '✓ Copied' : 'Copy'}
-              </button>
-            </div>
+                <code style={{ fontSize: '15px', color: '#c4b5fd', fontFamily: 'monospace' }}>
+                  {licenseKey}
+                </code>
+                <button
+                  onClick={handleCopy}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: '13px',
+                  }}
+                >
+                  {copied ? '✓ Copied' : 'Copy'}
+                </button>
+              </div>
+            ) : (
+              <div
+                style={{
+                  background: 'rgba(0, 0, 0, 0.45)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '12px',
+                  padding: '16px 18px',
+                  marginBottom: '12px',
+                  fontSize: '13.5px',
+                  color: 'var(--text-muted)',
+                  lineHeight: 1.5,
+                }}
+              >
+                No license key was attached to this URL yet. Check your SellAuth receipt email or sign in to your Dashboard to view activated keys.
+              </div>
+            )}
             {order && (
               <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
                 Order ID: {order}

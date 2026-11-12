@@ -5,7 +5,12 @@ export default function Footer() {
   return (
     <footer className="footer">
       <div className="container footer-container">
-        <p>© 2026 5.55 Client. All rights reserved.</p>
+        <div>
+          <p style={{ margin: 0 }}>© 2026 5.55 Client. All rights reserved.</p>
+          <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--text-dim)' }}>
+            Independent third-party Minecraft Fabric 1.21.11 utility mod for single-player use. Not affiliated with Mojang AB, Microsoft Corporation, or Discord Inc.
+          </p>
+        </div>
         <div className="footer-links">
           <Link to="/terms" className="footer-link">
             Terms of Service

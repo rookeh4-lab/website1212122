@@ -49,7 +49,7 @@ export default function Privacy() {
             3. Data Protection & Third Parties
           </h3>
           <p>
-            Payment information is processed directly by Stripe and is never stored on our servers. We do not sell, rent, or share personal user data with third-party advertisers or external companies.
+            Payment processing and digital checkout are handled externally by SellAuth and its payment partners; card details are never stored on our servers. Discord sign-in uses OAuth2 Authorization Code + PKCE (requesting only identify and email). We do not sell, rent, or share personal user data with third-party advertisers or external companies.
           </p>
         </div>
       </div>

@@ -86,32 +86,38 @@ export const auth = {
     localStorage.removeItem('plutora_user');
     localStorage.removeItem('555_supabase_auth_token');
     try {
+      await fetch(`${API_BASE}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch {}
+    try {
       await supabase.auth.signOut();
     } catch {}
   },
 
   /**
-   * Real user profile retrieval from Supabase Auth + profiles table (or Key Portal fallback)
+   * Real user profile retrieval from Supabase Auth + profiles table (or HttpOnly cookie / Key Portal session)
    */
   async getProfile() {
     try {
       const { data: { user }, error: userErr } = await supabase.auth.getUser();
       if (userErr || !user) {
-        const token = localStorage.getItem('plutora_token');
+        const token = this.getToken();
+        const headers = { 'Content-Type': 'application/json' };
         if (token && !isTokenExpired(token)) {
-          const res = await fetch(`${API_BASE}/auth/verify`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.valid && data.user) {
-              localStorage.setItem('plutora_user', JSON.stringify(data.user));
-              return { user: data.user, role: data.user.role };
-            }
+          headers.Authorization = `Bearer ${token}`;
+        }
+        const res = await fetch(`${API_BASE}/auth/verify`, {
+          method: 'POST',
+          credentials: 'include',
+          headers,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.valid && data.user) {
+            localStorage.setItem('plutora_user', JSON.stringify(data.user));
+            return { user: data.user, role: data.user.role };
           }
         }
         return null;
@@ -150,6 +156,7 @@ export const auth = {
   async signUp(email, password, username) {
     const res = await fetch(`${API_BASE}/auth/register`, {
       method: 'POST',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: email.trim(),
@@ -173,18 +180,31 @@ export const auth = {
   },
 
   /**
-   * User Login with Email and Password
+   * User Login with Email and Password (sets HttpOnly cookie + syncs client session)
    */
   async signIn(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim(), password }),
     });
-    if (error) throw error;
-    if (data.session?.access_token) {
-      this.setToken(data.session.access_token);
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok || !payload?.success) {
+      throw new Error(payload?.error || 'Invalid email or password.');
     }
-    return data;
+
+    if (payload.session?.access_token && payload.session?.refresh_token) {
+      await supabase.auth.setSession({
+        access_token: payload.session.access_token,
+        refresh_token: payload.session.refresh_token,
+      });
+      this.setToken(payload.session.access_token);
+    }
+    if (payload.user) {
+      localStorage.setItem('plutora_user', JSON.stringify(payload.user));
+    }
+    return payload;
   },
 
   /**

@@ -1,18 +1,20 @@
 import crypto from 'crypto';
 
-// Ed25519 Keys from environment or fallback to existing platform keys
-const DEFAULT_PRIVATE_KEY = `-----BEGIN PRIVATE KEY-----
-MC4CAQAwBQYDK2VwBCIEIA/zYinPV3tUvHqTwJnznQXkRWkqw9SBgAZdbxGwdmSV
------END PRIVATE KEY-----
-`;
-
+// Ed25519 keys loaded strictly from environment variables (never hardcode private keys in source control)
 const DEFAULT_PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEARd55FQilrg341RLIhPT3uNjimFGB283jN5YQYJJeH80=
 -----END PUBLIC KEY-----
 `;
 
-const privateKey = (process.env.ED25519_PRIVATE_KEY || DEFAULT_PRIVATE_KEY).replace(/\\n/g, '\n');
-const publicKey = (process.env.ED25519_PUBLIC_KEY || DEFAULT_PUBLIC_KEY).replace(/\\n/g, '\n');
+const getPrivateKey = () => {
+  const raw = process.env.ED25519_PRIVATE_KEY;
+  return raw ? raw.replace(/\\n/g, '\n') : '';
+};
+
+const getPublicKey = () => {
+  const raw = process.env.ED25519_PUBLIC_KEY || DEFAULT_PUBLIC_KEY;
+  return raw.replace(/\\n/g, '\n');
+};
 
 /**
  * Sign data using Ed25519 private key
@@ -20,6 +22,10 @@ const publicKey = (process.env.ED25519_PUBLIC_KEY || DEFAULT_PUBLIC_KEY).replace
  * @returns {string} base64 signature
  */
 export function signEd25519(data) {
+  const privateKey = getPrivateKey();
+  if (!privateKey) {
+    throw new Error('ED25519_PRIVATE_KEY is not configured on the server');
+  }
   const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data, 'utf-8');
   const signature = crypto.sign(null, buffer, privateKey);
   return signature.toString('base64');
@@ -33,6 +39,7 @@ export function signEd25519(data) {
  */
 export function verifyEd25519(data, signatureBase64) {
   try {
+    const publicKey = getPublicKey();
     const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data, 'utf-8');
     const signature = Buffer.from(signatureBase64, 'base64');
     return crypto.verify(null, buffer, publicKey, signature);
@@ -102,20 +109,29 @@ export function generateToken(bytes = 32) {
 export function verifySellAuthWebhook(payload, signature, secret) {
   if (!secret || !signature) return false;
   try {
+    const cleanSig = String(signature).trim().replace(/^sha256=/i, '');
+    const raw = typeof payload === 'string' ? payload : JSON.stringify(payload);
     const expected = crypto
       .createHmac('sha256', secret)
-      .update(typeof payload === 'string' ? payload : JSON.stringify(payload))
+      .update(raw)
       .digest('hex');
-    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+    if (cleanSig.length !== expected.length) return false;
+    return crypto.timingSafeEqual(Buffer.from(cleanSig, 'utf-8'), Buffer.from(expected, 'utf-8'));
   } catch {
     return false;
   }
 }
 
-const getPortalSecret = () =>
-  process.env.PORTAL_SESSION_SECRET ||
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  privateKey;
+const getPortalSecret = () => {
+  const base =
+    process.env.PORTAL_SESSION_SECRET ||
+    process.env.OAUTH_STATE_SECRET ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!base) {
+    throw new Error('Server signing secret is not configured');
+  }
+  return crypto.createHash('sha256').update(`kportal:${base}`).digest();
+};
 
 /**
  * Sign a short-lived portal session token for license-key login

@@ -56,6 +56,7 @@ export default function HwidModal({ open, onClose, licenseKey, userEmail }) {
 
       const res = await fetch(`${API_BASE}/checkout/create-session`, {
         method: 'POST',
+        credentials: 'include',
         headers,
         body: JSON.stringify({
           tier: 'hwid_reset',
@@ -66,15 +67,17 @@ export default function HwidModal({ open, onClose, licenseKey, userEmail }) {
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (data.url) {
+      if (res.ok && data.url) {
         window.location.href = data.url;
       } else {
-        alert('HWID Reset purchase initiated (Demo). Contact support or complete payment.');
-        onClose();
+        setErrorMsg(
+          'HWID resets use single-use Admin Reset Keys on your Dashboard. Open a support ticket on Discord (discord.gg/xx7Ns6vW8) to receive a reset key.'
+        );
       }
     } catch {
-      alert('HWID Reset purchase initiated (Demo).');
-      onClose();
+      setErrorMsg(
+        'HWID resets use single-use Admin Reset Keys on your Dashboard. Open a support ticket on Discord (discord.gg/xx7Ns6vW8) to receive a reset key.'
+      );
     } finally {
       setSubmitting(false);
     }
@@ -373,14 +376,14 @@ export default function HwidModal({ open, onClose, licenseKey, userEmail }) {
                     fontSize: '11px',
                     fontWeight: 800,
                     color: '#ffffff',
-                    background: '#635bff',
+                    background: '#6d28d9',
                     padding: '2px 6px',
                     borderRadius: '4px',
                   }}
                 >
-                  stripe
+                  Admin Key
                 </span>
-                <span style={{ fontSize: '14px', fontWeight: 600, color: '#ffffff' }}>Stripe</span>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#ffffff' }}>Dashboard</span>
               </div>
               <div
                 style={{
@@ -402,8 +405,8 @@ export default function HwidModal({ open, onClose, licenseKey, userEmail }) {
             <div
               onClick={() => setPaymentMethod('paypal')}
               style={{
-                background: paymentMethod === 'paypal' ? 'rgba(0, 112, 186, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                border: paymentMethod === 'paypal' ? '1.5px solid #0070ba' : '1.5px solid rgba(255, 255, 255, 0.08)',
+                background: paymentMethod === 'paypal' ? 'rgba(88, 101, 242, 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                border: paymentMethod === 'paypal' ? '1.5px solid #5865f2' : '1.5px solid rgba(255, 255, 255, 0.08)',
                 borderRadius: '12px',
                 padding: '12px 14px',
                 display: 'flex',
@@ -418,28 +421,28 @@ export default function HwidModal({ open, onClose, licenseKey, userEmail }) {
                     fontSize: '11px',
                     fontWeight: 800,
                     color: '#ffffff',
-                    background: '#003087',
+                    background: '#5865f2',
                     padding: '2px 6px',
                     borderRadius: '4px',
                   }}
                 >
-                  PayPal
+                  Discord
                 </span>
-                <span style={{ fontSize: '14px', fontWeight: 600, color: '#ffffff' }}>PayPal</span>
+                <span style={{ fontSize: '14px', fontWeight: 600, color: '#ffffff' }}>Ticket</span>
               </div>
               <div
                 style={{
                   width: '16px',
                   height: '16px',
                   borderRadius: '50%',
-                  border: paymentMethod === 'paypal' ? '2px solid #38bdf8' : '2px solid rgba(255, 255, 255, 0.2)',
+                  border: paymentMethod === 'paypal' ? '2px solid #818cf8' : '2px solid rgba(255, 255, 255, 0.2)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
                 {paymentMethod === 'paypal' && (
-                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#38bdf8' }} />
+                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#818cf8' }} />
                 )}
               </div>
             </div>

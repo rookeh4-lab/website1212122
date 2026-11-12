@@ -2,7 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { auth, API_BASE } from '../utils/api';
 
-const DISCORD_CLIENT_ID = '1557993745884905512';
+const OAUTH_ERROR_MESSAGES = {
+  access_denied: 'Discord authentication was cancelled.',
+  missing_params: 'Discord callback was missing verification parameters. Please try again.',
+  state_mismatch: 'Security verification failed (invalid OAuth state). Please try signing in again.',
+  token_exchange_failed: 'Could not verify your Discord sign-in with Discord servers. Please try again.',
+};
 
 export default function Login() {
   const [searchParams] = useSearchParams();
@@ -23,72 +28,75 @@ export default function Login() {
   const [showOAuthHelp, setShowOAuthHelp] = useState(false);
   const [copiedRedirect, setCopiedRedirect] = useState(false);
 
-  // 1. Check OAuth callback or existing session on mount
+  // 1. Check OAuth Authorization Code callback or existing session on mount
   useEffect(() => {
     let active = true;
 
     const initAuth = async () => {
-      // Check direct query token (from /weblogin command)
-      const queryToken = searchParams.get('token');
-      if (queryToken) {
-        auth.setToken(queryToken);
-        navigate('/dashboard', { replace: true });
-        return;
-      }
-
       // Check password reset redirect
       if (searchParams.get('reset') === 'true') {
         setStatus({ text: 'Please enter your new password below.', type: 'info' });
       }
 
-      // Check OAuth fragment token & clear from URL immediately
-      const hash = window.location.hash;
-      if (hash && hash.includes('access_token=')) {
-        const params = new URLSearchParams(hash.substring(1));
-        const accessToken = params.get('access_token');
-        window.history.replaceState(null, '', window.location.pathname);
+      // Check backend OAuth error redirect
+      const oauthError = searchParams.get('oauth_error');
+      if (oauthError) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setStatus({
+          text: OAUTH_ERROR_MESSAGES[oauthError] || 'Discord authentication failed. Please try again.',
+          type: 'danger',
+        });
+        return;
+      }
 
-        if (accessToken) {
-          setLoading(true);
-          setStatus({ text: 'Completing Discord sign-in...', type: 'info' });
-          try {
-            const syncRes = await fetch(`${API_BASE}/auth/discord-sync`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ accessToken }),
-            });
-            const syncData = await syncRes.json().catch(() => ({}));
+      // Strip any unexpected hash fragments from /login URL immediately
+      if (window.location.hash && window.location.hash.length > 1) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
 
-            if (!active) return;
-
-            if (syncRes.ok && syncData?.success && syncData?.token) {
-              if (syncData.session?.access_token && syncData.session?.refresh_token) {
-                await auth.supabase.auth.setSession({
-                  access_token: syncData.session.access_token,
-                  refresh_token: syncData.session.refresh_token,
-                });
-              }
-              auth.setToken(syncData.token);
-              if (syncData.user) {
-                localStorage.setItem('plutora_user', JSON.stringify(syncData.user));
-              }
-              navigate('/dashboard', { replace: true });
-              return;
-            } else {
-              setStatus({
-                text: syncData?.error || 'Could not sign in with Discord. Please try again.',
-                type: 'danger',
-              });
-            }
-          } catch {
-            if (active) {
-              setStatus({ text: 'Connection error during Discord sign-in.', type: 'danger' });
-            }
-          } finally {
-            if (active) setLoading(false);
-          }
+      // Handle Discord OAuth2 Authorization Code + PKCE callback
+      const oauthCode = searchParams.get('code');
+      const oauthState = searchParams.get('state');
+      if (oauthCode) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        if (!oauthState) {
+          setStatus({ text: OAUTH_ERROR_MESSAGES.missing_params, type: 'danger' });
           return;
         }
+
+        setLoading(true);
+        setStatus({ text: 'Completing Discord sign-in securely...', type: 'info' });
+        try {
+          const cbRes = await fetch(`${API_BASE}/auth/discord/callback`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: oauthCode, state: oauthState }),
+          });
+          const cbData = await cbRes.json().catch(() => ({}));
+
+          if (!active) return;
+
+          if (cbRes.ok && cbData?.success && cbData?.user) {
+            // Clear any old client bearer token; backend issued HttpOnly 555_session cookie
+            auth.setToken(null);
+            localStorage.setItem('plutora_user', JSON.stringify(cbData.user));
+            navigate('/dashboard', { replace: true });
+            return;
+          } else {
+            setStatus({
+              text: cbData?.error || 'Could not sign in with Discord. Please try again.',
+              type: 'danger',
+            });
+          }
+        } catch {
+          if (active) {
+            setStatus({ text: 'Connection error during Discord sign-in.', type: 'danger' });
+          }
+        } finally {
+          if (active) setLoading(false);
+        }
+        return;
       }
 
       // Check existing authenticated session
@@ -228,15 +236,13 @@ export default function Login() {
     }
   };
 
-  // Discord OAuth Redirect
+  // Discord OAuth2 Authorization Code + PKCE Redirect (via backend state transaction)
   const handleDiscordOAuth = () => {
     const baseOrigin =
       window.location.hostname === '555client.xyz'
         ? 'https://www.555client.xyz'
         : window.location.origin;
-    const redirectUri = encodeURIComponent(`${baseOrigin}/login`);
-    const discordAuthUrl = `https://discord.com/oauth2/authorize?client_id=${DISCORD_CLIENT_ID}&response_type=token&redirect_uri=${redirectUri}&scope=identify%20email`;
-    window.location.href = discordAuthUrl;
+    window.location.href = `${API_BASE}/auth/discord/start?origin=${encodeURIComponent(baseOrigin)}`;
   };
 
   return (
@@ -668,8 +674,24 @@ export default function Login() {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.893.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
           </svg>
-          <span>Continue with Discord</span>
+          <span>Sign in with Discord (OAuth2)</span>
         </button>
+
+        <p
+          style={{
+            marginTop: '10px',
+            marginBottom: '4px',
+            fontSize: '11.5px',
+            lineHeight: 1.5,
+            color: 'var(--text-dim)',
+          }}
+        >
+          Discord authentication is required for Discord SSO. Redirects to official{' '}
+          <strong style={{ color: 'var(--text-muted)' }}>discord.com</strong> to read only your{' '}
+          <code style={{ color: 'var(--text-muted)' }}>identify</code> (ID, username, avatar) and{' '}
+          <code style={{ color: 'var(--text-muted)' }}>email</code>. We never request your Discord password.
+          5.55 Client is an independent third-party Minecraft utility mod and is not affiliated with Discord Inc. or Mojang AB.
+        </p>
 
         {/* Status display */}
         {status.text && (

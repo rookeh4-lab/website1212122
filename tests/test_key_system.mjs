@@ -1,11 +1,18 @@
+import 'dotenv/config';
+import crypto from 'crypto';
 import WebSocket from 'ws';
 global.WebSocket = WebSocket;
 
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = 'https://thmpaozerfhoykqxwrlz.supabase.co';
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || Buffer.from('c2Jfc2VjcmV0X0VZcW5BdWxHTTRXbkRqVUhMSFlyZVFfd3lNQXRsOEg=', 'base64').toString('utf-8');
-const API_BASE = 'https://555client.xyz/api';
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SELLAUTH_SECRET = process.env.SELLAUTH_WEBHOOK_SECRET;
+const API_BASE = process.env.TEST_API_BASE || 'https://www.555client.xyz/api';
+
+if (!SUPABASE_URL || !SERVICE_KEY) {
+  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables are required to run tests.');
+}
 
 const sbAdmin = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -165,12 +172,25 @@ async function runKeySystemTests() {
   }
 
   // --------------------------------------------------------------------------
-  // TEST 10: SellAuth Webhook - Automatic Key Generation (555C-XXXX-XXXX-XXXX)
+  // TEST 10: SellAuth Webhook - Rejects Unsigned + Generates Signed Key
   // --------------------------------------------------------------------------
   let sellAuthKey = null;
   {
     const invoiceId = `inv_test_${testSuffix}`;
-    const res = await postApi('/webhooks/sellauth', {
+    const unsignedRes = await postApi('/webhooks/sellauth', {
+      id: invoiceId,
+      event: 'order.completed',
+      data: { id: invoiceId, email: `unsigned_${testSuffix}@555client.xyz` },
+    });
+    const rejectedUnsigned = unsignedRes.status === 401;
+    results.push({ test: '10a. SellAuth Unsigned Rejection', pass: rejectedUnsigned, details: unsignedRes.data });
+    console.log(`[TEST 10a] Unsigned webhook rejection: ${rejectedUnsigned ? 'PASS' : 'FAIL'} (Status: ${unsignedRes.status})`);
+
+    if (!SELLAUTH_SECRET) {
+      throw new Error('SELLAUTH_WEBHOOK_SECRET missing in environment.');
+    }
+
+    const payload = {
       id: invoiceId,
       event: 'order.completed',
       data: {
@@ -178,13 +198,15 @@ async function runKeySystemTests() {
         email: `buyer_${testSuffix}@555client.xyz`,
         product: { name: '5.55 C++ Client Lifetime' },
       },
-    });
+    };
+    const sig = crypto.createHmac('sha256', SELLAUTH_SECRET).update(JSON.stringify(payload)).digest('hex');
+    const res = await postApi('/webhooks/sellauth', payload, { 'x-sellauth-signature': sig });
 
     sellAuthKey = res.data.license_key;
-    const formatMatch = /^555C-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(sellAuthKey);
+    const formatMatch = /^555C-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(sellAuthKey || '');
     const pass = res.status === 200 && res.data.success && formatMatch;
-    results.push({ test: '10. SellAuth Webhook Key Generation', pass, details: res.data });
-    console.log(`[TEST 10] SellAuth auto-generation: ${pass ? 'PASS' : 'FAIL'} (Key: ${sellAuthKey}, Format: ${formatMatch ? '555C-XXXX-XXXX-XXXX' : 'INVALID'})`);
+    results.push({ test: '10b. SellAuth Webhook Key Generation', pass, details: res.data });
+    console.log(`[TEST 10b] SellAuth auto-generation: ${pass ? 'PASS' : 'FAIL'} (Key: ${sellAuthKey}, Format: ${formatMatch ? '555C-XXXX-XXXX-XXXX' : 'INVALID'})`);
   }
 
   // --------------------------------------------------------------------------
@@ -192,11 +214,13 @@ async function runKeySystemTests() {
   // --------------------------------------------------------------------------
   {
     const invoiceId = `inv_test_${testSuffix}`;
-    const res = await postApi('/webhooks/sellauth', {
+    const dupPayload = {
       id: invoiceId,
       event: 'order.completed',
       data: { id: invoiceId, email: `buyer_${testSuffix}@555client.xyz` },
-    });
+    };
+    const dupSig = crypto.createHmac('sha256', SELLAUTH_SECRET).update(JSON.stringify(dupPayload)).digest('hex');
+    const res = await postApi('/webhooks/sellauth', dupPayload, { 'x-sellauth-signature': dupSig });
     const pass = res.status === 200 && res.data.message === 'Event already processed';
     results.push({ test: '11. SellAuth Webhook Idempotency', pass, details: res.data });
     console.log(`[TEST 11] Duplicate webhook idempotency: ${pass ? 'PASS' : 'FAIL'} (Message: "${res.data.message}")`);
@@ -207,11 +231,13 @@ async function runKeySystemTests() {
   // --------------------------------------------------------------------------
   {
     const invoiceId = `inv_test_${testSuffix}`;
-    const res = await postApi('/webhooks/sellauth', {
+    const refundPayload = {
       id: `refund_${testSuffix}`,
       event: 'order.refunded',
       data: { id: invoiceId },
-    });
+    };
+    const refundSig = crypto.createHmac('sha256', SELLAUTH_SECRET).update(JSON.stringify(refundPayload)).digest('hex');
+    const res = await postApi('/webhooks/sellauth', refundPayload, { 'x-sellauth-signature': refundSig });
 
     const { data: refundedLic } = await sbAdmin
       .from('licenses')

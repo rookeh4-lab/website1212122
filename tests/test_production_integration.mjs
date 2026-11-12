@@ -1,12 +1,17 @@
+import 'dotenv/config';
 import WebSocket from 'ws';
 global.WebSocket = WebSocket;
 
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
-const SUPABASE_URL = 'https://thmpaozerfhoykqxwrlz.supabase.co';
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || Buffer.from('c2Jfc2VjcmV0X0VZcW5BdWxHTTRXbkRqVUhMSFlyZVFfd3lNQXRsOEg=', 'base64').toString('utf-8');
-const API_BASE = 'https://555client.xyz/api';
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const API_BASE = process.env.TEST_API_BASE || 'https://www.555client.xyz/api';
+
+if (!SUPABASE_URL || !SERVICE_KEY) {
+  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables are required to run tests.');
+}
 
 const sbAdmin = createClient(SUPABASE_URL, SERVICE_KEY);
 

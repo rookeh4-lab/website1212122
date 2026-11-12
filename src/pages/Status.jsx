@@ -2,31 +2,41 @@ import React, { useState, useEffect } from 'react';
 import { API_BASE } from '../utils/api';
 
 export default function Status() {
-  const [headline, setHeadline] = useState('All Systems Fully Operational');
-  const [latency, setLatency] = useState('24 ms');
-  const [dbStatus, setDbStatus] = useState('Connected');
-  const [lastCheck, setLastCheck] = useState('Last checked: just now');
+  const [overallState, setOverallState] = useState('checking'); // 'online' | 'degraded' | 'offline' | 'checking'
+  const [headline, setHeadline] = useState('Checking System Health...');
+  const [latency, setLatency] = useState('—');
+  const [dbStatus, setDbStatus] = useState('Checking...');
+  const [lastCheck, setLastCheck] = useState('Checking now...');
 
   const checkHealth = async () => {
     const start = performance.now();
     try {
-      const res = await fetch(`${API_BASE}/health`);
-      const ms = Math.round(performance.now() - start);
-      const data = await res.json();
-      if (res.ok && data.status === 'ok') {
-        setHeadline('All Systems Fully Operational');
-        setLatency(`${ms} ms`);
-        setDbStatus(data.db === 'connected' ? 'Connected' : 'Connected');
-        setLastCheck(`Last checked: ${new Date().toLocaleTimeString()} (${ms}ms)`);
+      const res = await fetch(`${API_BASE}/health`, { cache: 'no-store' });
+      const ms = Math.max(1, Math.round(performance.now() - start));
+      const data = await res.json().catch(() => ({}));
+      const apiUp = res.ok && (data.status === 'online' || data.status === 'ok');
+      const dbUp = data.db === 'connected';
+
+      setLatency(`${ms} ms`);
+      setDbStatus(dbUp ? 'Connected' : 'Degraded');
+      setLastCheck(`Last checked: ${new Date().toLocaleTimeString()} (${ms}ms)`);
+
+      if (apiUp && dbUp) {
+        setOverallState('online');
+        setHeadline('All Core Services Operational');
+      } else if (res.ok || data.status === 'degraded') {
+        setOverallState('degraded');
+        setHeadline('Partial Service Degradation');
       } else {
-        setHeadline('All Systems Fully Operational');
-        setLatency('24 ms');
-        setLastCheck(`Last checked: ${new Date().toLocaleTimeString()} (24ms)`);
+        setOverallState('offline');
+        setHeadline('API Service Unavailable');
       }
     } catch {
-      setHeadline('All Systems Fully Operational');
-      setLatency('28 ms');
-      setLastCheck(`Last checked: ${new Date().toLocaleTimeString()} (28ms)`);
+      setOverallState('offline');
+      setHeadline('Unable to Reach API Server');
+      setLatency('—');
+      setDbStatus('Unreachable');
+      setLastCheck(`Last check failed: ${new Date().toLocaleTimeString()}`);
     }
   };
 
@@ -35,6 +45,13 @@ export default function Status() {
     const interval = setInterval(checkHealth, 15000);
     return () => clearInterval(interval);
   }, []);
+
+  const statusColor =
+    overallState === 'online'
+      ? '#10b981'
+      : overallState === 'degraded' || overallState === 'checking'
+      ? '#f59e0b'
+      : '#ef4444';
 
   return (
     <div className="container" style={{ maxWidth: '800px', padding: '60px 20px' }}>
@@ -64,7 +81,7 @@ export default function Status() {
             gap: '10px',
             fontSize: '20px',
             fontWeight: 700,
-            color: '#10b981',
+            color: statusColor,
           }}
         >
           <span
@@ -72,8 +89,8 @@ export default function Status() {
               width: 10,
               height: 10,
               borderRadius: '50%',
-              background: '#10b981',
-              boxShadow: '0 0 12px #10b981',
+              background: statusColor,
+              boxShadow: `0 0 12px ${statusColor}`,
             }}
           />
           <span>{headline}</span>
@@ -100,7 +117,7 @@ export default function Status() {
               5.55 Client API
             </div>
             <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-              api.555client.com
+              www.555client.xyz/api/health
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -113,7 +130,9 @@ export default function Status() {
             >
               {latency}
             </span>
-            <span className="badge badge-success">Operational</span>
+            <span className={`badge ${overallState === 'online' ? 'badge-success' : 'badge-warning'}`}>
+              {overallState === 'online' ? 'Operational' : overallState === 'degraded' ? 'Degraded' : overallState === 'checking' ? 'Checking' : 'Offline'}
+            </span>
           </div>
         </div>
 
@@ -133,11 +152,11 @@ export default function Status() {
               Database
             </div>
             <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-              Core Data Store
+              Core Supabase Data Store
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="badge badge-success">{dbStatus}</span>
+            <span className={`badge ${dbStatus === 'Connected' ? 'badge-success' : 'badge-warning'}`}>{dbStatus}</span>
           </div>
         </div>
 
@@ -154,14 +173,14 @@ export default function Status() {
         >
           <div>
             <div style={{ fontWeight: 700, color: '#fff', fontSize: '15px' }}>
-              Discord Bot
+              Discord OAuth &amp; Community
             </div>
             <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-              Community & Verification Services
+              OAuth2 Sign-In &amp; Community Discord
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="badge badge-success">Online</span>
+            <span className="badge badge-success">Integrated</span>
           </div>
         </div>
 
@@ -178,14 +197,14 @@ export default function Status() {
         >
           <div>
             <div style={{ fontWeight: 700, color: '#fff', fontSize: '15px' }}>
-              Stripe Payments
+              SellAuth Checkout
             </div>
             <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-              Payment Processing Gateway
+              Digital License Checkout &amp; Webhook Delivery
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="badge badge-success">Operational</span>
+            <span className="badge badge-success">External Hosted</span>
           </div>
         </div>
       </div>

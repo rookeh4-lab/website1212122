@@ -28,7 +28,7 @@ export default function Home() {
             data-aos-delay="100"
             data-aos-duration="600"
           >
-            Stealth by design. Best Performance. Every gamemode covered.
+            Independent third-party Fabric 1.21.11 single-player utility mod for Minecraft (Windows x64). Not affiliated with Mojang AB or Microsoft.
           </p>
 
           <div

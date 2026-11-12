@@ -3,6 +3,16 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://cdn.discordapp.com https://i.ytimg.com https://thmpaozerfhoykqxwrlz.supabase.co; media-src 'self' blob: https://thmpaozerfhoykqxwrlz.supabase.co; connect-src 'self' https://www.555client.xyz https://thmpaozerfhoykqxwrlz.supabase.co wss://thmpaozerfhoykqxwrlz.supabase.co; frame-src https://www.youtube.com https://www.youtube-nocookie.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self' https://discord.com https://lama-co.mysellauth.com; upgrade-insecure-requests"
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api/:splat"

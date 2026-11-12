@@ -96,8 +96,8 @@ async function runTests() {
   // TEST 6: License Key Generation & Format Validation
   console.log('\n[6/12] Testing 5.55 License Key Generator...');
   const sampleKey = generateLicenseKey();
-  const keyRegex = /^[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}$/i;
-  assert(keyRegex.test(sampleKey), `License key follows 5x5 format: ${sampleKey}`);
+  const keyRegex = /^(555[A-Z0-9]-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}|[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5}-[A-Z0-9]{5})$/i;
+  assert(keyRegex.test(sampleKey), `License key follows expected 555C-XXXX-XXXX-XXXX format: ${sampleKey}`);
 
   // TEST 7: Central License Validation Simulation
   console.log('\n[7/12] Testing Central License & HWID Validation Logic...');

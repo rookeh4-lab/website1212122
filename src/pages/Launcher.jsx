@@ -26,7 +26,8 @@ export default function Launcher() {
         setUser(profile.user);
         const token = await auth.getToken();
         const res = await fetch(`${API_BASE}/user/licenses`, {
-          headers: { Authorization: `Bearer ${token}` },
+          credentials: 'include',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         const data = await res.json();
         if (active && data.licenses) {
@@ -55,29 +56,25 @@ export default function Launcher() {
   const handleLaunch = async () => {
     if (!activeLicenseForProduct) return;
     setLaunching(true);
-    setLaunchLog('Initializing 5.55 Security Sandbox...\nConnecting to Supabase License Gateway...\n');
+    setLaunchLog('Checking release manifest and download readiness...\n');
 
     try {
-      const token = await auth.getToken();
-      // Step 1: Validate license
-      const res = await fetch(`${API_BASE}/licenses/validate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          license_key: activeLicenseForProduct.license_key,
-          hwid: 'LAUNCHER-' + (user?.id ? user.id.substring(0, 12) : 'CLIENT'),
-          client_type: selectedProduct === 'java-client' ? 'java' : 'cpp',
-        }),
-      });
-      const data = await res.json();
-
-      if (data.valid) {
-        setLaunchLog((prev) => prev + `✓ License Authenticated [${data.product_slug}]\n✓ Ed25519 Signature Verified\n✓ Session token granted: ${data.session_token.substring(0, 8)}...\nStarting target process...\n[5.55 Client] Injected successfully! Have fun.`);
+      const res = await fetch(`${API_BASE}/updates/${selectedProduct}/manifest`);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.version) {
+        setUpdateStatus(data);
+        setLaunchLog(
+          (prev) =>
+            prev +
+            `✓ Active License Verified (${activeLicenseForProduct.license_type})\n` +
+            `✓ Latest Release: v${data.version} (MC ${data.min_mc_version || '1.21.11'}–${data.max_mc_version || '1.21.11'})\n` +
+            `→ Web browsers cannot launch or inject local executables. Use "Download Package" or visit /download or /dashboard to download SyndicateLoader.exe and launch it manually on Windows.`
+        );
       } else {
-        setLaunchLog((prev) => prev + `✗ Launch rejected: ${data.error || 'Validation failed'}`);
+        setLaunchLog((prev) => prev + `✗ Unable to load release manifest right now.`);
       }
     } catch {
-      setLaunchLog((prev) => prev + '✗ Network error communicating with licensing server.');
+      setLaunchLog((prev) => prev + '✗ Network error communicating with update server.');
     } finally {
       setLaunching(false);
     }
@@ -353,7 +350,7 @@ export default function Launcher() {
                 >
                   <p style={{ margin: '0 0 10px', fontWeight: 600 }}>No license registered for this product.</p>
                   <Link to="/checkout" className="btn btn-primary btn-sm" style={{ padding: '6px 14px' }}>
-                    Purchase License ($19.99)
+                    View Plans ($2.00+)
                   </Link>
                 </div>
               )}
@@ -398,7 +395,7 @@ export default function Launcher() {
                     boxShadow: '0 4px 20px rgba(99, 102, 241, 0.4)',
                   }}
                 >
-                  {launching ? 'Injecting 5.55…' : '▶ LAUNCH & INJECT'}
+                  {launching ? 'Checking Release...' : 'Check Latest Release & Setup'}
                 </button>
               ) : (
                 <Link
