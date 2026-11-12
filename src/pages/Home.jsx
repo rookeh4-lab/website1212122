@@ -40,9 +40,9 @@ export default function Home() {
             <a href="#pricing" className="btn btn-primary btn-lg">
               Get Started Now
             </a>
-            <Link to="/trial" className="btn btn-secondary btn-lg">
-              Try free for 3 days
-            </Link>
+            <a href="#pricing" className="btn btn-secondary btn-lg">
+              View Plans &amp; Pricing
+            </a>
           </div>
 
           <div
@@ -252,32 +252,41 @@ export default function Home() {
             className="cta-box"
             data-aos="fade-up"
             data-aos-duration="600"
-            style={{ marginTop: 48, padding: '40px 28px' }}
+            style={{ marginTop: 48, padding: '40px 28px', border: '1px solid rgba(245, 158, 11, 0.35)' }}
           >
-            <p className="section-tag" style={{ marginBottom: 10 }}>
-              Free Trial
+            <p
+              className="section-tag"
+              style={{
+                marginBottom: 10,
+                display: 'inline-block',
+                background: 'rgba(245, 158, 11, 0.15)',
+                color: '#fbbf24',
+                borderColor: 'rgba(245, 158, 11, 0.4)',
+              }}
+            >
+              ⏸ Free Trial · Temporarily On Hold
             </p>
             <h3 className="cta-title" style={{ fontSize: 28, marginBottom: 10 }}>
-              Not ready to buy?
+              Free Trials Are On Hold
             </h3>
             <p
               className="cta-desc"
               style={{
                 marginBottom: 24,
-                maxWidth: 440,
+                maxWidth: 480,
                 marginLeft: 'auto',
                 marginRight: 'auto',
               }}
             >
-              Start a free 3-day trial with your Discord account. Same client, no payment required.
+              Free trial activations are temporarily on hold while updates are being finalized. Check our pricing plans below or visit Discord for announcements.
             </p>
             <div className="cta-actions">
-              <Link to="/trial" className="btn btn-primary btn-lg">
-                Start free trial
-              </Link>
-              <a href="#pricing" className="btn btn-secondary btn-lg">
-                See plans
+              <a href="#pricing" className="btn btn-primary btn-lg">
+                View Available Plans
               </a>
+              <Link to="/trial" className="btn btn-secondary btn-lg">
+                Trial Status
+              </Link>
             </div>
           </div>
         </div>

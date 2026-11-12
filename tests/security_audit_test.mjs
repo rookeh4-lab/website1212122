@@ -241,7 +241,8 @@ async function runHttpSecurityTests() {
     const trialInfoRes = await fetch(`${baseUrl}/api/trials/info`);
     assert.equal(trialInfoRes.status, 200);
     const trialInfo = await trialInfoRes.json();
-    assert.equal(trialInfo.enabled, true);
+    assert.equal(trialInfo.enabled, false);
+    assert.equal(trialInfo.on_hold, true);
     assert.equal(trialInfo.durationDays, 3);
 
     const unauthTrialMy = await fetch(`${baseUrl}/api/trials/my`);
@@ -289,11 +290,25 @@ async function runHttpSecurityTests() {
       assert.equal(preTrialRes.status, 200);
       assert.equal((await preTrialRes.json()).trial, null);
 
+      // Verify trial claim is blocked while trials are on hold
+      const onHoldClaimRes = await fetch(`${baseUrl}/api/trials/claim`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({}),
+      });
+      assert.equal(onHoldClaimRes.status, 403);
+      const onHoldJson = await onHoldClaimRes.json();
+      assert.equal(onHoldJson.on_hold, true);
+      console.log('[PASS] Free trial on-hold enforcement verified (403 on hold)');
+
+      // Allow test claim execution to verify subsequent license & HWID mechanics
+      process.env.ALLOW_TEST_TRIAL_CLAIM = '1';
       const claimRes = await fetch(`${baseUrl}/api/trials/claim`, {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({}),
       });
+      delete process.env.ALLOW_TEST_TRIAL_CLAIM;
       assert.equal(claimRes.status, 201);
       const claimed = (await claimRes.json()).trial;
       assert.ok(claimed?.licenseKey?.startsWith('555C-'), 'Trial key must use 555C- format');

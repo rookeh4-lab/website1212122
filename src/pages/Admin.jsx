@@ -66,6 +66,13 @@ export default function Admin() {
   const [generatingResetKey, setGeneratingResetKey] = useState(false);
   const [copiedResetKey, setCopiedResetKey] = useState('');
 
+  // Free Trial Program settings state
+  const [trialSettings, setTrialSettings] = useState({
+    on_hold: true,
+    hold_message: 'Free trials are temporarily on hold while updates are being finalized.',
+  });
+  const [savingTrialSettings, setSavingTrialSettings] = useState(false);
+
   useEffect(() => {
     let active = true;
     const checkAdmin = async () => {
@@ -134,6 +141,12 @@ export default function Admin() {
       const data = await res.json();
       if (data.success && data.products) {
         setAdminProducts(data.products);
+        if (data.settings?.trials) {
+          setTrialSettings({
+            on_hold: data.settings.trials.on_hold !== undefined ? Boolean(data.settings.trials.on_hold) : true,
+            hold_message: data.settings.trials.hold_message || 'Free trials are temporarily on hold while updates are being finalized.',
+          });
+        }
       }
     } catch (err) {
       console.error('Failed to load admin products:', err);
@@ -179,6 +192,54 @@ export default function Admin() {
       }
     } catch {
       setStatusMsg({ text: 'Error toggling hold status', type: 'danger' });
+    }
+  };
+
+  const handleToggleTrialHold = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/trials/toggle-hold`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: adminHeaders(token, true),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setStatusMsg({
+          text: `Free trials are now ${data.on_hold ? 'ON HOLD (Claims Paused)' : 'ACTIVE (Claims Open)'}!`,
+          type: 'success',
+        });
+        setTrialSettings({
+          on_hold: data.on_hold,
+          hold_message: data.hold_message || '',
+        });
+      } else {
+        setStatusMsg({ text: data.error || 'Failed to toggle trial hold status', type: 'danger' });
+      }
+    } catch {
+      setStatusMsg({ text: 'Error toggling trial hold status', type: 'danger' });
+    }
+  };
+
+  const handleSaveTrialSettings = async (e) => {
+    if (e) e.preventDefault();
+    setSavingTrialSettings(true);
+    try {
+      const res = await fetch(`${API_BASE}/admin/trials/settings`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: adminHeaders(token, true),
+        body: JSON.stringify(trialSettings),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setStatusMsg({ text: 'Free trial program settings saved successfully!', type: 'success' });
+      } else {
+        setStatusMsg({ text: data.error || 'Failed to save trial settings', type: 'danger' });
+      }
+    } catch {
+      setStatusMsg({ text: 'Error saving trial settings', type: 'danger' });
+    } finally {
+      setSavingTrialSettings(false);
     }
   };
 
@@ -797,6 +858,84 @@ export default function Admin() {
                 );
               })}
             </div>
+          </div>
+
+          {/* Section: Free Trial Program & Hold Controls */}
+          <div
+            className="card"
+            style={{
+              padding: '24px 28px',
+              background: 'var(--bg-card)',
+              border: `1px solid ${trialSettings.on_hold ? 'rgba(245, 158, 11, 0.4)' : 'rgba(34, 197, 94, 0.3)'}`,
+              borderRadius: '16px',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#fff', margin: 0 }}>
+                    3-Day Free Trial Program
+                  </h2>
+                  <span
+                    style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      padding: '3px 10px',
+                      borderRadius: '9999px',
+                      background: trialSettings.on_hold ? 'rgba(245, 158, 11, 0.15)' : 'rgba(34, 197, 94, 0.15)',
+                      color: trialSettings.on_hold ? '#fbbf24' : '#4ade80',
+                      border: `1px solid ${trialSettings.on_hold ? 'rgba(245, 158, 11, 0.3)' : 'rgba(34, 197, 94, 0.3)'}`,
+                    }}
+                  >
+                    {trialSettings.on_hold ? '⏸ ON HOLD (Claims Paused)' : '🟢 ACTIVE (Claims Open)'}
+                  </span>
+                </div>
+                <div style={{ fontSize: '12.5px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Control public 3-day automated free trial claims without restarting servers.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleToggleTrialHold}
+                className="btn btn-sm"
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '12.5px',
+                  fontWeight: 700,
+                  background: trialSettings.on_hold ? 'rgba(34, 197, 94, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                  color: trialSettings.on_hold ? '#4ade80' : '#fbbf24',
+                  border: `1px solid ${trialSettings.on_hold ? 'rgba(34, 197, 94, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`,
+                  cursor: 'pointer',
+                }}
+              >
+                {trialSettings.on_hold ? '▶ Resume Free Trials' : '⏸ Put Free Trials On Hold'}
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTrialSettings} style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '260px' }}>
+                <label className="form-label" style={{ fontSize: '11.5px', marginBottom: '6px' }}>
+                  Notice Shown to Users While On Hold
+                </label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={trialSettings.hold_message || ''}
+                  onChange={(e) => setTrialSettings({ ...trialSettings, hold_message: e.target.value })}
+                  placeholder="e.g. Free trials are temporarily on hold while updates are being finalized."
+                  style={{ padding: '9px 12px', fontSize: '13px' }}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={savingTrialSettings}
+                className="btn btn-secondary btn-sm"
+                style={{ padding: '9px 18px', fontSize: '12.5px', fontWeight: 600, height: '39px' }}
+              >
+                {savingTrialSettings ? 'Saving...' : '💾 Save Notice'}
+              </button>
+            </form>
           </div>
 
           {/* Section 2: Upload / Replace Client File (JAR / EXE) */}

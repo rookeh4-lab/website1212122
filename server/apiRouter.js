@@ -2348,7 +2348,15 @@ async function getSiteSettings() {
     if (dl?.data) {
       const text = await dl.data.text();
       const parsed = JSON.parse(text);
-      if (parsed && typeof parsed === 'object') return parsed;
+      if (parsed && typeof parsed === 'object') {
+        if (!parsed.trials) {
+          parsed.trials = {
+            on_hold: true,
+            hold_message: 'Free trials are temporarily on hold while updates are being finalized.',
+          };
+        }
+        return parsed;
+      }
     }
   } catch (e) {
     // Ignore fallback
@@ -2358,6 +2366,10 @@ async function getSiteSettings() {
       'cpp-client': { on_hold: true, hold_message: '5.55 Injection is currently on hold while updates are being finalized.' },
       'java-client': { on_hold: false },
       'external': { on_hold: true, hold_message: '5.55 External is currently on hold.' }
+    },
+    trials: {
+      on_hold: true,
+      hold_message: 'Free trials are temporarily on hold while updates are being finalized.'
     }
   };
 }
@@ -3620,6 +3632,56 @@ router.post('/admin/products/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// POST /api/admin/trials/toggle-hold
+router.post('/admin/trials/toggle-hold', requireAdmin, async (req, res) => {
+  try {
+    const settings = await getSiteSettings();
+    if (!settings.trials) settings.trials = {};
+    const cur = settings.trials.on_hold !== undefined ? Boolean(settings.trials.on_hold) : true;
+    settings.trials.on_hold = !cur;
+    if (!settings.trials.hold_message) {
+      settings.trials.hold_message = 'Free trials are temporarily on hold while updates are being finalized.';
+    }
+    settings.updated_at = new Date().toISOString();
+    await saveSiteSettings(settings);
+
+    try {
+      await supabaseAdmin.from('audit_logs').insert({
+        action: settings.trials.on_hold ? 'TRIALS_PUT_ON_HOLD' : 'TRIALS_RELEASED_HOLD',
+        entity_type: 'trial_program',
+        entity_id: '3-day-trial',
+        metadata: { on_hold: !cur, admin: req.user.email },
+      });
+    } catch (_) {}
+
+    return res.json({
+      success: true,
+      on_hold: !cur,
+      hold_message: settings.trials.hold_message,
+      trials: settings.trials,
+    });
+  } catch (err) {
+    return serverError(res, 'AdminToggleTrialHold Error', err);
+  }
+});
+
+// POST /api/admin/trials/settings
+router.post('/admin/trials/settings', requireAdmin, async (req, res) => {
+  try {
+    const { on_hold, hold_message } = req.body;
+    const settings = await getSiteSettings();
+    if (!settings.trials) settings.trials = {};
+    if (on_hold !== undefined) settings.trials.on_hold = Boolean(on_hold);
+    if (hold_message !== undefined) settings.trials.hold_message = String(hold_message).trim();
+    settings.updated_at = new Date().toISOString();
+    await saveSiteSettings(settings);
+
+    return res.json({ success: true, trials: settings.trials });
+  } catch (err) {
+    return serverError(res, 'AdminUpdateTrialSettings Error', err);
+  }
+});
+
 // GET /api/admin/releases
 router.get('/admin/releases', requireAdmin, async (req, res) => {
   try {
@@ -3821,14 +3883,31 @@ function formatTrialLicense(lic, productFallback = null) {
 }
 
 // GET /api/trials/info (Public trial configuration)
-router.get('/trials/info', (_req, res) => {
-  return res.json({
-    enabled: true,
-    durationDays: 3,
-    durationLabel: '3 days',
-    productSlug: 'cpp-client',
-    productName: '5.55 C++ Client',
-  });
+router.get('/trials/info', async (_req, res) => {
+  try {
+    const settings = await getSiteSettings();
+    const trialConf = settings.trials || {};
+    const isOnHold = trialConf.on_hold !== undefined ? Boolean(trialConf.on_hold) : true;
+    return res.json({
+      enabled: !isOnHold,
+      on_hold: isOnHold,
+      hold_message: trialConf.hold_message || 'Free trials are temporarily on hold while updates are being finalized.',
+      durationDays: 3,
+      durationLabel: '3 days',
+      productSlug: 'cpp-client',
+      productName: '5.55 C++ Client',
+    });
+  } catch {
+    return res.json({
+      enabled: false,
+      on_hold: true,
+      hold_message: 'Free trials are temporarily on hold.',
+      durationDays: 3,
+      durationLabel: '3 days',
+      productSlug: 'cpp-client',
+      productName: '5.55 C++ Client',
+    });
+  }
 });
 
 // GET /api/trials/my (Fetch authenticated user's trial license, if any)
@@ -3872,6 +3951,16 @@ router.post('/trials/claim', rateLimitTrial, requireAuth, async (req, res) => {
   }
 
   try {
+    const settings = await getSiteSettings();
+    const trialConf = settings.trials || {};
+    const isOnHold = trialConf.on_hold !== undefined ? Boolean(trialConf.on_hold) : true;
+    if (isOnHold && process.env.ALLOW_TEST_TRIAL_CLAIM !== '1') {
+      return res.status(403).json({
+        error: trialConf.hold_message || 'Free trials are temporarily on hold while updates are being finalized. Please check back later or purchase a plan.',
+        on_hold: true,
+      });
+    }
+
     const clientIp = getClientIp(req);
     const ipHash = sha256(`trial-ip:${clientIp}`);
     const cleanInvite =

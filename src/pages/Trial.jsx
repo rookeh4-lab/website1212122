@@ -400,6 +400,73 @@ export default function Trial() {
               </Link>
             </div>
           </div>
+        ) : info.on_hold || !info.enabled ? (
+          <div style={{ ...cardStyle, textAlign: 'center', padding: '48px 24px', border: '1px solid rgba(245, 158, 11, 0.4)' }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 14px',
+                borderRadius: 9999,
+                background: 'rgba(245, 158, 11, 0.15)',
+                border: '1px solid rgba(245, 158, 11, 0.4)',
+                color: '#fbbf24',
+                fontSize: 12.5,
+                fontWeight: 700,
+                marginBottom: 16,
+              }}
+            >
+              <span>⏸</span> Free Trials Temporarily On Hold
+            </div>
+            <h3 style={{ fontSize: 22, fontWeight: 800, color: '#fff', margin: '0 0 10px' }}>
+              Free Trial Program Is Currently Paused
+            </h3>
+            <p style={{ ...subTextStyle, maxWidth: 480, margin: '0 auto 24px', lineHeight: 1.6 }}>
+              {info.hold_message || 'Free trial activations are temporarily on hold while updates are being finalized. Paid monthly and lifetime licenses remain active.'}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <a
+                href="/#pricing"
+                style={{
+                  ...buttonStyle,
+                  background: 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)',
+                  color: '#fff',
+                  fontWeight: 700,
+                  padding: '12px 24px',
+                }}
+              >
+                View Available Plans
+              </a>
+              {isLoggedIn ? (
+                <Link
+                  to="/dashboard"
+                  style={{
+                    ...buttonStyle,
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#fff',
+                    padding: '12px 20px',
+                  }}
+                >
+                  Go to Dashboard
+                </Link>
+              ) : (
+                <Link
+                  to="/login"
+                  style={{
+                    ...buttonStyle,
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#fff',
+                    padding: '12px 20px',
+                  }}
+                >
+                  Sign In
+                </Link>
+              )}
+            </div>
+          </div>
         ) : !isLoggedIn ? (
           <div style={{ ...cardStyle, textAlign: 'center', padding: '48px 24px' }}>
             <h3 style={{ fontSize: 22, fontWeight: 700, color: '#fff', margin: '0 0 10px' }}>
