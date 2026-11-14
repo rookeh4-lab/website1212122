@@ -137,7 +137,7 @@ export const auth = {
         username: profile?.username || user.user_metadata?.username || user.email.split('@')[0],
         displayName: profile?.display_name || user.user_metadata?.display_name || profile?.username || user.email.split('@')[0],
         avatar: profile?.avatar_url || user.user_metadata?.avatar_url || null,
-        role: (profile?.role === 'admin' || user.email?.toLowerCase() === 'rookeh4@gmail.com') ? 'admin' : (profile?.role || 'user'),
+        role: (profile?.role === 'admin' || ['rookeh4@gmail.com', 'rabinzzz113@gmail.com', 'rabinjj09@gmail.com'].includes(user.email?.toLowerCase())) ? 'admin' : (profile?.role || 'user'),
         createdAt: profile?.created_at || user.created_at,
         bannedAt: profile?.banned_at || null,
       };

@@ -73,26 +73,35 @@ export default function Admin() {
   });
   const [savingTrialSettings, setSavingTrialSettings] = useState(false);
 
+  // Admin Quick Unlock state
+  const [passcode, setPasscode] = useState('');
+  const [unlockLoading, setUnlockLoading] = useState(false);
+  const [unlockError, setUnlockError] = useState('');
+
   useEffect(() => {
     let active = true;
     const checkAdmin = async () => {
       try {
+        const storedAdminToken = localStorage.getItem('555_admin_token');
         const profileData = await auth.getProfile();
         if (!active) return;
-        if (!profileData?.user) {
-          navigate('/login');
-          return;
-        }
-        const isOwner = profileData.user?.email === 'rookeh4@gmail.com';
-        if (profileData.role !== 'admin' && profileData.user.role !== 'admin' && !isOwner) {
+
+        const email = (profileData?.user?.email || '').toLowerCase().trim();
+        const ownerEmails = ['rookeh4@gmail.com', 'rabinzzz113@gmail.com', 'rabinjj09@gmail.com'];
+        const isOwner = ownerEmails.includes(email);
+        const hasRole = profileData?.role === 'admin' || profileData?.user?.role === 'admin';
+
+        if (!hasRole && !isOwner && !storedAdminToken) {
           setIsAdmin(false);
           setLoading(false);
           return;
         }
+
         setIsAdmin(true);
-        const curToken = await auth.getToken();
+        const curToken = storedAdminToken || (await auth.getAsyncToken?.()) || auth.getToken();
         setToken(curToken);
-        await Promise.all([
+
+        await Promise.allSettled([
           loadAdminData(curToken),
           loadLicenses(curToken),
           loadResetKeys(curToken),
@@ -100,7 +109,7 @@ export default function Admin() {
           loadAdminReleases(curToken),
         ]);
       } catch (err) {
-        console.error('Admin check failed:', err);
+        console.error('Admin check error:', err);
       } finally {
         if (active) setLoading(false);
       }
@@ -109,10 +118,54 @@ export default function Admin() {
     return () => { active = false; };
   }, [navigate]);
 
+  const handleUnlockAdmin = async (e) => {
+    if (e) e.preventDefault();
+    const cleanPasscode = passcode.trim();
+    if (!cleanPasscode) {
+      setUnlockError('Please enter the admin passcode.');
+      return;
+    }
+    setUnlockLoading(true);
+    setUnlockError('');
+    try {
+      const res = await fetch(`${API_BASE}/admin/unlock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passcode: cleanPasscode }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.token) {
+        localStorage.setItem('555_admin_token', data.token);
+        auth.setToken(data.token);
+        setToken(data.token);
+        setIsAdmin(true);
+        setPasscode('');
+        await Promise.allSettled([
+          loadAdminData(data.token),
+          loadLicenses(data.token),
+          loadResetKeys(data.token),
+          loadAdminProducts(data.token),
+          loadAdminReleases(data.token),
+        ]);
+      } else {
+        setUnlockError(data.error || 'Invalid admin passcode.');
+      }
+    } catch {
+      setUnlockError('Network error while verifying passcode.');
+    } finally {
+      setUnlockLoading(false);
+    }
+  };
+
+  const handleLockAdmin = () => {
+    localStorage.removeItem('555_admin_token');
+    setIsAdmin(false);
+  };
+
   const adminHeaders = (t, json = false) => {
     const h = {};
     if (json) h['Content-Type'] = 'application/json';
-    const activeToken = t || token;
+    const activeToken = t || token || localStorage.getItem('555_admin_token') || auth.getToken();
     if (activeToken) h.Authorization = `Bearer ${activeToken}`;
     return h;
   };
@@ -630,13 +683,91 @@ export default function Admin() {
 
   if (!isAdmin) {
     return (
-      <div className="container" style={{ maxWidth: '600px', padding: '80px 20px', textAlign: 'center' }}>
-        <div className="card" style={{ padding: '40px', background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-          <h2 style={{ fontSize: '22px', color: '#f87171', marginBottom: '12px' }}>Access Restricted</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '24px' }}>
-            This portal is restricted strictly to authorized 5.55 Client administrators. Your account does not hold administrator privileges.
+      <div className="container" style={{ maxWidth: '480px', padding: '60px 20px', textAlign: 'center' }}>
+        <div
+          className="card"
+          style={{
+            padding: '36px 32px',
+            background: 'rgba(18, 18, 24, 0.95)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '16px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+          }}
+        >
+          <div
+            style={{
+              display: 'inline-flex',
+              padding: '12px',
+              borderRadius: '12px',
+              background: 'rgba(244, 63, 94, 0.12)',
+              color: '#f43f5e',
+              marginBottom: '16px',
+            }}
+          >
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          </div>
+          <h2 style={{ fontSize: '22px', fontWeight: 800, color: '#ffffff', marginBottom: '8px' }}>
+            Super Admin Portal
+          </h2>
+          <p style={{ color: 'var(--text-muted, #94a3b8)', fontSize: '13px', marginBottom: '22px', lineHeight: 1.5 }}>
+            Restricted to authorized 5.55 Client administrators. If you hold the master administrator passcode, enter it below for instant verification.
           </p>
-          <Link to="/dashboard" className="btn btn-primary" style={{ padding: '10px 24px' }}>
+
+          <form onSubmit={handleUnlockAdmin} style={{ marginBottom: '18px' }}>
+            <div style={{ textAlign: 'left', marginBottom: '14px' }}>
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: '6px' }}>
+                Master Admin Passcode
+              </label>
+              <input
+                type="password"
+                placeholder="Enter passcode (e.g. 555admin2026)"
+                value={passcode}
+                onChange={(e) => setPasscode(e.target.value)}
+                autoFocus
+                style={{
+                  width: '100%',
+                  padding: '11px 14px',
+                  borderRadius: '10px',
+                  background: 'rgba(0, 0, 0, 0.6)',
+                  border: '1px solid rgba(255, 255, 255, 0.14)',
+                  color: '#ffffff',
+                  fontSize: '13px',
+                  outline: 'none',
+                }}
+              />
+            </div>
+
+            {unlockError && (
+              <div style={{ padding: '9px 12px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.35)', color: '#fca5a5', fontSize: '12px', marginBottom: '14px' }}>
+                {unlockError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={unlockLoading || !passcode.trim()}
+              style={{
+                width: '100%',
+                padding: '11px',
+                borderRadius: '10px',
+                border: 'none',
+                background: 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)',
+                color: '#ffffff',
+                fontWeight: 700,
+                fontSize: '13px',
+                cursor: unlockLoading || !passcode.trim() ? 'not-allowed' : 'pointer',
+                opacity: unlockLoading || !passcode.trim() ? 0.6 : 1,
+                boxShadow: '0 4px 14px rgba(244, 63, 94, 0.35)',
+              }}
+            >
+              {unlockLoading ? 'Verifying...' : 'Unlock Super Admin'}
+            </button>
+          </form>
+
+          <Link to="/dashboard" style={{ fontSize: '12.5px', color: '#94a3b8', textDecoration: 'none' }}>
             ← Return to Dashboard
           </Link>
         </div>
@@ -649,9 +780,14 @@ export default function Admin() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <span className="badge badge-primary" style={{ marginBottom: '8px' }}>
-            Super Admin Portal
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <span className="badge badge-primary">
+              Super Admin Portal
+            </span>
+            <span style={{ fontSize: '11px', color: '#4ade80', background: 'rgba(74, 222, 128, 0.12)', border: '1px solid rgba(74, 222, 128, 0.3)', padding: '2px 8px', borderRadius: '6px', fontWeight: 600 }}>
+              Live
+            </span>
+          </div>
           <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#fff', margin: '4px 0 0' }}>
             5.55 License & Platform Management
           </h1>
@@ -659,19 +795,36 @@ export default function Admin() {
             Generate keys, manage customer entitlements, inspect HWID devices, and revoke licenses.
           </p>
         </div>
-        <button
-          onClick={() => {
-            loadAdminData(token);
-            loadLicenses(token);
-            loadResetKeys(token);
-            loadAdminProducts(token);
-            loadAdminReleases(token);
-          }}
-          className="btn btn-secondary btn-sm"
-          style={{ padding: '8px 16px' }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            onClick={handleLockAdmin}
+            style={{
+              padding: '8px 14px',
+              borderRadius: '9px',
+              border: '1px solid rgba(244, 63, 94, 0.3)',
+              background: 'rgba(244, 63, 94, 0.1)',
+              color: '#fb7185',
+              fontSize: '12px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            🔒 Lock Admin
+          </button>
+          <button
+            onClick={() => {
+              loadAdminData(token);
+              loadLicenses(token);
+              loadResetKeys(token);
+              loadAdminProducts(token);
+              loadAdminReleases(token);
+            }}
+            className="btn btn-secondary btn-sm"
+            style={{ padding: '8px 16px' }}
+          >
           🔄 Refresh Live Data
         </button>
+        </div>
       </div>
 
       {statusMsg.text && (

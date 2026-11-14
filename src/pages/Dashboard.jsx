@@ -742,7 +742,7 @@ export default function Dashboard() {
               Quick Links
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              {user?.role === 'admin' && (
+              {(user?.role === 'admin' || ['rookeh4@gmail.com', 'rabinzzz113@gmail.com', 'rabinjj09@gmail.com'].includes(user?.email?.toLowerCase()) || Boolean(localStorage.getItem('555_admin_token'))) && (
                 <Link
                   to="/admin"
                   style={{
@@ -986,7 +986,7 @@ export default function Dashboard() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            {user?.role === 'admin' && (
+            {(user?.role === 'admin' || ['rookeh4@gmail.com', 'rabinzzz113@gmail.com', 'rabinjj09@gmail.com'].includes(user?.email?.toLowerCase()) || Boolean(localStorage.getItem('555_admin_token'))) && (
               <Link
                 to="/admin"
                 style={{

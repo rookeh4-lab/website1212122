@@ -165,7 +165,7 @@ export default function Navbar() {
           >
             Discord
           </a>
-          {user?.role === 'admin' && (
+          {(user?.role === 'admin' || ['rookeh4@gmail.com', 'rabinzzz113@gmail.com', 'rabinjj09@gmail.com'].includes(user?.email?.toLowerCase())) && (
             <Link
               to="/admin"
               style={{
@@ -423,7 +423,7 @@ export default function Navbar() {
                     marginBottom: '8px',
                   }}
                 >
-                  Sign In with Discord
+                  Sign In
                 </Link>
               )}
 
@@ -492,6 +492,16 @@ export default function Navbar() {
               >
                 Discord
               </a>
+              {(user?.role === 'admin' || ['rookeh4@gmail.com', 'rabinzzz113@gmail.com', 'rabinjj09@gmail.com'].includes(user?.email?.toLowerCase())) && (
+                <Link
+                  to="/admin"
+                  onClick={() => setMobileOpen(false)}
+                  className="navbar-mobile-link"
+                  style={{ color: '#f43f5e', fontWeight: 700 }}
+                >
+                  Admin Panel
+                </Link>
+              )}
             </div>
           </>
         )}
