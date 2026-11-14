@@ -2,8 +2,8 @@ import React from 'react';
 
 const creators = [
   {
-    name: 'Error Minecraft',
-    handle: '@ErrorMinecraft-l2d',
+    name: 'blatantprovider',
+    handle: '@errorminecraft-l2d',
     avatar: '/creators/errorminecraft.png',
     url: 'https://youtube.com/@errorminecraft-l2d?si=vvVDF_pSNnHponW_',
   },
