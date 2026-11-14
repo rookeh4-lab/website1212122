@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import PricingSection from '../components/PricingSection';
 import PurchaseModal from '../components/PurchaseModal';
 import VideoShowcase from '../components/VideoShowcase';
+import TrustedCreators from '../components/TrustedCreators';
 
 export default function Home() {
   const [modalState, setModalState] = useState({ open: false, tier: 'lifetime' });
@@ -108,6 +109,9 @@ export default function Home() {
               Instant Delivery
             </span>
           </div>
+
+          {/* Trusted by large creators */}
+          <TrustedCreators />
         </div>
       </section>
 
