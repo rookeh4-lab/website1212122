@@ -127,10 +127,10 @@ export default function Dashboard() {
 
   const extractHwid = (text) => {
     if (!text || typeof text !== 'string') return '';
-    const m1 = text.match(/Machine\s+HWID[:\s=]+([a-fA-F0-9]{32,64})/i);
+    const m1 = text.match(/Machine\s+HWID[:\s=]+([a-fA-F0-9]{16,64})/i);
     if (m1) return m1[1].toUpperCase();
 
-    const m2 = text.match(/HWID[:\s=]+([a-fA-F0-9]{32,64})/i);
+    const m2 = text.match(/HWID[:\s=]+([a-fA-F0-9]{16,64})/i);
     if (m2) return m2[1].toUpperCase();
 
     const m3 = text.match(/\b([a-fA-F0-9]{64})\b/);
@@ -138,6 +138,9 @@ export default function Dashboard() {
 
     const m4 = text.match(/\b([a-fA-F0-9]{32})\b/);
     if (m4) return m4[1].toUpperCase();
+
+    const m5 = text.match(/\b([a-fA-F0-9]{16})\b/);
+    if (m5) return m5[1].toUpperCase();
 
     return '';
   };

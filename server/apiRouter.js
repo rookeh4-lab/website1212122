@@ -1592,9 +1592,10 @@ router.post('/licenses/set-hwid', rateLimitReset, requireAuth, async (req, res) 
 
   // If user pasted log text or full log, extract the HWID automatically on the server too as a fallback!
   if (cleanHwid.length > 64 || cleanHwid.includes('\n') || cleanHwid.includes('HWID') || cleanHwid.includes(' ')) {
-    const hwidMatch = cleanHwid.match(/HWID[:\s=]+([a-fA-F0-9]{32,64})/i) ||
+    const hwidMatch = cleanHwid.match(/HWID[:\s=]+([a-fA-F0-9]{16,64})/i) ||
                       cleanHwid.match(/\b([a-fA-F0-9]{64})\b/) ||
-                      cleanHwid.match(/\b([a-fA-F0-9]{32})\b/);
+                      cleanHwid.match(/\b([a-fA-F0-9]{32})\b/) ||
+                      cleanHwid.match(/\b([a-fA-F0-9]{16})\b/);
     if (hwidMatch) {
       cleanHwid = hwidMatch[1];
     }
