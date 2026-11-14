@@ -1650,7 +1650,15 @@ router.post('/licenses/set-hwid', rateLimitReset, requireAuth, async (req, res) 
     if (devErr) throw devErr;
 
     if (existingDevices && existingDevices.length > 0) {
-      // Update existing device
+      const isOwnerOrAdmin = req.profile?.role === 'admin' || ['rookeh4@gmail.com', 'rabinzzz113@gmail.com', 'rabinjj09@gmail.com'].includes(req.user?.email?.toLowerCase());
+      if (!isOwnerOrAdmin) {
+        return res.status(400).json({
+          success: false,
+          error: 'A machine is already bound to this license. You can only reset your machine using the Reset HWID option, not directly change it.',
+        });
+      }
+
+      // Admin override:
       await supabaseAdmin
         .from('devices')
         .update({
