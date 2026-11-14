@@ -473,7 +473,7 @@ export default function Trial() {
               Sign in to Claim Trial
             </h3>
             <p style={{ ...subTextStyle, maxWidth: 440, margin: '0 auto 24px' }}>
-              Use Discord to create or open your 5.55 Client account, then instantly activate your free 3-day access.
+              Create or sign in to your 5.55 Client account, then activate your access.
             </p>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 12 }}>
               <Link
