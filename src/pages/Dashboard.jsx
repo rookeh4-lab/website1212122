@@ -111,6 +111,37 @@ export default function Dashboard() {
     licenseKey: '',
   });
 
+  const [hwidSetupModal, setHwidSetupModal] = useState({
+    open: false,
+    licenseId: '',
+    licenseKey: '',
+    currentHwid: '',
+    mode: 'direct', // 'direct' | 'log'
+    inputHwid: '',
+    logText: '',
+    detectedHwid: '',
+    loading: false,
+    error: '',
+    success: '',
+  });
+
+  const extractHwid = (text) => {
+    if (!text || typeof text !== 'string') return '';
+    const m1 = text.match(/Machine\s+HWID[:\s=]+([a-fA-F0-9]{32,64})/i);
+    if (m1) return m1[1].toUpperCase();
+
+    const m2 = text.match(/HWID[:\s=]+([a-fA-F0-9]{32,64})/i);
+    if (m2) return m2[1].toUpperCase();
+
+    const m3 = text.match(/\b([a-fA-F0-9]{64})\b/);
+    if (m3) return m3[1].toUpperCase();
+
+    const m4 = text.match(/\b([a-fA-F0-9]{32})\b/);
+    if (m4) return m4[1].toUpperCase();
+
+    return '';
+  };
+
   const loadLicenses = useCallback(async (token) => {
     try {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -358,6 +389,68 @@ export default function Dashboard() {
     }
   };
 
+  const handleSaveHwid = async (e) => {
+    if (e) e.preventDefault();
+    const rawTarget = hwidSetupModal.inputHwid || hwidSetupModal.detectedHwid || '';
+    const cleanHwid = rawTarget.trim();
+
+    if (!cleanHwid || cleanHwid.length < 16) {
+      setHwidSetupModal((prev) => ({
+        ...prev,
+        error: 'Please enter a valid HWID or paste your latest.log to detect it.',
+        success: '',
+      }));
+      return;
+    }
+
+    setHwidSetupModal((prev) => ({ ...prev, loading: true, error: '', success: '' }));
+
+    try {
+      const token = (await auth.getAsyncToken?.()) || auth.getToken();
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      const res = await fetch(`${API_BASE}/licenses/set-hwid`, {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify({
+          licenseId: hwidSetupModal.licenseId,
+          licenseKey: hwidSetupModal.licenseKey,
+          hwid: cleanHwid,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setHwidSetupModal((prev) => ({
+          ...prev,
+          loading: false,
+          success: 'Machine HWID successfully bound! You can now launch Minecraft.',
+          error: '',
+        }));
+        loadLicenses(token);
+        setTimeout(() => {
+          setHwidSetupModal((prev) => ({ ...prev, open: false, success: '' }));
+        }, 1200);
+      } else {
+        setHwidSetupModal((prev) => ({
+          ...prev,
+          loading: false,
+          error: data.error || 'Failed to set HWID.',
+          success: '',
+        }));
+      }
+    } catch {
+      setHwidSetupModal((prev) => ({
+        ...prev,
+        loading: false,
+        error: 'Connection error while saving HWID.',
+        success: '',
+      }));
+    }
+  };
+
   const handleAuthorizedDownload = async (productSlug) => {
     setDownloadLoading(productSlug);
     setDownloadError('');
@@ -373,14 +466,26 @@ export default function Dashboard() {
         body: JSON.stringify({ product_slug: productSlug }),
       });
       const data = await res.json();
-      if (res.ok && data.authorized && data.download_url) {
+      if (res.ok && data.authorized && (data.download_url || data.direct_download_url)) {
+        const fallbackName = productSlug === 'java-client' ? 'CrosshairAddons-2.2.0+1.21.11.jar' : 'SyndicateLoader.exe';
         setDownloadMeta({
-          fileName: data.file_name || 'SyndicateLoader.exe',
-          fileSizeMb: data.file_size_bytes ? `${(data.file_size_bytes / (1024 * 1024)).toFixed(2)} MB` : '11.23 MB',
+          fileName: data.file_name || fallbackName,
+          fileSizeMb: data.file_size_bytes ? `${(data.file_size_bytes / (1024 * 1024)).toFixed(2)} MB` : '15.52 MB',
           sha256: data.sha256 || null,
           version: data.version || '1.21.11',
         });
-        window.location.href = `${API_BASE}${data.download_url.replace(/^\/api/, '')}`;
+
+        const targetUrl = data.direct_download_url || (data.download_url.startsWith('http') ? data.download_url : `${API_BASE}${data.download_url.replace(/^\/api/, '')}`);
+
+        // Direct anchor download to avoid navigation errors or single-use token bugs
+        const a = document.createElement('a');
+        a.href = targetUrl;
+        a.download = data.file_name || fallbackName;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
       } else {
         setDownloadError(data.error || 'Could not authorize download.');
       }
@@ -1695,7 +1800,7 @@ export default function Dashboard() {
                                     <strong style={{ color: '#c4b5fd' }}>Installation:</strong> Save <code style={{ color: '#ffffff' }}>CrosshairAddons-2.2.0+1.21.11.jar</code> into your <code style={{ color: '#ffffff' }}>.minecraft/mods</code> folder.
                                   </div>
                                   <div style={{ color: '#71717a', fontSize: '11.5px', marginTop: '4px' }}>
-                                    Start Minecraft Fabric 1.21.11. Your machine hardware binds automatically on first launch.
+                                    Start Minecraft Fabric 1.21.11, then set your Machine HWID below (enter directly or paste latest.log to auto-detect).
                                   </div>
                                 </div>
                               ) : isOnHold ? (
@@ -1811,17 +1916,57 @@ export default function Dashboard() {
                                         style={{
                                           padding: '7px 14px',
                                           borderRadius: '8px',
-                                          background: 'rgba(0, 0, 0, 0.55)',
-                                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                                          background: lic.hwid ? 'rgba(0, 0, 0, 0.55)' : 'rgba(239, 68, 68, 0.12)',
+                                          border: lic.hwid ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(239, 68, 68, 0.3)',
                                           fontFamily: 'monospace',
                                           fontSize: '13px',
-                                          color: '#d4d4d8',
+                                          color: lic.hwid ? '#d4d4d8' : '#f87171',
+                                          fontWeight: 600,
                                         }}
                                       >
                                         {lic.hwid
                                           ? `${lic.hwid.slice(0, 10)}...${lic.hwid.slice(-8)}`
                                           : 'No machine bound'}
                                       </div>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => setHwidSetupModal({
+                                          open: true,
+                                          licenseId: lic.id,
+                                          licenseKey: lic.key,
+                                          currentHwid: lic.hwid || '',
+                                          mode: 'direct',
+                                          inputHwid: lic.hwid || '',
+                                          logText: '',
+                                          detectedHwid: '',
+                                          loading: false,
+                                          error: '',
+                                          success: '',
+                                        })}
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '6px',
+                                          padding: '7px 14px',
+                                          borderRadius: '8px',
+                                          border: 'none',
+                                          background: lic.hwid
+                                            ? 'rgba(168, 85, 247, 0.2)'
+                                            : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                          color: '#ffffff',
+                                          fontSize: '12.5px',
+                                          fontWeight: 700,
+                                          cursor: 'pointer',
+                                          boxShadow: lic.hwid ? 'none' : '0 2px 10px rgba(16, 185, 129, 0.35)',
+                                        }}
+                                      >
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                                          <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                                        </svg>
+                                        <span>{lic.hwid ? 'Change HWID' : 'Set Machine HWID'}</span>
+                                      </button>
+
                                       {lic.hwid && (
                                         <button
                                           type="button"
@@ -1847,42 +1992,51 @@ export default function Dashboard() {
                                           <span>{copiedKey === 'hwid' ? 'Copied' : 'Copy'}</span>
                                         </button>
                                       )}
-                                      <button
-                                        type="button"
-                                        onClick={() => setHwidModalState({
-                                          open: true,
-                                          id: lic.id,
-                                          key: lic.key,
-                                          resetKey: '',
-                                          cooldownRemaining: lic.cooldown_days_remaining || 0,
-                                          loading: false,
-                                          msg: '',
-                                          error: '',
-                                        })}
-                                        style={{
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: '6px',
-                                          padding: '7px 14px',
-                                          borderRadius: '8px',
-                                          border: '1px solid rgba(255, 255, 255, 0.12)',
-                                          background: 'rgba(255, 255, 255, 0.06)',
-                                          color: '#ffffff',
-                                          fontSize: '12.5px',
-                                          fontWeight: 600,
-                                          cursor: 'pointer',
-                                        }}
-                                      >
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                                          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-                                        </svg>
-                                        <span>Reset machine</span>
-                                      </button>
+
+                                      {lic.hwid && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setHwidModalState({
+                                            open: true,
+                                            id: lic.id,
+                                            key: lic.key,
+                                            resetKey: '',
+                                            cooldownRemaining: lic.cooldown_days_remaining || 0,
+                                            loading: false,
+                                            msg: '',
+                                            error: '',
+                                          })}
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            padding: '7px 14px',
+                                            borderRadius: '8px',
+                                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                                            background: 'rgba(255, 255, 255, 0.06)',
+                                            color: '#ffffff',
+                                            fontSize: '12.5px',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                          }}
+                                        >
+                                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                                            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+                                          </svg>
+                                          <span>Reset machine</span>
+                                        </button>
+                                      )}
                                     </div>
                                     <div style={{ fontSize: '11.5px', color: '#71717a' }}>
-                                      {lic.cooldown_days_remaining > 0
-                                        ? `Next reset available in ${lic.cooldown_days_remaining} day${lic.cooldown_days_remaining === 1 ? '' : 's'}. (One reset every 1 month)`
-                                        : 'One reset every 1 month.'}
+                                      {lic.hwid ? (
+                                        lic.cooldown_days_remaining > 0
+                                          ? `Next reset available in ${lic.cooldown_days_remaining} day${lic.cooldown_days_remaining === 1 ? '' : 's'}. (One reset every 1 month)`
+                                          : 'One reset every 1 month.'
+                                      ) : (
+                                        <span style={{ color: '#fbbf24' }}>
+                                          ⚡ Setup your HWID to unlock client launching. Enter HWID directly or paste latest.log.
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -1924,6 +2078,392 @@ export default function Dashboard() {
           })()}
         </div>
       </div>
+
+      {/* ========================================================
+          MODALS (HWID SETUP, HWID RESET, LAUNCH GUIDE, RENAME)
+          ======================================================== */}
+      {hwidSetupModal.open && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 10000,
+            background: 'rgba(0, 0, 0, 0.82)',
+            backdropFilter: 'blur(10px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !hwidSetupModal.loading) {
+              setHwidSetupModal({ ...hwidSetupModal, open: false, error: '', success: '' });
+            }
+          }}
+        >
+          <div
+            className="v2-dash-card"
+            style={{
+              maxWidth: '540px',
+              width: '100%',
+              padding: '28px',
+              background: '#130d22',
+              border: '1px solid rgba(168, 85, 247, 0.35)',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.85)',
+              borderRadius: '16px',
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+              <div>
+                <h3 style={{ fontSize: '19px', fontWeight: 800, color: '#ffffff', margin: 0 }}>
+                  Machine HWID Setup
+                </h3>
+                <div style={{ fontSize: '12px', color: '#a1a1aa', marginTop: '3px' }}>
+                  Bind your computer hardware ID to this license
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHwidSetupModal({ ...hwidSetupModal, open: false, error: '', success: '' })}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  color: '#d4d4d8',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Mode Selector Tabs */}
+            <div
+              style={{
+                display: 'flex',
+                background: 'rgba(0, 0, 0, 0.55)',
+                padding: '4px',
+                borderRadius: '10px',
+                marginBottom: '18px',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setHwidSetupModal(prev => ({ ...prev, mode: 'direct', error: '' }))}
+                style={{
+                  flex: 1,
+                  padding: '9px',
+                  fontSize: '12.5px',
+                  fontWeight: 700,
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  background: hwidSetupModal.mode === 'direct' ? 'linear-gradient(135deg, #9333ea 0%, #7c3aed 100%)' : 'transparent',
+                  color: hwidSetupModal.mode === 'direct' ? '#ffffff' : '#a1a1aa',
+                  transition: 'all 0.15s',
+                }}
+              >
+                Direct HWID Input
+              </button>
+              <button
+                type="button"
+                onClick={() => setHwidSetupModal(prev => ({ ...prev, mode: 'log', error: '' }))}
+                style={{
+                  flex: 1,
+                  padding: '9px',
+                  fontSize: '12.5px',
+                  fontWeight: 700,
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  background: hwidSetupModal.mode === 'log' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'transparent',
+                  color: hwidSetupModal.mode === 'log' ? '#ffffff' : '#a1a1aa',
+                  transition: 'all 0.15s',
+                }}
+              >
+                Auto-Detect from latest.log
+              </button>
+            </div>
+
+            {/* Mode 1: Direct HWID Input */}
+            {hwidSetupModal.mode === 'direct' && (
+              <div style={{ marginBottom: '18px' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '11.5px',
+                    fontWeight: 700,
+                    color: '#c4b5fd',
+                    marginBottom: '8px',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  ENTER HARDWARE ID (HWID)
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    placeholder="e.g. 175CDCA6D28699D8B6F8E8C78B..."
+                    value={hwidSetupModal.inputHwid}
+                    onChange={(e) => {
+                      const clean = e.target.value.toUpperCase();
+                      setHwidSetupModal(prev => ({ ...prev, inputHwid: clean, error: '' }));
+                    }}
+                    style={{
+                      flex: 1,
+                      padding: '11px 14px',
+                      borderRadius: '10px',
+                      background: 'rgba(0, 0, 0, 0.65)',
+                      border: '1px solid rgba(255, 255, 255, 0.14)',
+                      color: '#ffffff',
+                      fontFamily: 'monospace',
+                      fontSize: '13px',
+                      outline: 'none',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const txt = await navigator.clipboard.readText();
+                        if (txt) {
+                          const detected = extractHwid(txt) || txt.trim().toUpperCase();
+                          setHwidSetupModal(prev => ({ ...prev, inputHwid: detected, error: '' }));
+                        }
+                      } catch {
+                        // Fallback
+                      }
+                    }}
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      color: '#ffffff',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Paste
+                  </button>
+                </div>
+                <div style={{ fontSize: '11.5px', color: '#71717a', marginTop: '8px' }}>
+                  Must be the 64-character or 32-character hexadecimal fingerprint of your computer.
+                </div>
+              </div>
+            )}
+
+            {/* Mode 2: Auto-Detect from latest.log */}
+            {hwidSetupModal.mode === 'log' && (
+              <div style={{ marginBottom: '18px' }}>
+                <div
+                  style={{
+                    background: 'rgba(16, 185, 129, 0.08)',
+                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                    borderRadius: '10px',
+                    padding: '12px 14px',
+                    marginBottom: '14px',
+                    fontSize: '12px',
+                    color: '#d1fae5',
+                    lineHeight: 1.6,
+                  }}
+                >
+                  <strong style={{ color: '#34d399' }}>Quick 3-Step Setup:</strong>
+                  <ol style={{ margin: '6px 0 0', paddingLeft: '18px' }}>
+                    <li>Put the client jar in your <code>.minecraft/mods</code> folder.</li>
+                    <li>Launch Minecraft Fabric 1.21.11 once (to generate your HWID log).</li>
+                    <li>Open <code>.minecraft/logs/latest.log</code> and paste it below:</li>
+                  </ol>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <label
+                    style={{
+                      fontSize: '11.5px',
+                      fontWeight: 700,
+                      color: '#6ee7b7',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    PASTE LATEST.LOG
+                  </label>
+
+                  <label
+                    style={{
+                      fontSize: '11.5px',
+                      color: '#a78bfa',
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    Upload latest.log file
+                    <input
+                      type="file"
+                      accept=".log,.txt"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            const content = String(ev.target?.result || '');
+                            const detected = extractHwid(content);
+                            setHwidSetupModal(prev => ({
+                              ...prev,
+                              logText: content.slice(0, 5000),
+                              detectedHwid: detected,
+                              inputHwid: detected || prev.inputHwid,
+                              error: detected ? '' : 'No HWID detected in the uploaded file.',
+                            }));
+                          };
+                          reader.readAsText(file);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+
+                <textarea
+                  rows={4}
+                  placeholder="Paste your .minecraft/logs/latest.log text here..."
+                  value={hwidSetupModal.logText}
+                  onChange={(e) => {
+                    const text = e.target.value;
+                    const detected = extractHwid(text);
+                    setHwidSetupModal(prev => ({
+                      ...prev,
+                      logText: text,
+                      detectedHwid: detected,
+                      inputHwid: detected || prev.inputHwid,
+                      error: detected ? '' : prev.error,
+                    }));
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '11px 14px',
+                    borderRadius: '10px',
+                    background: 'rgba(0, 0, 0, 0.65)',
+                    border: hwidSetupModal.detectedHwid ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid rgba(255, 255, 255, 0.14)',
+                    color: '#ffffff',
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    outline: 'none',
+                    resize: 'vertical',
+                  }}
+                />
+
+                {hwidSetupModal.detectedHwid && (
+                  <div
+                    style={{
+                      marginTop: '10px',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      border: '1px solid rgba(16, 185, 129, 0.4)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '10px',
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#6ee7b7', fontWeight: 700, textTransform: 'uppercase' }}>
+                        ✔ HWID Auto-Detected
+                      </div>
+                      <div style={{ fontFamily: 'monospace', fontSize: '12px', color: '#ffffff', wordBreak: 'break-all' }}>
+                        {hwidSetupModal.detectedHwid}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Error & Success Messages */}
+            {hwidSetupModal.error && (
+              <div
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  background: 'rgba(239, 68, 68, 0.12)',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                  color: '#fca5a5',
+                  fontSize: '12.5px',
+                  marginBottom: '14px',
+                }}
+              >
+                {hwidSetupModal.error}
+              </div>
+            )}
+
+            {hwidSetupModal.success && (
+              <div
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '8px',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  color: '#4ade80',
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  marginBottom: '14px',
+                }}
+              >
+                ✔ {hwidSetupModal.success}
+              </div>
+            )}
+
+            {/* Footer Buttons */}
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '16px' }}>
+              <button
+                type="button"
+                onClick={() => setHwidSetupModal({ ...hwidSetupModal, open: false, error: '', success: '' })}
+                disabled={hwidSetupModal.loading}
+                style={{
+                  padding: '9px 16px',
+                  borderRadius: '9px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: 'transparent',
+                  color: '#d4d4d8',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveHwid}
+                disabled={hwidSetupModal.loading || (!hwidSetupModal.inputHwid && !hwidSetupModal.detectedHwid)}
+                style={{
+                  padding: '9px 22px',
+                  borderRadius: '9px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  color: '#ffffff',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: hwidSetupModal.loading || (!hwidSetupModal.inputHwid && !hwidSetupModal.detectedHwid) ? 'not-allowed' : 'pointer',
+                  opacity: hwidSetupModal.loading || (!hwidSetupModal.inputHwid && !hwidSetupModal.detectedHwid) ? 0.6 : 1,
+                  boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)',
+                }}
+              >
+                {hwidSetupModal.loading ? 'Saving & Binding...' : 'Save & Bind HWID'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================
           MODALS (HWID RESET, LAUNCH GUIDE, RENAME)

@@ -373,10 +373,15 @@ export default function Download() {
           <div style={{ textAlign: 'center', padding: '16px 0 24px' }}>
             <a
               href={
-                successData.download_url?.startsWith('/api')
+                successData.direct_download_url
+                  ? successData.direct_download_url
+                  : successData.download_url?.startsWith('http')
                   ? successData.download_url
-                  : `${API_BASE}${successData.download_url}`
+                  : `${API_BASE}${successData.download_url.replace(/^\/api/, '')}`
               }
+              download={successData.file_name || 'CrosshairAddons-2.2.0+1.21.11.jar'}
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -398,15 +403,15 @@ export default function Download() {
                 <polyline points="7 10 12 15 17 10" />
                 <line x1="12" y1="15" x2="12" y2="3" />
               </svg>
-              <span>Download SyndicateLoader.exe</span>
+              <span>Download {successData.file_name || '5.55 Client'}</span>
             </a>
 
             <div style={{ fontSize: '12px', color: 'var(--text-muted, #94a3b8)', marginTop: '12px' }}>
-              Package: <code>{successData.file_name || 'SyndicateLoader.exe'}</code> (
+              Package: <code>{successData.file_name || '5.55 Client'}</code> (
               {successData.file_size_bytes
                 ? `${(successData.file_size_bytes / (1024 * 1024)).toFixed(2)} MB`
-                : '11.23 MB'}
-              ) · Windows x64 Executable · Fabric 1.21.11 Single Player
+                : '15.52 MB'}
+              ) · Fabric 1.21.11 Single Player
             </div>
             {successData.sha256 && (
               <div

@@ -1585,6 +1585,129 @@ router.post('/licenses/reset-hwid', rateLimitReset, requireAuth, async (req, res
   }
 });
 
+// POST /api/licenses/set-hwid (Manual HWID Setup from Web Dashboard / Log Extraction)
+router.post('/licenses/set-hwid', rateLimitReset, requireAuth, async (req, res) => {
+  const { licenseId, licenseKey, hwid, deviceName } = req.body || {};
+  let cleanHwid = (hwid || '').trim();
+
+  // If user pasted log text or full log, extract the HWID automatically on the server too as a fallback!
+  if (cleanHwid.length > 64 || cleanHwid.includes('\n') || cleanHwid.includes('HWID') || cleanHwid.includes(' ')) {
+    const hwidMatch = cleanHwid.match(/HWID[:\s=]+([a-fA-F0-9]{32,64})/i) ||
+                      cleanHwid.match(/\b([a-fA-F0-9]{64})\b/) ||
+                      cleanHwid.match(/\b([a-fA-F0-9]{32})\b/);
+    if (hwidMatch) {
+      cleanHwid = hwidMatch[1];
+    }
+  }
+
+  cleanHwid = cleanHwid.toLowerCase();
+
+  if (!cleanHwid || !/^[a-f0-9]{16,64}$/i.test(cleanHwid)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid HWID format. HWID must be a 16 to 64 character hexadecimal string.',
+    });
+  }
+
+  try {
+    let licQuery = supabaseAdmin
+      .from('licenses')
+      .select('id, user_id, license_key, status, max_devices, metadata, products(slug, name)');
+
+    if (licenseId) {
+      licQuery = licQuery.eq('id', licenseId);
+    } else if (licenseKey) {
+      licQuery = licQuery.eq('license_key', licenseKey.trim().toUpperCase());
+    } else {
+      licQuery = licQuery.eq('user_id', req.user.id).eq('status', 'active');
+    }
+
+    if (req.isPortalKey && req.portalLicenseId) {
+      licQuery = licQuery.eq('id', req.portalLicenseId);
+    } else if (!req.profile || req.profile.role !== 'admin') {
+      licQuery = licQuery.eq('user_id', req.user.id);
+    }
+
+    const { data: license, error: licErr } = await licQuery.maybeSingle();
+    if (licErr || !license) {
+      return res.status(404).json({ success: false, error: 'License not found on your account.' });
+    }
+
+    if (license.status !== 'active') {
+      return res.status(403).json({ success: false, error: `License is ${license.status}.` });
+    }
+
+    const clientIp = getClientIp(req);
+    const resolvedDevName = (deviceName || `PC-${cleanHwid.substring(0, 8).toUpperCase()}`).trim().slice(0, 32);
+
+    // Check if device already exists for this license
+    const { data: existingDevices, error: devErr } = await supabaseAdmin
+      .from('devices')
+      .select('id, hwid')
+      .eq('license_id', license.id);
+
+    if (devErr) throw devErr;
+
+    if (existingDevices && existingDevices.length > 0) {
+      // Update existing device
+      await supabaseAdmin
+        .from('devices')
+        .update({
+          hwid: cleanHwid,
+          device_name: resolvedDevName,
+          last_seen_at: new Date().toISOString(),
+          ip_address: clientIp,
+        })
+        .eq('id', existingDevices[0].id);
+    } else {
+      // Create new device record
+      await supabaseAdmin
+        .from('devices')
+        .insert({
+          license_id: license.id,
+          user_id: license.user_id || req.user.id,
+          hwid: cleanHwid,
+          device_name: resolvedDevName,
+          client_type: 'java',
+          ip_address: clientIp,
+          registered_at: new Date().toISOString(),
+          last_seen_at: new Date().toISOString(),
+        });
+    }
+
+    // Update license metadata
+    await supabaseAdmin
+      .from('licenses')
+      .update({
+        updated_at: new Date().toISOString(),
+        metadata: {
+          ...(license.metadata || {}),
+          last_activated_hwid: cleanHwid,
+          hwid_manually_set_at: new Date().toISOString(),
+        },
+      })
+      .eq('id', license.id);
+
+    // Audit log
+    await supabaseAdmin.from('audit_logs').insert({
+      user_id: req.user.id,
+      action: 'HWID_MANUAL_SET',
+      entity_type: 'license',
+      entity_id: license.id,
+      ip_address: clientIp,
+      metadata: { hwid: cleanHwid, license_key: license.license_key },
+    });
+
+    return res.json({
+      success: true,
+      message: 'Hardware ID successfully bound to your license!',
+      hwid: cleanHwid,
+    });
+  } catch (err) {
+    return serverError(res, 'SetHwid Error', err, { success: false });
+  }
+});
+
 // POST /api/licenses/update-name
 router.post('/licenses/update-name', requireAuth, async (req, res) => {
   const { licenseKey, name } = req.body;
@@ -1708,18 +1831,12 @@ router.post('/licenses/redeem', rateLimitRedeem, async (req, res) => {
     }
 
     const product = license.products;
-    if (product.platform === 'fabric' || product.slug === 'java-client') {
-      return res.status(403).json({
-        valid: false,
-        error: 'PRODUCT_MISMATCH',
-        message: 'This license is for 5.55 Java Fabric Client. Please visit the Java download section.',
-      });
-    }
+    const isJarProduct = product.platform === 'fabric' || product.slug === 'java-client';
 
     // Find active release for this product dynamically
     const { data: activeRelease } = await supabaseAdmin
       .from('client_releases')
-      .select('id, version, sha256, storage_path')
+      .select('id, version, sha256, storage_path, file_name, file_size_bytes')
       .eq('product_id', product.id)
       .eq('is_active', true)
       .order('created_at', { ascending: false })
@@ -1754,7 +1871,7 @@ router.post('/licenses/redeem', rateLimitRedeem, async (req, res) => {
       });
     }
 
-    // Generate short-lived single-use download token (15 mins)
+    // Generate short-lived download token (15 mins)
     const token = generateToken(32);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
 
@@ -1771,7 +1888,7 @@ router.post('/licenses/redeem', rateLimitRedeem, async (req, res) => {
       return serverError(res, 'DownloadToken Insert Error', tokenInsertErr, { valid: false });
     }
 
-    // Record audit log (website redemption does NOT consume or activate the key)
+    // Record audit log
     await supabaseAdmin.from('audit_logs').insert({
       user_id: license.user_id,
       action: 'KEY_REDEEMED_FOR_DOWNLOAD',
@@ -1781,6 +1898,21 @@ router.post('/licenses/redeem', rateLimitRedeem, async (req, res) => {
       metadata: { license_key: cleanKey, product: product.slug },
     });
 
+    const defaultFileName = isJarProduct ? 'CrosshairAddons-2.2.0+1.21.11.jar' : 'SyndicateLoader.exe';
+    const defaultStorageKey = isJarProduct ? 'CrosshairAddons-2.2.0+1.21.11.jar' : 'SyndicateLoader.exe';
+
+    let directDownloadUrl = null;
+    try {
+      const { data: signedData } = await supabaseAdmin.storage
+        .from('releases')
+        .createSignedUrl(defaultStorageKey, 1800, { download: defaultFileName });
+      if (signedData?.signedUrl) {
+        directDownloadUrl = signedData.signedUrl;
+      }
+    } catch {
+      // Fallback
+    }
+
     return res.json({
       valid: true,
       authorized: true,
@@ -1788,10 +1920,11 @@ router.post('/licenses/redeem', rateLimitRedeem, async (req, res) => {
       key: cleanKey,
       product_name: product.name,
       product_slug: product.slug,
-      download_url: `/api/downloads/file/${token}`,
+      download_url: directDownloadUrl || `/api/downloads/file/${token}`,
+      direct_download_url: directDownloadUrl,
       token,
-      file_name: 'SyndicateLoader.exe',
-      file_size_bytes: 11772416,
+      file_name: defaultFileName,
+      file_size_bytes: isJarProduct ? 16282246 : 11772416,
       version: activeRelease.version || '1.21.11',
       sha256: activeRelease.sha256,
       expires_at: expiresAt,
@@ -2135,45 +2268,28 @@ const handleClientVerification = async (req, res) => {
     const boundDevice = existingDevices && existingDevices.length > 0 ? existingDevices[0] : null;
 
     if (!boundDevice) {
-      // FIRST LAUNCH! Automatically bind machine HWID to this license!
-      const newDevice = {
-        license_id: license.id,
-        user_id: license.user_id,
-        hwid: cleanHwid,
-        device_name: `PC-${cleanHwid.substring(0, 8)}`,
-        ip_address: clientIp,
-        client_type: 'java',
-        registered_at: new Date().toISOString(),
-        last_seen_at: new Date().toISOString(),
-      };
+      // Machine HWID not bound yet: Manual setup required via web dashboard!
+      return res.status(403).json({
+        valid: false,
+        code: 'HWID_NOT_BOUND',
+        errorCode: 'HWID_NOT_BOUND',
+        message: 'This machine HWID is not bound to your license yet. Please enter your HWID on your dashboard at https://www.555client.xyz/dashboard.',
+      });
+    }
 
-      await supabaseAdmin.from('devices').insert(newDevice);
+    // Device already bound! Validate exact HWID match
+    const existingHwid = boundDevice.hwid.toLowerCase();
+    if (existingHwid !== cleanHwid) {
+      // HWID MISMATCH - another PC is trying to use this jar / key!
+      return res.status(403).json({
+        valid: false,
+        code: 'HWID_MISMATCH',
+        errorCode: 'HWID_MISMATCH',
+        message: 'Hardware ID mismatch. This license is bound to another PC. You can reset or update your HWID on your dashboard at https://www.555client.xyz/dashboard.',
+      });
+    }
 
-      // Update license metadata
-      await supabaseAdmin
-        .from('licenses')
-        .update({
-          updated_at: new Date().toISOString(),
-          metadata: {
-            ...(license.metadata || {}),
-            key_state: 'ACTIVE',
-            first_activated_at: new Date().toISOString(),
-            last_activated_hwid: cleanHwid,
-          },
-        })
-        .eq('id', license.id);
-    } else {
-      // Device already bound! Validate exact HWID match
-      const existingHwid = boundDevice.hwid.toLowerCase();
-      if (existingHwid !== cleanHwid) {
-        // HWID MISMATCH - another PC is trying to use this jar / key!
-        return res.status(403).json({
-          valid: false,
-          code: 'HWID_MISMATCH',
-          errorCode: 'HWID_MISMATCH',
-          message: 'Hardware ID mismatch. This license is bound to another PC. You can reset your HWID once per month on https://www.555client.xyz/dashboard.',
-        });
-      }
+    // HWID matches: update heartbeat / last_seen_at
 
       // HWID matches: update heartbeat / last_seen_at
       await supabaseAdmin
@@ -2553,13 +2669,53 @@ router.post('/downloads/authorize', requireAuth, async (req, res) => {
     }
 
     const isJar = release?.file_type === 'jar' || product_slug === 'java-client' || release?.storage_path?.endsWith('.jar');
-    const resolvedFileName = isJar ? 'CrosshairAddons-2.2.0+1.21.11.jar' : (release?.file_name || 'SyndicateLoader.exe');
-    const resolvedFileSize = isJar ? 16284469 : (release?.file_size_bytes || 11779072);
+
+    // Personalize filename with user's account name
+    let downloadUsername = '';
+    const dlUserId = license.user_id || (req.isPortalKey ? null : req.user?.id);
+    if (dlUserId) {
+      try {
+        const { data: dlProfile } = await supabaseAdmin
+          .from('profiles')
+          .select('username, email')
+          .eq('id', dlUserId)
+          .maybeSingle();
+        downloadUsername = (dlProfile?.username || dlProfile?.email?.split('@')[0] || '').replace(/[^a-zA-Z0-9_-]/g, '');
+      } catch {
+        // Non-critical
+      }
+    }
+
+    let resolvedFileName;
+    if (isJar) {
+      resolvedFileName = downloadUsername
+        ? `CrosshairAddons-${downloadUsername}-1.21.11.jar`
+        : 'CrosshairAddons-2.2.0+1.21.11.jar';
+    } else {
+      resolvedFileName = downloadUsername
+        ? `SyndicateLoader-${downloadUsername}.exe`
+        : (release?.file_name || 'SyndicateLoader.exe');
+    }
+    const resolvedFileSize = isJar ? 16282246 : (release?.file_size_bytes || 11779072);
+
+    let directDownloadUrl = null;
+    const storageKey = isJar ? 'CrosshairAddons-2.2.0+1.21.11.jar' : (release?.storage_path?.replace(/^releases\//, '') || 'SyndicateLoader.exe');
+    try {
+      const { data: signedData } = await supabaseAdmin.storage
+        .from('releases')
+        .createSignedUrl(storageKey, 1800, { download: resolvedFileName });
+      if (signedData?.signedUrl) {
+        directDownloadUrl = signedData.signedUrl;
+      }
+    } catch {
+      // Fallback
+    }
 
     return res.json({
       authorized: true,
       token,
-      download_url: `/api/downloads/file/${token}`,
+      download_url: directDownloadUrl || `/api/downloads/file/${token}`,
+      direct_download_url: directDownloadUrl,
       file_name: resolvedFileName,
       file_size_bytes: resolvedFileSize,
       expires_at: expiresAt,
@@ -2586,7 +2742,7 @@ router.get('/downloads/file/:token', async (req, res) => {
   try {
     const { data: tokenRecord, error } = await supabaseAdmin
       .from('download_tokens')
-      .select('*, client_releases(storage_path, version)')
+      .select('*, client_releases(storage_path, version, file_type), licenses(user_id)')
       .eq('token', token)
       .maybeSingle();
 
@@ -2598,25 +2754,45 @@ router.get('/downloads/file/:token', async (req, res) => {
       return res.status(410).json({ error: 'Download token expired' });
     }
 
+    // Allow token to be re-used within 5 minutes of first use (browser prefetch / double-click protection)
     if (tokenRecord.used_at) {
-      return res.status(410).json({ error: 'Download token has already been used' });
+      const usedTime = new Date(tokenRecord.used_at).getTime();
+      const now = Date.now();
+      const REUSE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes grace window
+      if (now - usedTime > REUSE_WINDOW_MS) {
+        return res.status(410).json({ error: 'Download token has already been used' });
+      }
+      // Within grace window - allow re-download (skip marking as used again)
+    } else {
+      // First use: atomically mark as used
+      const { data: consumedToken } = await supabaseAdmin
+        .from('download_tokens')
+        .update({ used_at: new Date().toISOString() })
+        .eq('id', tokenRecord.id)
+        .is('used_at', null)
+        .select('id')
+        .maybeSingle();
+
+      if (!consumedToken) {
+        // Race condition: another request consumed it at the same time - still allow within grace window
+        const { data: recheckToken } = await supabaseAdmin
+          .from('download_tokens')
+          .select('used_at')
+          .eq('id', tokenRecord.id)
+          .maybeSingle();
+        if (recheckToken?.used_at) {
+          const elapsed = Date.now() - new Date(recheckToken.used_at).getTime();
+          if (elapsed > 5 * 60 * 1000) {
+            return res.status(410).json({ error: 'Download token has already been used' });
+          }
+        } else {
+          return res.status(410).json({ error: 'Download token has already been used' });
+        }
+      }
     }
 
-    // Atomically mark as used to prevent single-use token replay race conditions
-    const { data: consumedToken } = await supabaseAdmin
-      .from('download_tokens')
-      .update({ used_at: new Date().toISOString() })
-      .eq('id', tokenRecord.id)
-      .is('used_at', null)
-      .select('id')
-      .maybeSingle();
-
-    if (!consumedToken) {
-      return res.status(410).json({ error: 'Download token has already been used' });
-    }
-
-    // Increment download count
-    if (tokenRecord.release_id) {
+    // Increment download count (only on first use)
+    if (!tokenRecord.used_at && tokenRecord.release_id) {
       try {
         await supabaseAdmin.rpc('increment_download_count', { release_id: tokenRecord.release_id });
       } catch {
@@ -2624,15 +2800,46 @@ router.get('/downloads/file/:token', async (req, res) => {
       }
     }
 
+    // Resolve download username for personalized filename
+    let downloadUsername = '';
+    const ownerUserId = tokenRecord.licenses?.user_id || tokenRecord.user_id;
+    if (ownerUserId) {
+      try {
+        const { data: ownerProfile } = await supabaseAdmin
+          .from('profiles')
+          .select('username, email')
+          .eq('id', ownerUserId)
+          .maybeSingle();
+        downloadUsername = (ownerProfile?.username || ownerProfile?.email?.split('@')[0] || '').replace(/[^a-zA-Z0-9_-]/g, '');
+      } catch {
+        // Non-critical
+      }
+    }
+
     // Redirect only to trusted Supabase Storage signed URL for releases bucket
+    const releaseStoragePath = tokenRecord.client_releases?.storage_path?.replace(/^releases\//, '');
+    const releaseFileType = tokenRecord.client_releases?.file_type;
+    const isJarRelease = releaseFileType === 'jar' || releaseStoragePath?.endsWith('.jar');
+
     const candidateStorageKeys = [
-      tokenRecord.client_releases?.storage_path?.replace(/^releases\//, ''),
+      releaseStoragePath,
       'CrosshairAddons-2.2.0+1.21.11.jar',
       'SyndicateLoader.exe',
     ].filter(Boolean);
 
     for (const storageKey of candidateStorageKeys) {
-      const targetFilename = storageKey.endsWith('.jar') ? 'CrosshairAddons-2.2.0+1.21.11.jar' : 'SyndicateLoader.exe';
+      const isJar = storageKey.endsWith('.jar') || isJarRelease;
+      // Personalize filename with username
+      let targetFilename;
+      if (isJar) {
+        targetFilename = downloadUsername
+          ? `CrosshairAddons-${downloadUsername}-1.21.11.jar`
+          : 'CrosshairAddons-2.2.0+1.21.11.jar';
+      } else {
+        targetFilename = downloadUsername
+          ? `SyndicateLoader-${downloadUsername}.exe`
+          : 'SyndicateLoader.exe';
+      }
       const { data: signedUrlData } = await supabaseAdmin.storage
         .from('releases')
         .createSignedUrl(storageKey, 300, { download: targetFilename });
