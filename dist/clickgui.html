@@ -1,0 +1,2483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>5.55 Injection — Click GUI Preview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ==========================================================================
+       CSS VARIABLES & THEME ENGINE (All colours use CSS custom properties)
+       ========================================================================== */
+    :root {
+      /* Theme Tint RGB (Slate Default) */
+      --tint-r: 52;
+      --tint-g: 60;
+      --tint-b: 92;
+
+      /* Accent 1 RGB */
+      --accent-r: 125;
+      --accent-g: 155;
+      --accent-b: 255;
+
+      /* Accent 2 RGB */
+      --accent2-r: 95;
+      --accent2-g: 125;
+      --accent2-b: 240;
+
+      /* Dynamic Theme Colors */
+      --color-tint: rgb(var(--tint-r), var(--tint-g), var(--tint-b));
+      --color-panel-bg: rgba(var(--tint-r), var(--tint-g), var(--tint-b), var(--panel-opacity));
+      --color-panel-border: rgba(255, 255, 255, 0.14);
+      --color-accent: rgb(var(--accent-r), var(--accent-g), var(--accent-b));
+      --color-accent-2: rgb(var(--accent2-r), var(--accent2-g), var(--accent2-b));
+      --color-accent-subtle: rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0.22);
+      --color-accent-glow: rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0.38);
+
+      /* Typography & Neutral Palette */
+      --color-text-bright: #ffffff;
+      --color-text-main: #f2f4fa;
+      --color-text-dim: #aab3cc;
+      --color-text-muted: #747d96;
+      --color-row-bg: rgba(255, 255, 255, 0.08);
+      --color-row-hover: rgba(255, 255, 255, 0.13);
+      --color-drawer-bg: rgba(0, 0, 0, 0.34);
+      --color-modal-backdrop: rgba(0, 0, 0, 0.45);
+
+      /* Geometry & Scaling */
+      --radius-panel: 18px;
+      --radius-row: 9px;
+      --radius-pill: 24px;
+      --panel-opacity: 0.68;
+      --panel-blur: 16px;
+      --ui-scale: 1;
+      --hud-scale: 1;
+
+      /* Background Palette (Plain Minecraft game-like sky + grass) */
+      --sky-top: #4285f4;
+      --sky-mid: #68a0f6;
+      --sky-bot: #a1c7fc;
+      --grass-horizon: #4a8f29;
+      --grass-top: #5c9e31;
+      --grass-bot: #325a17;
+    }
+
+    /* Reset & Base Setup */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      color: var(--color-text-main);
+      background: #0f121d;
+      position: relative;
+    }
+
+    /* ==========================================================================
+       BACKGROUND: Plain game-like backdrop (Sky-blue gradient + grass below)
+       ========================================================================== */
+    .game-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .backdrop-sky {
+      flex: 74;
+      background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-mid) 45%, var(--sky-bot) 100%);
+    }
+
+    .backdrop-grass {
+      flex: 26;
+      background: linear-gradient(180deg, var(--grass-top) 0%, var(--grass-bot) 100%);
+      border-top: 3px solid var(--grass-horizon);
+      box-shadow: inset 0 6px 16px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Master Zoom / Scaling Container */
+    #ui-root {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      transform-origin: top center;
+      transform: scale(var(--ui-scale));
+      pointer-events: auto;
+    }
+
+    /* ==========================================================================
+       HUD: Watermark, Coordinates, Live FPS Counter, Array List
+       ========================================================================== */
+    .hud-watermark {
+      position: fixed;
+      top: 18px;
+      left: 18px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      background: rgba(0, 0, 0, 0.52);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: var(--radius-row);
+      backdrop-filter: blur(8px);
+      transform-origin: top left;
+      transform: scale(var(--hud-scale));
+      pointer-events: none;
+    }
+
+    .hud-watermark-title {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--color-accent);
+      text-shadow: 0 0 14px var(--color-accent-glow);
+    }
+
+    .hud-fps-badge {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--color-text-dim);
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 7px;
+      border-radius: 5px;
+    }
+
+    .hud-coords {
+      position: fixed;
+      bottom: 18px;
+      left: 18px;
+      z-index: 100;
+      padding: 7px 14px;
+      background: rgba(0, 0, 0, 0.52);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: var(--radius-row);
+      backdrop-filter: blur(8px);
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--color-text-main);
+      letter-spacing: 0.04em;
+      transform-origin: bottom left;
+      transform: scale(var(--hud-scale));
+      pointer-events: none;
+    }
+
+    .hud-array-list {
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 3px;
+      transform-origin: top right;
+      transform: scale(var(--hud-scale));
+      pointer-events: none;
+    }
+
+    .hud-array-list.left-side {
+      right: auto;
+      left: 18px;
+      top: 64px;
+      align-items: flex-start;
+      transform-origin: top left;
+    }
+
+    .hud-array-item {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      background: rgba(0, 0, 0, 0.58);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--color-text-bright);
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      animation: arraySlideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .hud-array-item::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: var(--color-accent);
+      right: 0;
+    }
+
+    .hud-array-list.left-side .hud-array-item::after {
+      right: auto;
+      left: 0;
+    }
+
+    @keyframes arraySlideIn {
+      from { opacity: 0; transform: translateX(14px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* ==========================================================================
+       PANELS CONTAINER & SLIDE-IN STAGGER
+       ========================================================================== */
+    .panels-viewport {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .panel {
+      position: absolute;
+      width: 216px;
+      background: var(--color-panel-bg);
+      backdrop-filter: blur(var(--panel-blur));
+      -webkit-backdrop-filter: blur(var(--panel-blur));
+      border: 1px solid var(--color-panel-border);
+      border-radius: var(--radius-panel);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      z-index: 20;
+      transition: box-shadow 0.2s ease;
+    }
+
+    .panel.dragging {
+      z-index: 50 !important;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65), 0 0 0 1px var(--color-accent);
+      cursor: grabbing;
+    }
+
+    /* Staggered slide in animation when opening */
+    .menu-visible .panel {
+      animation: panelSlideIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    @keyframes panelSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-26px) scale(0.96);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    /* Panel Header */
+    .panel-header {
+      height: 54px;
+      min-height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      cursor: grab;
+      border-bottom: 1px solid transparent;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .panel:not(.collapsed) .panel-header {
+      border-bottom-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .panel-header:active {
+      cursor: grabbing;
+    }
+
+    .panel-header-content {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      pointer-events: none;
+    }
+
+    .panel-header-icon {
+      width: 17px;
+      height: 17px;
+      stroke: var(--color-text-bright);
+      stroke-width: 2;
+      fill: none;
+      flex-shrink: 0;
+    }
+
+    .panel-header-title {
+      font-size: 14.5px;
+      font-weight: 800;
+      color: var(--color-text-bright);
+      letter-spacing: -0.01em;
+    }
+
+    .panel-header-counter {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--color-text-muted);
+      letter-spacing: 0.02em;
+      pointer-events: none;
+      transition: color 0.2s ease;
+    }
+
+    .panel-header-counter.active {
+      color: var(--color-accent);
+      font-weight: 800;
+    }
+
+    /* Panel Body & Scroll Area */
+    .panel-body {
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      max-height: calc(88vh - 120px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: none;
+      transition: max-height 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, padding 0.2s ease;
+    }
+
+    .panel-body::-webkit-scrollbar {
+      display: none;
+    }
+
+    .panel.collapsed .panel-body {
+      max-height: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      opacity: 0;
+      overflow: hidden;
+    }
+
+    /* ==========================================================================
+       MODULE ROWS & EXPANDABLE SETTINGS DRAWER
+       ========================================================================== */
+    .module-item {
+      display: flex;
+      flex-direction: column;
+      border-radius: var(--radius-row);
+      transition: transform 0.12s ease;
+    }
+
+    .module-row {
+      height: 33px;
+      min-height: 33px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px 0 12px;
+      background: var(--color-row-bg);
+      border-radius: var(--radius-row);
+      cursor: pointer;
+      position: relative;
+      outline: none;
+      transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .module-row:hover {
+      background: var(--color-row-hover);
+    }
+
+    .module-row:focus-visible {
+      box-shadow: 0 0 0 2px var(--color-accent);
+    }
+
+    /* Disabled vs Enabled States */
+    .module-item.disabled .module-name {
+      color: var(--color-text-dim);
+      font-weight: 600;
+    }
+
+    .module-item.enabled .module-row {
+      background: var(--color-accent);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+    }
+
+    .module-item.enabled .module-name {
+      color: var(--color-text-white);
+      font-weight: 800;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    }
+
+    .module-left {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .module-name {
+      font-size: 13.5px;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: color 0.15s ease;
+    }
+
+    .module-desc-inline {
+      display: none;
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.72);
+      line-height: 1.25;
+      margin-top: 2px;
+      padding-bottom: 3px;
+    }
+
+    body.descriptions-always .module-row {
+      height: auto;
+      min-height: 38px;
+      padding-top: 5px;
+      padding-bottom: 5px;
+    }
+
+    body.descriptions-always .module-desc-inline {
+      display: block;
+    }
+
+    .module-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    /* Bound Key Chip on row */
+    .module-key-chip {
+      display: none;
+      padding: 2px 6px;
+      font-size: 9.5px;
+      font-weight: 800;
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.38);
+      color: rgba(255, 255, 255, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      letter-spacing: 0.03em;
+    }
+
+    .module-key-chip.has-key {
+      display: inline-block;
+    }
+
+    /* Chevron Toggle Icon */
+    .module-chevron-btn {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.15s;
+    }
+
+    .module-chevron-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .module-chevron-icon {
+      width: 12px;
+      height: 12px;
+      stroke: rgba(255, 255, 255, 0.8);
+      stroke-width: 2.2;
+      fill: none;
+      transition: transform 0.2s ease;
+    }
+
+    .module-item.open .module-chevron-icon {
+      transform: rotate(180deg);
+    }
+
+    /* Settings Drawer Container */
+    .module-drawer {
+      max-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      background: var(--color-drawer-bg);
+      border-radius: 0 0 var(--radius-row) var(--radius-row);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 0 12px;
+      transition: max-height 0.24s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, padding 0.2s ease;
+    }
+
+    .module-item.open .module-drawer {
+      max-height: 175px;
+      opacity: 1;
+      padding: 10px 12px 12px;
+      margin-top: 1px;
+    }
+
+    .drawer-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .drawer-label {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--color-text-dim);
+    }
+
+    .drawer-value {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--color-text-bright);
+    }
+
+    /* Range Slider */
+    .slider-control {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 96px;
+      height: 5px;
+      background: rgba(255, 255, 255, 0.14);
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .slider-control::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: var(--color-accent);
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+
+    .slider-control::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    /* Segmented Controls */
+    .segmented-group {
+      display: flex;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px;
+      border-radius: 6px;
+      gap: 2px;
+    }
+
+    .segmented-btn {
+      border: none;
+      background: transparent;
+      color: var(--color-text-dim);
+      font-family: inherit;
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .segmented-btn:hover {
+      color: #fff;
+    }
+
+    .segmented-btn.active {
+      background: var(--color-accent);
+      color: #fff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    }
+
+    /* Rebind Button Chip */
+    .rebind-chip {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #fff;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .rebind-chip:hover {
+      background: rgba(0, 0, 0, 0.6);
+      border-color: rgba(255, 255, 255, 0.35);
+    }
+
+    .rebind-chip.listening {
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+      animation: pulse 1s infinite alternate;
+    }
+
+    @keyframes pulse {
+      from { box-shadow: 0 0 4px var(--color-accent-subtle); }
+      to { box-shadow: 0 0 10px var(--color-accent); }
+    }
+
+    /* ==========================================================================
+       MENU PANEL ITEMS (Buttons, Checkboxes, 3x3 Theme Swatches)
+       ========================================================================== */
+    .menu-bar {
+      height: 33px;
+      min-height: 33px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      background: var(--color-row-bg);
+      border-radius: var(--radius-row);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-text-main);
+    }
+
+    .menu-btn {
+      height: 33px;
+      min-height: 33px;
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      background: var(--color-row-bg);
+      border-radius: var(--radius-row);
+      border: none;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--color-text-main);
+      cursor: pointer;
+      transition: all 0.16s ease;
+      width: 100%;
+      text-align: left;
+    }
+
+    .menu-btn:hover {
+      background: var(--color-row-hover);
+      color: #ffffff;
+    }
+
+    .menu-btn.center {
+      justify-content: center;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .menu-btn.center:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Custom Checkbox */
+    .custom-checkbox-wrapper {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .custom-checkbox {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      border: 1.6px solid rgba(255, 255, 255, 0.35);
+      background: rgba(0, 0, 0, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+
+    .custom-checkbox.checked {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+    }
+
+    .custom-checkbox svg {
+      width: 12px;
+      height: 12px;
+      stroke: #ffffff;
+      stroke-width: 2.4;
+      fill: none;
+      display: none;
+    }
+
+    .custom-checkbox.checked svg {
+      display: block;
+    }
+
+    /* 3x3 Theme Swatches Grid */
+    .themes-title {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--color-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      text-align: center;
+      margin: 6px 0 2px;
+    }
+
+    .theme-grid-3x3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      padding: 2px;
+    }
+
+    .theme-swatch {
+      height: 36px;
+      border-radius: 7px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .theme-swatch:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    }
+
+    .theme-swatch.active {
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    }
+
+    .swatch-tint {
+      flex: 1;
+    }
+
+    .swatch-accent {
+      height: 9px;
+    }
+
+    /* ==========================================================================
+       SEARCH BAR (Fixed Pill Bottom Center)
+       ========================================================================== */
+    .search-pill-container {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 80;
+      width: 360px;
+      max-width: calc(100vw - 32px);
+    }
+
+    .search-pill {
+      height: 44px;
+      background: var(--color-panel-bg);
+      backdrop-filter: blur(var(--panel-blur));
+      -webkit-backdrop-filter: blur(var(--panel-blur));
+      border: 1px solid var(--color-panel-border);
+      border-radius: var(--radius-pill);
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08);
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      gap: 10px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .search-pill:focus-within {
+      border-color: var(--color-accent);
+      box-shadow: 0 14px 38px rgba(0, 0, 0, 0.55), 0 0 0 2px var(--color-accent-subtle);
+    }
+
+    .search-pill-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      font-family: inherit;
+      font-size: 14px;
+      color: #ffffff;
+    }
+
+    .search-pill-input::placeholder {
+      color: var(--color-text-muted);
+    }
+
+    .search-pill-icon {
+      width: 17px;
+      height: 17px;
+      stroke: var(--color-text-dim);
+      stroke-width: 2.2;
+      fill: none;
+      flex-shrink: 0;
+    }
+
+    /* ==========================================================================
+       SHEETS / MODALS (Centered Frosted Glass Window)
+       ========================================================================== */
+    .sheet-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: var(--color-modal-backdrop);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .sheet-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .sheet-card {
+      width: 440px;
+      max-width: 100%;
+      background: var(--color-panel-bg);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid var(--color-panel-border);
+      border-radius: var(--radius-panel);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.1);
+      padding: 22px 24px;
+      transform: scale(0.94) translateY(14px);
+      transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .sheet-backdrop.open .sheet-card {
+      transform: scale(1) translateY(0);
+    }
+
+    .sheet-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .sheet-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.01em;
+    }
+
+    .sheet-close-btn {
+      background: none;
+      border: none;
+      color: var(--color-text-dim);
+      font-size: 20px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: color 0.15s, background 0.15s;
+    }
+
+    .sheet-close-btn:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .sheet-content {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-height: 480px;
+      overflow-y: auto;
+    }
+
+    .sheet-item-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 12px;
+      background: rgba(0, 0, 0, 0.28);
+      border-radius: var(--radius-row);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      font-size: 13px;
+    }
+
+    .sheet-input {
+      width: 100%;
+      padding: 8px 12px;
+      background: rgba(0, 0, 0, 0.38);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: var(--radius-row);
+      font-family: inherit;
+      font-size: 13px;
+      color: #fff;
+      outline: none;
+    }
+
+    .sheet-input:focus {
+      border-color: var(--color-accent);
+    }
+
+    .sheet-action-btn {
+      padding: 6px 14px;
+      background: var(--color-accent);
+      border: none;
+      border-radius: var(--radius-row);
+      color: #fff;
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+
+    .sheet-action-btn:hover {
+      opacity: 0.9;
+    }
+
+    .sheet-btn-danger {
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #f87171;
+    }
+
+    .sheet-btn-danger:hover {
+      background: rgba(239, 68, 68, 0.35);
+    }
+
+    /* ==========================================================================
+       TOOLTIP & TOAST NOTIFICATIONS
+       ========================================================================== */
+    .module-tooltip {
+      position: fixed;
+      z-index: 300;
+      max-width: 240px;
+      padding: 9px 13px;
+      background: var(--color-panel-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--color-panel-border);
+      border-radius: var(--radius-row);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s;
+    }
+
+    .module-tooltip.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .tooltip-name {
+      font-size: 12.5px;
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 2px;
+    }
+
+    .tooltip-desc {
+      font-size: 11px;
+      line-height: 1.35;
+      color: var(--color-text-dim);
+    }
+
+    /* Toast Container (Bottom-Right) */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 250;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .toast-item {
+      padding: 9px 16px;
+      background: var(--color-panel-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--color-panel-border);
+      border-left: 3.5px solid var(--color-accent);
+      border-radius: var(--radius-row);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+      font-size: 12.5px;
+      font-weight: 700;
+      color: #ffffff;
+      animation: toastIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .toast-item.fade-out {
+      animation: toastOut 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    @keyframes toastOut {
+      from { opacity: 1; transform: translateX(0); }
+      to { opacity: 0; transform: translateY(-10px); }
+    }
+
+    /* Accessibility: Prefers Reduced Motion */
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body class="menu-visible">
+
+  <!-- Plain game-like backdrop: sky-blue gradient with grass below -->
+  <div class="game-backdrop">
+    <div class="backdrop-sky"></div>
+    <div class="backdrop-grass"></div>
+  </div>
+
+  <!-- HUD: Watermark (with FPS), Coordinates, Array List -->
+  <div class="hud-watermark" id="hud-watermark">
+    <span class="hud-watermark-title">5.55 Injection</span>
+    <span class="hud-fps-badge" id="hud-fps">144 fps</span>
+  </div>
+
+  <div class="hud-coords" id="hud-coords">
+    XYZ  142.4  68.0  -289.1
+  </div>
+
+  <div class="hud-array-list" id="hud-array-list"></div>
+
+  <!-- Master UI Root -->
+  <div id="ui-root">
+    <div class="panels-viewport" id="panels-viewport"></div>
+
+    <!-- Fixed Search Pill at Bottom Center -->
+    <div class="search-pill-container" id="search-pill-container">
+      <div class="search-pill">
+        <svg class="search-pill-icon" viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input
+          type="text"
+          class="search-pill-input"
+          id="search-input"
+          placeholder="Search modules... (Press / to focus, Esc to clear)"
+          autocomplete="off"
+          spellcheck="false"
+        >
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Hover Description Tooltip -->
+  <div class="module-tooltip" id="module-tooltip">
+    <div class="tooltip-name" id="tooltip-name"></div>
+    <div class="tooltip-desc" id="tooltip-desc"></div>
+  </div>
+
+  <!-- Toast Notification Stack -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Modal Sheet Container -->
+  <div class="sheet-backdrop" id="sheet-backdrop">
+    <div class="sheet-card" id="sheet-card">
+      <div class="sheet-header">
+        <h3 class="sheet-title" id="sheet-title">Manager</h3>
+        <button class="sheet-close-btn" id="sheet-close-btn">&times;</button>
+      </div>
+      <div class="sheet-content" id="sheet-content"></div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       VANILLA JS CLIENT ENGINE (No frameworks, no localStorage, all state in-memory)
+       ========================================================================== -->
+  <script>
+    (function () {
+      'use strict';
+
+      // ------------------------------------------------------------------------
+      // 1. SOUND ENGINE (Synthesized via WebAudio API)
+      // ------------------------------------------------------------------------
+      let audioCtx = null;
+      let guiSounds = true;
+
+      function initAudio() {
+        if (!audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (AudioContextClass) audioCtx = new AudioContextClass();
+        }
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+      }
+
+      function playSound(type) {
+        if (!guiSounds) return;
+        initAudio();
+        if (!audioCtx) return;
+
+        try {
+          const now = audioCtx.currentTime;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          if (type === 'on') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(440, now);
+            osc.frequency.exponentialRampToValueAtTime(880, now + 0.05);
+            gain.gain.setValueAtTime(0.08, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+            osc.start(now);
+            osc.stop(now + 0.05);
+          } else if (type === 'off') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(520, now);
+            osc.frequency.exponentialRampToValueAtTime(260, now + 0.05);
+            gain.gain.setValueAtTime(0.07, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+            osc.start(now);
+            osc.stop(now + 0.05);
+          } else if (type === 'click') {
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(600, now);
+            gain.gain.setValueAtTime(0.05, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+            osc.start(now);
+            osc.stop(now + 0.03);
+          } else if (type === 'open') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(320, now);
+            osc.frequency.exponentialRampToValueAtTime(640, now + 0.08);
+            gain.gain.setValueAtTime(0.09, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+            osc.start(now);
+            osc.stop(now + 0.08);
+          } else if (type === 'close') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(480, now);
+            osc.frequency.exponentialRampToValueAtTime(220, now + 0.08);
+            gain.gain.setValueAtTime(0.08, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+            osc.start(now);
+            osc.stop(now + 0.08);
+          }
+        } catch (e) {
+          // Audio fallback silent
+        }
+      }
+
+      // ------------------------------------------------------------------------
+      // 2. THEMES & COLOR ENGINE (9 Color Themes from InjectionGui.h)
+      // ------------------------------------------------------------------------
+      const THEMES = [
+        { name: 'Slate',   tint: [52, 60, 92],  a1: [125, 155, 255], a2: [95, 125, 240] },
+        { name: 'Forest',  tint: [28, 62, 46],  a1: [74, 222, 128],  a2: [34, 179, 107] },
+        { name: 'Ocean',   tint: [28, 60, 96],  a1: [56, 189, 248],  a2: [42, 143, 216] },
+        { name: 'Plum',    tint: [66, 36, 84],  a1: [192, 132, 252], a2: [163, 90, 230] },
+        { name: 'Rust',    tint: [76, 42, 24],  a1: [251, 146, 60],  a2: [224, 112, 42] },
+        { name: 'Crimson', tint: [78, 28, 38],  a1: [248, 113, 113], a2: [224, 65, 79] },
+        { name: 'Indigo',  tint: [36, 38, 100], a1: [129, 140, 248], a2: [91, 97, 232] },
+        { name: 'Teal',    tint: [24, 68, 72],  a1: [45, 212, 191],  a2: [20, 169, 154] },
+        { name: 'Mocha',   tint: [58, 46, 32],  a1: [251, 191, 36],  a2: [217, 154, 20] },
+      ];
+
+      let currentThemeIdx = 0;
+      let panelOpacity = 0.68;
+      let panelBlur = 16;
+      let uiScale = 1.0;
+      let cornersMode = 'Round'; // 'Sharp' | 'Soft' | 'Round'
+
+      function applyTheme(idx) {
+        currentThemeIdx = idx;
+        const th = THEMES[idx];
+        const r = document.documentElement;
+        r.style.setProperty('--tint-r', th.tint[0]);
+        r.style.setProperty('--tint-g', th.tint[1]);
+        r.style.setProperty('--tint-b', th.tint[2]);
+        r.style.setProperty('--accent-r', th.a1[0]);
+        r.style.setProperty('--accent-g', th.a1[1]);
+        r.style.setProperty('--accent-b', th.a1[2]);
+        r.style.setProperty('--accent2-r', th.a2[0]);
+        r.style.setProperty('--accent2-g', th.a2[1]);
+        r.style.setProperty('--accent2-b', th.a2[2]);
+
+        // Update active class on swatch buttons
+        document.querySelectorAll('.theme-swatch').forEach((sw, i) => {
+          sw.classList.toggle('active', i === idx);
+        });
+      }
+
+      function applyHue(hueDeg) {
+        // Compute RGB from hue
+        const h = hueDeg / 360;
+        const s = 0.65, v = 1.0;
+        const i = Math.floor(h * 6);
+        const f = h * 6 - i;
+        const p = v * (1 - s);
+        const q = v * (1 - f * s);
+        const t = v * (1 - (1 - f) * s);
+        let r = 0, g = 0, b = 0;
+        switch (i % 6) {
+          case 0: r = v; g = t; b = p; break;
+          case 1: r = q; g = v; b = p; break;
+          case 2: r = p; g = v; b = t; break;
+          case 3: r = p; g = q; b = v; break;
+          case 4: r = t; g = p; b = v; break;
+          case 5: r = v; g = p; b = q; break;
+        }
+        const ro = Math.round(r * 255);
+        const go = Math.round(g * 255);
+        const bo = Math.round(b * 255);
+        const root = document.documentElement;
+        root.style.setProperty('--accent-r', ro);
+        root.style.setProperty('--accent-g', go);
+        root.style.setProperty('--accent-b', bo);
+      }
+
+      function setCorners(mode) {
+        cornersMode = mode;
+        const root = document.documentElement;
+        if (mode === 'Sharp') {
+          root.style.setProperty('--radius-panel', '2px');
+          root.style.setProperty('--radius-row', '2px');
+          root.style.setProperty('--radius-pill', '2px');
+        } else if (mode === 'Soft') {
+          root.style.setProperty('--radius-panel', '10px');
+          root.style.setProperty('--radius-row', '6px');
+          root.style.setProperty('--radius-pill', '14px');
+        } else {
+          root.style.setProperty('--radius-panel', '18px');
+          root.style.setProperty('--radius-row', '9px');
+          root.style.setProperty('--radius-pill', '24px');
+        }
+      }
+
+      // ------------------------------------------------------------------------
+      // 3. IN-MEMORY STATE (No localStorage, strictly in-memory data structures)
+      // ------------------------------------------------------------------------
+      let menuKey = 'ShiftRight'; // default RSHIFT
+      let menuVisible = true;
+      let descriptionsMode = 'Hover'; // 'Hover' | 'Always'
+      let activeListeningModule = null;
+      let listeningForMenuKey = false;
+
+      // In-Memory User Profile & Friends & Configs
+      let profile = {
+        name: 'derivified',
+        plan: 'Lifetime'
+      };
+
+      let friends = ['Steve', 'Alex', 'Notch'];
+
+      let configs = [
+        { name: 'Default', on: [] },
+        { name: 'Legit PvP', on: ['Aim Assist', 'Reach', 'Sprint', 'ESP'] }
+      ];
+
+      // HUD Configuration
+      let hudConfig = {
+        watermark: true,
+        fps: true,
+        coordinates: true,
+        arrayList: true,
+        arraySide: 'Right', // 'Left' | 'Right'
+        scale: 1.0
+      };
+
+      // Module Categories & Definitions
+      const CATEGORIES = [
+        {
+          name: 'Combat',
+          iconSvg: '<line x1="4" y1="20" x2="18" y2="6"></line><line x1="14" y1="6" x2="20" y2="4"></line><line x1="4" y1="14" x2="10" y2="20"></line>',
+          modules: [
+            { name: 'Aim Assist', desc: 'Smoothly rotates crosshairs toward target hitbox within angle limit.', strength: 65, mode: 'Legit', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Auto Clicker', desc: 'Simulates humanized left clicks while holding down attack key.', strength: 75, mode: 'Normal', key: '', hold: 'Hold', enabled: false },
+            { name: 'Reach', desc: 'Subtly expands attack interaction reach within strict server bounds.', strength: 35, mode: 'Legit', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Velocity', desc: 'Reduces taken horizontal and vertical knockback percentage.', strength: 80, mode: 'Normal', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Hitboxes', desc: 'Broadens target player entity bounding boxes for easier landing.', strength: 40, mode: 'Silent', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Triggerbot', desc: 'Automatically delivers attacks whenever crosshair aligns on a valid enemy.', strength: 70, mode: 'Silent', key: '', hold: 'Hold', enabled: false }
+          ]
+        },
+        {
+          name: 'Movement',
+          iconSvg: '<line x1="4" y1="12" x2="20" y2="12"></line><polyline points="14 6 20 12 14 18"></polyline>',
+          modules: [
+            { name: 'Sprint', desc: 'Maintains permanent forward sprint without exhausting food/stamina.', strength: 100, mode: 'Normal', key: 'KeyV', hold: 'Toggle', enabled: true },
+            { name: 'Fast Ladder', desc: 'Accelerates vertical ladder climb velocity safely.', strength: 60, mode: 'Normal', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Safe Walk', desc: 'Constrains character movement to eliminate accidentally falling off cliff edges.', strength: 80, mode: 'Legit', key: '', hold: 'Toggle', enabled: false },
+            { name: 'No Slowdown', desc: 'Removes movement penalty slowdown when consuming potions or golden apples.', strength: 90, mode: 'Legit', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Step', desc: 'Allows walking directly up single full block steps smoothly.', strength: 50, mode: 'Normal', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Strafe', desc: 'Preserves horizontal air directional momentum during jumps and turns.', strength: 75, mode: 'Normal', key: '', hold: 'Toggle', enabled: false }
+          ]
+        },
+        {
+          name: 'Render',
+          iconSvg: '<ellipse cx="12" cy="12" rx="9" ry="6"></ellipse><circle cx="12" cy="12" r="3"></circle>',
+          modules: [
+            { name: 'ESP', desc: 'Renders glowing box outlines through solid terrain and cave walls.', strength: 100, mode: 'Normal', key: 'KeyR', hold: 'Toggle', enabled: true },
+            { name: 'Tracers', desc: 'Draws directional indicator lines connecting camera center to targets.', strength: 60, mode: 'Normal', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Fullbright', desc: 'Overhauls world gamma illumination for crystal clear visibility in pitch dark.', strength: 100, mode: 'Normal', key: 'KeyB', hold: 'Toggle', enabled: true },
+            { name: 'Chams', desc: 'Renders colored solid silhouette player overlays through wall geometries.', strength: 70, mode: 'Silent', key: '', hold: 'Toggle', enabled: false },
+            { name: 'NameTags', desc: 'Draws enlarged readable player health, distance, and gear plates above heads.', strength: 85, mode: 'Normal', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Block Outline', desc: 'Highlights selected block wireframes with client accent color.', strength: 75, mode: 'Legit', key: '', hold: 'Toggle', enabled: false }
+          ]
+        },
+        {
+          name: 'Misc',
+          iconSvg: '<circle cx="12" cy="14" r="6"></circle><line x1="12" y1="3" x2="15" y2="9"></line>',
+          modules: [
+            { name: 'Fast Place', desc: 'Removes default client tick delay between rapid block placements.', strength: 90, mode: 'Normal', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Auto Tool', desc: 'Instantly equips the optimal tool from hotbar when mining any block type.', strength: 100, mode: 'Normal', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Chest Stealer', desc: 'Rapidly loots items from opened storage containers and chests.', strength: 85, mode: 'Silent', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Auto Armor', desc: 'Automatically prioritizes and equips best protection armor pieces.', strength: 95, mode: 'Legit', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Middle Click Friend', desc: 'Clicking mouse wheel on a nearby player toggles them as friend.', strength: 50, mode: 'Normal', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Refill', desc: 'Replenishes depleted hotbar item stacks directly from main inventory.', strength: 70, mode: 'Silent', key: '', hold: 'Toggle', enabled: false }
+          ]
+        },
+        {
+          name: 'Spear & Mace',
+          iconSvg: '<line x1="4" y1="20" x2="20" y2="4"></line><line x1="14" y1="4" x2="20" y2="4"></line><line x1="20" y1="4" x2="20" y2="10"></line>',
+          modules: [
+            { name: 'Mace Smash', desc: 'Optimizes fall height timing to calculate maximum critical Mace smash hit multiplier.', strength: 90, mode: 'Normal', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Wind Charge Jump', desc: 'Times Wind Charge burst explosions under feet for peak vertical propulsion.', strength: 80, mode: 'Legit', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Auto Mace Swap', desc: 'Swaps to high-damage heavy Mace weapon in the exact tick before impact.', strength: 85, mode: 'Silent', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Spear Aim', desc: 'Calculates trajectory arcs and lead compensation for thrown spear weapons.', strength: 70, mode: 'Legit', key: '', hold: 'Toggle', enabled: false },
+            { name: 'Heavy Core Assist', desc: 'Tracks attack collision timing and ground strike shockwave radius.', strength: 75, mode: 'Normal', key: '', hold: 'Toggle', enabled: false }
+          ]
+        }
+      ];
+
+      // ------------------------------------------------------------------------
+      // 4. TOAST NOTIFICATIONS
+      // ------------------------------------------------------------------------
+      const toastContainer = document.getElementById('toast-container');
+
+      function showToast(text) {
+        playSound('on');
+        const item = document.createElement('div');
+        item.className = 'toast-item';
+        item.textContent = text;
+        toastContainer.appendChild(item);
+
+        setTimeout(() => {
+          item.classList.add('fade-out');
+          setTimeout(() => item.remove(), 260);
+        }, 2200);
+      }
+
+      // ------------------------------------------------------------------------
+      // 5. HUD UPDATES
+      // ------------------------------------------------------------------------
+      const hudWm = document.getElementById('hud-watermark');
+      const hudFps = document.getElementById('hud-fps');
+      const hudCoords = document.getElementById('hud-coords');
+      const hudArr = document.getElementById('hud-array-list');
+
+      function updateHud() {
+        hudWm.style.display = hudConfig.watermark ? 'flex' : 'none';
+        hudFps.style.display = hudConfig.fps ? 'inline-block' : 'none';
+        hudCoords.style.display = hudConfig.coordinates ? 'block' : 'none';
+        hudArr.style.display = hudConfig.arrayList ? 'flex' : 'none';
+
+        hudArr.className = 'hud-array-list' + (hudConfig.arraySide === 'Left' ? ' left-side' : '');
+        document.documentElement.style.setProperty('--hud-scale', hudConfig.scale);
+
+        // Populate array list with enabled modules, sorted descending by text length
+        const enabledList = [];
+        CATEGORIES.forEach(cat => {
+          cat.modules.forEach(m => {
+            if (m.enabled) enabledList.push(m.name);
+          });
+        });
+
+        enabledList.sort((a, b) => b.length - a.length);
+
+        hudArr.innerHTML = '';
+        enabledList.forEach(name => {
+          const row = document.createElement('div');
+          row.className = 'hud-array-item';
+          row.textContent = name;
+          hudArr.appendChild(row);
+        });
+      }
+
+      // Live FPS Counter simulator
+      let frameCount = 0;
+      let lastFpsTime = performance.now();
+      function tickFps() {
+        frameCount++;
+        const now = performance.now();
+        if (now - lastFpsTime >= 1000) {
+          const fps = Math.round((frameCount * 1000) / (now - lastFpsTime));
+          hudFps.textContent = fps + ' fps';
+          frameCount = 0;
+          lastFpsTime = now;
+        }
+        requestAnimationFrame(tickFps);
+      }
+      requestAnimationFrame(tickFps);
+
+      // Subtle coordinates drift simulating in-game movement
+      let coordX = 142.4, coordZ = -289.1;
+      setInterval(() => {
+        coordX += (Math.random() - 0.5) * 0.2;
+        coordZ += (Math.random() - 0.5) * 0.2;
+        hudCoords.textContent = `XYZ  ${coordX.toFixed(1)}  68.0  ${coordZ.toFixed(1)}`;
+      }, 1200);
+
+      // ------------------------------------------------------------------------
+      // 6. TOOLTIP ENGINE
+      // ------------------------------------------------------------------------
+      const tooltipEl = document.getElementById('module-tooltip');
+      const tooltipName = document.getElementById('tooltip-name');
+      const tooltipDesc = document.getElementById('tooltip-desc');
+      let tooltipTimer = null;
+
+      function scheduleTooltip(mod, mouseX, mouseY) {
+        if (descriptionsMode === 'Always') return;
+        clearTimeout(tooltipTimer);
+        tooltipTimer = setTimeout(() => {
+          tooltipName.textContent = mod.name;
+          tooltipDesc.textContent = mod.desc;
+
+          const tipWidth = 240;
+          let left = mouseX + 14;
+          let top = mouseY - 10;
+          if (left + tipWidth > window.innerWidth) {
+            left = mouseX - tipWidth - 14;
+          }
+          tooltipEl.style.left = `${left}px`;
+          tooltipEl.style.top = `${top}px`;
+          tooltipEl.classList.add('show');
+        }, 450);
+      }
+
+      function hideTooltip() {
+        clearTimeout(tooltipTimer);
+        tooltipEl.classList.remove('show');
+      }
+
+      // ------------------------------------------------------------------------
+      // 7. RENDER PANELS & MODULES
+      // ------------------------------------------------------------------------
+      const viewport = document.getElementById('panels-viewport');
+
+      function formatKeyLabel(code) {
+        if (!code) return '';
+        if (code === 'ShiftRight') return 'RSHIFT';
+        if (code === 'ShiftLeft') return 'LSHIFT';
+        if (code === 'ControlRight') return 'RCTRL';
+        if (code === 'ControlLeft') return 'LCTRL';
+        if (code === 'AltRight') return 'RALT';
+        if (code === 'AltLeft') return 'LALT';
+        if (code.startsWith('Key')) return code.slice(3);
+        if (code.startsWith('Digit')) return code.slice(5);
+        return code;
+      }
+
+      function updateCategoryCounter(panelEl, cat) {
+        const counterEl = panelEl.querySelector('.panel-header-counter');
+        if (!counterEl) return;
+        const total = cat.modules.length;
+        const on = cat.modules.filter(m => m.enabled).length;
+        counterEl.textContent = `${on}/${total}`;
+        counterEl.classList.toggle('active', on > 0);
+      }
+
+      function toggleModule(mod, modItemEl, panelEl, cat) {
+        mod.enabled = !mod.enabled;
+        modItemEl.classList.toggle('enabled', mod.enabled);
+        modItemEl.classList.toggle('disabled', !mod.enabled);
+        playSound(mod.enabled ? 'on' : 'off');
+        showToast(`${mod.name} ${mod.enabled ? 'enabled' : 'disabled'}`);
+        updateCategoryCounter(panelEl, cat);
+        updateHud();
+      }
+
+      function createPanelElement(title, iconSvg, index, totalPanels) {
+        const panel = document.createElement('div');
+        panel.className = 'panel';
+        panel.style.setProperty('--panel-idx', index);
+
+        // Calculate initial centered horizontal row
+        const panelWidth = 216;
+        const gap = 16;
+        const totalWidth = totalPanels * panelWidth + (totalPanels - 1) * gap;
+        const startX = Math.max(20, (window.innerWidth - totalWidth) / 2);
+        const posX = startX + index * (panelWidth + gap);
+        const posY = 70;
+
+        panel.style.left = `${posX}px`;
+        panel.style.top = `${posY}px`;
+
+        // Draggable panel logic
+        const header = document.createElement('div');
+        header.className = 'panel-header';
+        header.innerHTML = `
+          <div class="panel-header-content">
+            <svg class="panel-header-icon" viewBox="0 0 24 24">${iconSvg}</svg>
+            <span class="panel-header-title">${title}</span>
+          </div>
+          <span class="panel-header-counter">0/0</span>
+        `;
+
+        panel.appendChild(header);
+
+        let isDragging = false;
+        let dragStartX = 0, dragStartY = 0;
+        let initialLeft = 0, initialTop = 0;
+        let hasMoved = false;
+
+        header.addEventListener('mousedown', (e) => {
+          if (e.button !== 0) return; // Only left-click drag
+          isDragging = true;
+          hasMoved = false;
+          dragStartX = e.clientX;
+          dragStartY = e.clientY;
+          initialLeft = parseFloat(panel.style.left) || 0;
+          initialTop = parseFloat(panel.style.top) || 0;
+          panel.classList.add('dragging');
+          e.preventDefault();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+          if (!isDragging) return;
+          const dx = e.clientX - dragStartX;
+          const dy = e.clientY - dragStartY;
+          if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
+          panel.style.left = `${initialLeft + dx}px`;
+          panel.style.top = `${initialTop + dy}px`;
+        });
+
+        window.addEventListener('mouseup', () => {
+          if (isDragging) {
+            isDragging = false;
+            panel.classList.remove('dragging');
+            // If mouse didn't drag, treat as header click to collapse
+            if (!hasMoved) {
+              panel.classList.toggle('collapsed');
+              playSound('click');
+            }
+          }
+        });
+
+        const body = document.createElement('div');
+        body.className = 'panel-body';
+        panel.appendChild(body);
+
+        viewport.appendChild(panel);
+        return { panel, header, body };
+      }
+
+      function buildModuleRow(mod, panelEl, cat) {
+        const item = document.createElement('div');
+        item.className = 'module-item ' + (mod.enabled ? 'enabled' : 'disabled');
+
+        const row = document.createElement('div');
+        row.className = 'module-row';
+        row.tabIndex = 0;
+
+        const keyLabel = formatKeyLabel(mod.key);
+
+        row.innerHTML = `
+          <div class="module-left">
+            <span class="module-name">${mod.name}</span>
+            <span class="module-desc-inline">${mod.desc}</span>
+          </div>
+          <div class="module-right">
+            <span class="module-key-chip ${keyLabel ? 'has-key' : ''}">${keyLabel}</span>
+            <div class="module-chevron-btn" title="Expand Settings">
+              <svg class="module-chevron-icon" viewBox="0 0 24 24">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </div>
+          </div>
+        `;
+
+        // Left-click on row toggles module
+        row.addEventListener('click', (e) => {
+          if (e.target.closest('.module-chevron-btn')) {
+            // Clicked chevron specifically: toggle settings drawer
+            e.stopPropagation();
+            item.classList.toggle('open');
+            playSound('click');
+            return;
+          }
+          toggleModule(mod, item, panelEl, cat);
+        });
+
+        // Right-click on row expands settings drawer
+        row.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          item.classList.toggle('open');
+          playSound('click');
+        });
+
+        // Hover description tooltip
+        row.addEventListener('mouseenter', (e) => scheduleTooltip(mod, e.clientX, e.clientY));
+        row.addEventListener('mousemove', (e) => scheduleTooltip(mod, e.clientX, e.clientY));
+        row.addEventListener('mouseleave', hideTooltip);
+
+        // Keyboard toggle with Enter or Space
+        row.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleModule(mod, item, panelEl, cat);
+          }
+        });
+
+        // Settings Drawer
+        const drawer = document.createElement('div');
+        drawer.className = 'module-drawer';
+
+        // 1. Strength Slider
+        const strengthRow = document.createElement('div');
+        strengthRow.className = 'drawer-row';
+        strengthRow.innerHTML = `
+          <span class="drawer-label">Strength</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <input type="range" class="slider-control" min="0" max="100" value="${mod.strength}">
+            <span class="drawer-value">${mod.strength}%</span>
+          </div>
+        `;
+        const sliderInput = strengthRow.querySelector('.slider-control');
+        const sliderVal = strengthRow.querySelector('.drawer-value');
+        sliderInput.addEventListener('input', (e) => {
+          mod.strength = parseInt(e.target.value, 10);
+          sliderVal.textContent = `${mod.strength}%`;
+        });
+        drawer.appendChild(strengthRow);
+
+        // 2. Normal / Legit / Silent Segmented Control
+        const modeRow = document.createElement('div');
+        modeRow.className = 'drawer-row';
+        modeRow.innerHTML = `
+          <span class="drawer-label">Mode</span>
+          <div class="segmented-group">
+            <button type="button" class="segmented-btn ${mod.mode === 'Normal' ? 'active' : ''}" data-val="Normal">Normal</button>
+            <button type="button" class="segmented-btn ${mod.mode === 'Legit' ? 'active' : ''}" data-val="Legit">Legit</button>
+            <button type="button" class="segmented-btn ${mod.mode === 'Silent' ? 'active' : ''}" data-val="Silent">Silent</button>
+          </div>
+        `;
+        modeRow.querySelectorAll('.segmented-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            mod.mode = btn.getAttribute('data-val');
+            modeRow.querySelectorAll('.segmented-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            playSound('click');
+          });
+        });
+        drawer.appendChild(modeRow);
+
+        // 3. Keybind Chip & Toggle/Hold Control
+        const bindRow = document.createElement('div');
+        bindRow.className = 'drawer-row';
+        bindRow.innerHTML = `
+          <span class="drawer-label">Keybind</span>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button type="button" class="rebind-chip">${mod.key ? formatKeyLabel(mod.key) : 'None'}</button>
+            <div class="segmented-group">
+              <button type="button" class="segmented-btn ${mod.hold === 'Toggle' ? 'active' : ''}" data-type="Toggle">Toggle</button>
+              <button type="button" class="segmented-btn ${mod.hold === 'Hold' ? 'active' : ''}" data-type="Hold">Hold</button>
+            </div>
+          </div>
+        `;
+
+        const bindChip = bindRow.querySelector('.rebind-chip');
+        bindChip.addEventListener('click', () => {
+          activeListeningModule = mod;
+          bindChip.textContent = 'Press key...';
+          bindChip.classList.add('listening');
+          playSound('click');
+        });
+
+        bindRow.querySelectorAll('[data-type]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            mod.hold = btn.getAttribute('data-type');
+            bindRow.querySelectorAll('[data-type]').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            playSound('click');
+          });
+        });
+
+        drawer.appendChild(bindRow);
+
+        item.appendChild(row);
+        item.appendChild(drawer);
+        return item;
+      }
+
+      // Build Category Panels
+      const totalPanels = CATEGORIES.length + 1; // + Menu panel
+      CATEGORIES.forEach((cat, index) => {
+        const { panel, body } = createPanelElement(cat.name, cat.iconSvg, index, totalPanels);
+        cat.modules.forEach(mod => {
+          const rowEl = buildModuleRow(mod, panel, cat);
+          body.appendChild(rowEl);
+        });
+        updateCategoryCounter(panel, cat);
+      });
+
+      // ------------------------------------------------------------------------
+      // 8. MENU PANEL (Far Right)
+      // ------------------------------------------------------------------------
+      const menuIconSvg = '<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>';
+      const { panel: menuPanel, body: menuBody } = createPanelElement('Menu', menuIconSvg, CATEGORIES.length, totalPanels);
+      menuPanel.querySelector('.panel-header-counter').style.display = 'none';
+
+      // 1. Keybind Chip row
+      const menuKeyRow = document.createElement('div');
+      menuKeyRow.className = 'menu-bar';
+      menuKeyRow.innerHTML = `
+        <span>Keybind:</span>
+        <button type="button" class="rebind-chip" id="menu-keybind-chip">${formatKeyLabel(menuKey)}</button>
+      `;
+      const menuKeyChip = menuKeyRow.querySelector('#menu-keybind-chip');
+      menuKeyChip.addEventListener('click', () => {
+        listeningForMenuKey = true;
+        menuKeyChip.textContent = 'Press key...';
+        menuKeyChip.classList.add('listening');
+        playSound('click');
+      });
+      menuBody.appendChild(menuKeyRow);
+
+      // 2. Descriptions: Hover / Always
+      const descRow = document.createElement('div');
+      descRow.className = 'menu-bar';
+      descRow.innerHTML = `
+        <span>Descriptions</span>
+        <div class="segmented-group">
+          <button type="button" class="segmented-btn ${descriptionsMode === 'Hover' ? 'active' : ''}" data-desc="Hover">Hover</button>
+          <button type="button" class="segmented-btn ${descriptionsMode === 'Always' ? 'active' : ''}" data-desc="Always">Always</button>
+        </div>
+      `;
+      descRow.querySelectorAll('[data-desc]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          descriptionsMode = btn.getAttribute('data-desc');
+          descRow.querySelectorAll('[data-desc]').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          document.body.classList.toggle('descriptions-always', descriptionsMode === 'Always');
+          playSound('click');
+        });
+      });
+      menuBody.appendChild(descRow);
+
+      // 3. Manager Buttons
+      const managerButtons = [
+        { label: 'Keybind Manager', sheet: 'keybinds' },
+        { label: 'Config Manager', sheet: 'configs' },
+        { label: 'Profile Manager', sheet: 'profile' },
+        { label: 'Friend Manager', sheet: 'friends' },
+        { label: 'HUD Manager', sheet: 'hud' },
+        { label: 'Theme Manager', sheet: 'themes' }
+      ];
+
+      managerButtons.forEach(btnConfig => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'menu-btn';
+        btn.textContent = btnConfig.label;
+        btn.addEventListener('click', () => openSheet(btnConfig.sheet));
+        menuBody.appendChild(btn);
+      });
+
+      // 4. Reset Layout & Disable All Buttons
+      const resetBtn = document.createElement('button');
+      resetBtn.type = 'button';
+      resetBtn.className = 'menu-btn center';
+      resetBtn.textContent = 'Reset Layout';
+      resetBtn.addEventListener('click', () => {
+        document.querySelectorAll('.panel').forEach((p, idx) => {
+          const panelWidth = 216;
+          const gap = 16;
+          const totalWidth = totalPanels * panelWidth + (totalPanels - 1) * gap;
+          const startX = Math.max(20, (window.innerWidth - totalWidth) / 2);
+          p.style.left = `${startX + idx * (panelWidth + gap)}px`;
+          p.style.top = '70px';
+          p.classList.remove('collapsed');
+        });
+        showToast('Layout reset');
+      });
+      menuBody.appendChild(resetBtn);
+
+      const disableAllBtn = document.createElement('button');
+      disableAllBtn.type = 'button';
+      disableAllBtn.className = 'menu-btn center';
+      disableAllBtn.textContent = 'Disable All';
+      disableAllBtn.addEventListener('click', () => {
+        CATEGORIES.forEach(cat => {
+          cat.modules.forEach(m => m.enabled = false);
+        });
+        document.querySelectorAll('.module-item').forEach(el => {
+          el.classList.remove('enabled');
+          el.classList.add('disabled');
+        });
+        document.querySelectorAll('.panel').forEach((p, idx) => {
+          if (idx < CATEGORIES.length) updateCategoryCounter(p, CATEGORIES[idx]);
+        });
+        updateHud();
+        showToast('All modules disabled');
+      });
+      menuBody.appendChild(disableAllBtn);
+
+      // 5. Checkboxes: Discord RPC, Gui Sounds, Array List
+      function createCheckboxRow(label, initialVal, onChange) {
+        const row = document.createElement('div');
+        row.className = 'menu-bar';
+        row.innerHTML = `
+          <span>${label}</span>
+          <div class="custom-checkbox-wrapper">
+            <div class="custom-checkbox ${initialVal ? 'checked' : ''}">
+              <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </div>
+          </div>
+        `;
+        const cb = row.querySelector('.custom-checkbox');
+        row.addEventListener('click', () => {
+          const newState = !cb.classList.contains('checked');
+          cb.classList.toggle('checked', newState);
+          playSound('click');
+          onChange(newState);
+        });
+        return row;
+      }
+
+      menuBody.appendChild(createCheckboxRow('Discord RPC', false, (v) => {
+        showToast(`Discord RPC ${v ? 'connected' : 'disconnected'}`);
+      }));
+
+      menuBody.appendChild(createCheckboxRow('Gui Sounds', guiSounds, (v) => {
+        guiSounds = v;
+      }));
+
+      menuBody.appendChild(createCheckboxRow('Array List', hudConfig.arrayList, (v) => {
+        hudConfig.arrayList = v;
+        updateHud();
+      }));
+
+      // 6. Opacity Slider
+      const opacityRow = document.createElement('div');
+      opacityRow.className = 'menu-bar';
+      opacityRow.innerHTML = `
+        <span>Opacity</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input type="range" class="slider-control" min="20" max="95" value="${Math.round(panelOpacity * 100)}">
+          <span class="drawer-value" id="opacity-val">${Math.round(panelOpacity * 100)}%</span>
+        </div>
+      `;
+      const opInput = opacityRow.querySelector('.slider-control');
+      const opVal = opacityRow.querySelector('#opacity-val');
+      opInput.addEventListener('input', (e) => {
+        panelOpacity = parseInt(e.target.value, 10) / 100;
+        opVal.textContent = `${e.target.value}%`;
+        document.documentElement.style.setProperty('--panel-opacity', panelOpacity);
+      });
+      menuBody.appendChild(opacityRow);
+
+      // 7. Themes Label and 3x3 Swatch Grid
+      const themesTitle = document.createElement('div');
+      themesTitle.className = 'themes-title';
+      themesTitle.textContent = 'Themes';
+      menuBody.appendChild(themesTitle);
+
+      const swatchesGrid = document.createElement('div');
+      swatchesGrid.className = 'theme-grid-3x3';
+      THEMES.forEach((th, i) => {
+        const swatch = document.createElement('div');
+        swatch.className = 'theme-swatch' + (i === currentThemeIdx ? ' active' : '');
+        swatch.title = th.name;
+        swatch.innerHTML = `
+          <div class="swatch-tint" style="background: rgb(${th.tint.join(',')});"></div>
+          <div class="swatch-accent" style="background: rgb(${th.a1.join(',')});"></div>
+        `;
+        swatch.addEventListener('click', () => {
+          applyTheme(i);
+          playSound('click');
+        });
+        swatchesGrid.appendChild(swatch);
+      });
+      menuBody.appendChild(swatchesGrid);
+
+      // ------------------------------------------------------------------------
+      // 9. SEARCH BAR FUNCTIONALITY
+      // ------------------------------------------------------------------------
+      const searchInput = document.getElementById('search-input');
+
+      function filterModules(query) {
+        const q = query.trim().toLowerCase();
+        document.querySelectorAll('.panel').forEach((panel, pIdx) => {
+          if (pIdx >= CATEGORIES.length) return; // Skip Menu panel
+          const cat = CATEGORIES[pIdx];
+          let visibleCount = 0;
+          const rows = panel.querySelectorAll('.module-item');
+          cat.modules.forEach((mod, mIdx) => {
+            const matches = !q || mod.name.toLowerCase().includes(q) || mod.desc.toLowerCase().includes(q);
+            rows[mIdx].style.display = matches ? 'flex' : 'none';
+            if (matches) visibleCount++;
+          });
+          panel.style.display = visibleCount > 0 ? 'flex' : 'none';
+        });
+      }
+
+      searchInput.addEventListener('input', (e) => filterModules(e.target.value));
+
+      // ------------------------------------------------------------------------
+      // 10. SHEETS (Centered Glass Modals)
+      // ------------------------------------------------------------------------
+      const sheetBackdrop = document.getElementById('sheet-backdrop');
+      const sheetTitle = document.getElementById('sheet-title');
+      const sheetContent = document.getElementById('sheet-content');
+      const sheetCloseBtn = document.getElementById('sheet-close-btn');
+
+      function closeSheet() {
+        sheetBackdrop.classList.remove('open');
+        playSound('close');
+      }
+
+      sheetCloseBtn.addEventListener('click', closeSheet);
+      sheetBackdrop.addEventListener('click', (e) => {
+        if (e.target === sheetBackdrop) closeSheet();
+      });
+
+      function openSheet(type) {
+        playSound('open');
+        sheetContent.innerHTML = '';
+
+        if (type === 'friends') {
+          sheetTitle.textContent = 'Friend Manager';
+          const list = document.createElement('div');
+          list.style.display = 'flex';
+          list.style.flexDirection = 'column';
+          list.style.gap = '6px';
+
+          function renderFriends() {
+            list.innerHTML = '';
+            if (friends.length === 0) {
+              list.innerHTML = '<div style="color: var(--color-text-dim); font-size: 13px; text-align: center; padding: 12px;">No friends added yet.</div>';
+              return;
+            }
+            friends.forEach((fr, i) => {
+              const row = document.createElement('div');
+              row.className = 'sheet-item-row';
+              row.innerHTML = `
+                <span style="font-weight: 700;">${fr}</span>
+                <button type="button" class="sheet-action-btn sheet-btn-danger">Remove</button>
+              `;
+              row.querySelector('button').addEventListener('click', () => {
+                friends.splice(i, 1);
+                renderFriends();
+                playSound('off');
+              });
+              list.appendChild(row);
+            });
+          }
+          renderFriends();
+          sheetContent.appendChild(list);
+
+          const addRow = document.createElement('div');
+          addRow.style.display = 'flex';
+          addRow.style.gap = '8px';
+          addRow.innerHTML = `
+            <input type="text" class="sheet-input" placeholder="Player username..." style="flex: 1;">
+            <button type="button" class="sheet-action-btn">Add Friend</button>
+          `;
+          const addInput = addRow.querySelector('input');
+          addRow.querySelector('button').addEventListener('click', () => {
+            const name = addInput.value.trim();
+            if (name && !friends.includes(name)) {
+              friends.push(name);
+              addInput.value = '';
+              renderFriends();
+              playSound('on');
+            }
+          });
+          sheetContent.appendChild(addRow);
+        }
+
+        else if (type === 'configs') {
+          sheetTitle.textContent = 'Config Manager';
+          const list = document.createElement('div');
+          list.style.display = 'flex';
+          list.style.flexDirection = 'column';
+          list.style.gap = '6px';
+
+          function renderConfigs() {
+            list.innerHTML = '';
+            configs.forEach((cfg, i) => {
+              const row = document.createElement('div');
+              row.className = 'sheet-item-row';
+              row.innerHTML = `
+                <div>
+                  <div style="font-weight: 700;">${cfg.name}</div>
+                  <div style="font-size: 11px; color: var(--color-text-muted);">${cfg.on.length} modules enabled</div>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                  <button type="button" class="sheet-action-btn load-btn">Load</button>
+                  <button type="button" class="sheet-action-btn sheet-btn-danger del-btn">Delete</button>
+                </div>
+              `;
+              row.querySelector('.load-btn').addEventListener('click', () => {
+                CATEGORIES.forEach(cat => {
+                  cat.modules.forEach(m => {
+                    m.enabled = cfg.on.includes(m.name);
+                  });
+                });
+                document.querySelectorAll('.panel').forEach((p, pIdx) => {
+                  if (pIdx < CATEGORIES.length) {
+                    const cat = CATEGORIES[pIdx];
+                    const rows = p.querySelectorAll('.module-item');
+                    cat.modules.forEach((m, mIdx) => {
+                      rows[mIdx].classList.toggle('enabled', m.enabled);
+                      rows[mIdx].classList.toggle('disabled', !m.enabled);
+                    });
+                    updateCategoryCounter(p, cat);
+                  }
+                });
+                updateHud();
+                showToast(`Config "${cfg.name}" loaded`);
+                closeSheet();
+              });
+              row.querySelector('.del-btn').addEventListener('click', () => {
+                configs.splice(i, 1);
+                renderConfigs();
+                playSound('off');
+              });
+              list.appendChild(row);
+            });
+          }
+          renderConfigs();
+          sheetContent.appendChild(list);
+
+          const saveRow = document.createElement('div');
+          saveRow.style.display = 'flex';
+          saveRow.style.gap = '8px';
+          saveRow.innerHTML = `
+            <input type="text" class="sheet-input" placeholder="New config name..." style="flex: 1;">
+            <button type="button" class="sheet-action-btn">Save Current</button>
+          `;
+          const saveInput = saveRow.querySelector('input');
+          saveRow.querySelector('button').addEventListener('click', () => {
+            const name = saveInput.value.trim();
+            if (name) {
+              const activeOn = [];
+              CATEGORIES.forEach(cat => {
+                cat.modules.forEach(m => {
+                  if (m.enabled) activeOn.push(m.name);
+                });
+              });
+              configs.push({ name, on: activeOn });
+              saveInput.value = '';
+              renderConfigs();
+              playSound('on');
+              showToast(`Config "${name}" saved`);
+            }
+          });
+          sheetContent.appendChild(saveRow);
+        }
+
+        else if (type === 'keybinds') {
+          sheetTitle.textContent = 'Keybind Manager';
+          const list = document.createElement('div');
+          list.style.display = 'flex';
+          list.style.flexDirection = 'column';
+          list.style.gap = '6px';
+
+          // Menu toggle key
+          const menuKeyRow = document.createElement('div');
+          menuKeyRow.className = 'sheet-item-row';
+          menuKeyRow.innerHTML = `
+            <span style="font-weight: 700;">Open / Hide Menu</span>
+            <span class="rebind-chip">${formatKeyLabel(menuKey)}</span>
+          `;
+          list.appendChild(menuKeyRow);
+
+          let boundCount = 0;
+          CATEGORIES.forEach(cat => {
+            cat.modules.forEach(m => {
+              if (m.key) {
+                boundCount++;
+                const row = document.createElement('div');
+                row.className = 'sheet-item-row';
+                row.innerHTML = `
+                  <div>
+                    <span style="font-weight: 700;">${m.name}</span>
+                    <span style="font-size: 11px; color: var(--color-text-dim); margin-left: 6px;">(${cat.name})</span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 10px; color: var(--color-text-muted);">${m.hold}</span>
+                    <span class="rebind-chip">${formatKeyLabel(m.key)}</span>
+                  </div>
+                `;
+                list.appendChild(row);
+              }
+            });
+          });
+
+          if (boundCount === 0) {
+            const empty = document.createElement('div');
+            empty.style.color = 'var(--color-text-dim)';
+            empty.style.fontSize = '12px';
+            empty.style.textAlign = 'center';
+            empty.style.padding = '8px';
+            empty.textContent = 'No module keybinds assigned yet. Right-click any module to set a key.';
+            list.appendChild(empty);
+          }
+
+          sheetContent.appendChild(list);
+        }
+
+        else if (type === 'profile') {
+          sheetTitle.textContent = 'Profile Manager';
+          const info = document.createElement('div');
+          info.style.display = 'flex';
+          info.style.flexDirection = 'column';
+          info.style.gap = '10px';
+          info.innerHTML = `
+            <div class="sheet-item-row">
+              <span style="color: var(--color-text-dim);">Signed In As</span>
+              <span style="font-weight: 800; color: #fff;" id="profile-display-name">${profile.name}</span>
+            </div>
+            <div class="sheet-item-row">
+              <span style="color: var(--color-text-dim);">Entitlement Plan</span>
+              <span style="font-weight: 800; color: var(--color-accent);">${profile.plan}</span>
+            </div>
+            <div style="margin-top: 6px; display: flex; gap: 8px;">
+              <input type="text" class="sheet-input" id="rename-input" placeholder="New display name...">
+              <button type="button" class="sheet-action-btn" id="rename-btn">Rename</button>
+            </div>
+          `;
+          const renameInput = info.querySelector('#rename-input');
+          info.querySelector('#rename-btn').addEventListener('click', () => {
+            const nn = renameInput.value.trim();
+            if (nn) {
+              profile.name = nn;
+              info.querySelector('#profile-display-name').textContent = nn;
+              renameInput.value = '';
+              showToast(`Renamed to "${nn}"`);
+            }
+          });
+          sheetContent.appendChild(info);
+        }
+
+        else if (type === 'hud') {
+          sheetTitle.textContent = 'HUD Manager';
+          const hudBox = document.createElement('div');
+          hudBox.style.display = 'flex';
+          hudBox.style.flexDirection = 'column';
+          hudBox.style.gap = '8px';
+
+          hudBox.appendChild(createCheckboxRow('Watermark', hudConfig.watermark, v => { hudConfig.watermark = v; updateHud(); }));
+          hudBox.appendChild(createCheckboxRow('FPS Counter', hudConfig.fps, v => { hudConfig.fps = v; updateHud(); }));
+          hudBox.appendChild(createCheckboxRow('Array List', hudConfig.arrayList, v => { hudConfig.arrayList = v; updateHud(); }));
+          hudBox.appendChild(createCheckboxRow('Coordinates', hudConfig.coordinates, v => { hudConfig.coordinates = v; updateHud(); }));
+
+          const sideRow = document.createElement('div');
+          sideRow.className = 'sheet-item-row';
+          sideRow.innerHTML = `
+            <span>Array Side</span>
+            <div class="segmented-group">
+              <button type="button" class="segmented-btn ${hudConfig.arraySide === 'Left' ? 'active' : ''}" data-side="Left">Left</button>
+              <button type="button" class="segmented-btn ${hudConfig.arraySide === 'Right' ? 'active' : ''}" data-side="Right">Right</button>
+            </div>
+          `;
+          sideRow.querySelectorAll('[data-side]').forEach(btn => {
+            btn.addEventListener('click', () => {
+              hudConfig.arraySide = btn.getAttribute('data-side');
+              sideRow.querySelectorAll('[data-side]').forEach(b => b.classList.remove('active'));
+              btn.classList.add('active');
+              updateHud();
+              playSound('click');
+            });
+          });
+          hudBox.appendChild(sideRow);
+
+          const scaleRow = document.createElement('div');
+          scaleRow.className = 'sheet-item-row';
+          scaleRow.innerHTML = `
+            <span>HUD Scale</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="range" class="slider-control" min="70" max="140" value="${Math.round(hudConfig.scale * 100)}">
+              <span class="drawer-value">${hudConfig.scale.toFixed(2)}x</span>
+            </div>
+          `;
+          const scInput = scaleRow.querySelector('.slider-control');
+          const scVal = scaleRow.querySelector('.drawer-value');
+          scInput.addEventListener('input', e => {
+            hudConfig.scale = parseInt(e.target.value, 10) / 100;
+            scVal.textContent = `${hudConfig.scale.toFixed(2)}x`;
+            updateHud();
+          });
+          hudBox.appendChild(scaleRow);
+
+          sheetContent.appendChild(hudBox);
+        }
+
+        else if (type === 'themes') {
+          sheetTitle.textContent = 'Theme Manager';
+          const themeBox = document.createElement('div');
+          themeBox.style.display = 'flex';
+          themeBox.style.flexDirection = 'column';
+          themeBox.style.gap = '10px';
+
+          // Swatches
+          const swatches = document.createElement('div');
+          swatches.className = 'theme-grid-3x3';
+          THEMES.forEach((th, i) => {
+            const swatch = document.createElement('div');
+            swatch.className = 'theme-swatch' + (i === currentThemeIdx ? ' active' : '');
+            swatch.title = th.name;
+            swatch.innerHTML = `
+              <div class="swatch-tint" style="background: rgb(${th.tint.join(',')});"></div>
+              <div class="swatch-accent" style="background: rgb(${th.a1.join(',')});"></div>
+            `;
+            swatch.addEventListener('click', () => {
+              applyTheme(i);
+              swatches.querySelectorAll('.theme-swatch').forEach((s, idx) => s.classList.toggle('active', idx === i));
+              playSound('click');
+            });
+            swatches.appendChild(swatch);
+          });
+          themeBox.appendChild(swatches);
+
+          // Accent Hue Slider
+          const hueRow = document.createElement('div');
+          hueRow.className = 'sheet-item-row';
+          hueRow.innerHTML = `
+            <span>Accent Hue</span>
+            <input type="range" class="slider-control" min="0" max="360" value="230">
+          `;
+          hueRow.querySelector('.slider-control').addEventListener('input', e => {
+            applyHue(parseInt(e.target.value, 10));
+          });
+          themeBox.appendChild(hueRow);
+
+          // Opacity Slider
+          const opRow = document.createElement('div');
+          opRow.className = 'sheet-item-row';
+          opRow.innerHTML = `
+            <span>Panel Opacity</span>
+            <input type="range" class="slider-control" min="20" max="95" value="${Math.round(panelOpacity * 100)}">
+          `;
+          opRow.querySelector('.slider-control').addEventListener('input', e => {
+            panelOpacity = parseInt(e.target.value, 10) / 100;
+            document.documentElement.style.setProperty('--panel-opacity', panelOpacity);
+          });
+          themeBox.appendChild(opRow);
+
+          // Blur Slider
+          const blurRow = document.createElement('div');
+          blurRow.className = 'sheet-item-row';
+          blurRow.innerHTML = `
+            <span>Glass Blur</span>
+            <input type="range" class="slider-control" min="0" max="25" value="${panelBlur}">
+          `;
+          blurRow.querySelector('.slider-control').addEventListener('input', e => {
+            panelBlur = parseInt(e.target.value, 10);
+            document.documentElement.style.setProperty('--panel-blur', `${panelBlur}px`);
+          });
+          themeBox.appendChild(blurRow);
+
+          // UI Scale
+          const uiScRow = document.createElement('div');
+          uiScRow.className = 'sheet-item-row';
+          uiScRow.innerHTML = `
+            <span>UI Scale</span>
+            <input type="range" class="slider-control" min="80" max="125" value="${Math.round(uiScale * 100)}">
+          `;
+          uiScRow.querySelector('.slider-control').addEventListener('input', e => {
+            uiScale = parseInt(e.target.value, 10) / 100;
+            document.documentElement.style.setProperty('--ui-scale', uiScale);
+          });
+          themeBox.appendChild(uiScRow);
+
+          // Corners (Sharp / Soft / Round)
+          const cornerRow = document.createElement('div');
+          cornerRow.className = 'sheet-item-row';
+          cornerRow.innerHTML = `
+            <span>Corners</span>
+            <div class="segmented-group">
+              <button type="button" class="segmented-btn ${cornersMode === 'Sharp' ? 'active' : ''}" data-cr="Sharp">Sharp</button>
+              <button type="button" class="segmented-btn ${cornersMode === 'Soft' ? 'active' : ''}" data-cr="Soft">Soft</button>
+              <button type="button" class="segmented-btn ${cornersMode === 'Round' ? 'active' : ''}" data-cr="Round">Round</button>
+            </div>
+          `;
+          cornerRow.querySelectorAll('[data-cr]').forEach(btn => {
+            btn.addEventListener('click', () => {
+              setCorners(btn.getAttribute('data-cr'));
+              cornerRow.querySelectorAll('[data-cr]').forEach(b => b.classList.remove('active'));
+              btn.classList.add('active');
+              playSound('click');
+            });
+          });
+          themeBox.appendChild(cornerRow);
+
+          sheetContent.appendChild(themeBox);
+        }
+
+        sheetBackdrop.classList.add('open');
+      }
+
+      // ------------------------------------------------------------------------
+      // 11. GLOBAL KEYBOARD HOOKS & CONTROLS
+      // ------------------------------------------------------------------------
+      window.addEventListener('keydown', (e) => {
+        // 1. Listening for Menu Rebind Key
+        if (listeningForMenuKey) {
+          e.preventDefault();
+          if (e.code !== 'Escape') {
+            menuKey = e.code;
+            menuKeyChip.textContent = formatKeyLabel(menuKey);
+            showToast(`Menu key bound to ${formatKeyLabel(menuKey)}`);
+          } else {
+            menuKeyChip.textContent = formatKeyLabel(menuKey);
+          }
+          menuKeyChip.classList.remove('listening');
+          listeningForMenuKey = false;
+          playSound('click');
+          return;
+        }
+
+        // 2. Listening for Module Key Rebind
+        if (activeListeningModule) {
+          e.preventDefault();
+          if (e.code !== 'Escape') {
+            activeListeningModule.key = e.code;
+            showToast(`${activeListeningModule.name} bound to ${formatKeyLabel(e.code)}`);
+          } else {
+            activeListeningModule.key = '';
+            showToast(`${activeListeningModule.name} key cleared`);
+          }
+
+          // Refresh chip displays
+          document.querySelectorAll('.module-item').forEach(itemEl => {
+            const name = itemEl.querySelector('.module-name').textContent;
+            if (name === activeListeningModule.name) {
+              const chip = itemEl.querySelector('.rebind-chip');
+              const rowChip = itemEl.querySelector('.module-key-chip');
+              if (chip) chip.textContent = activeListeningModule.key ? formatKeyLabel(activeListeningModule.key) : 'None';
+              if (chip) chip.classList.remove('listening');
+              if (rowChip) {
+                rowChip.textContent = formatKeyLabel(activeListeningModule.key);
+                rowChip.classList.toggle('has-key', Boolean(activeListeningModule.key));
+              }
+            }
+          });
+
+          activeListeningModule = null;
+          playSound('click');
+          return;
+        }
+
+        // 3. Close open sheet or clear search on Escape
+        if (e.code === 'Escape') {
+          if (sheetBackdrop.classList.contains('open')) {
+            closeSheet();
+            return;
+          }
+          if (document.activeElement === searchInput) {
+            searchInput.value = '';
+            filterModules('');
+            searchInput.blur();
+            return;
+          }
+        }
+
+        // 4. Focus Search bar on "/"
+        if (e.key === '/' && document.activeElement !== searchInput && !sheetBackdrop.classList.contains('open')) {
+          e.preventDefault();
+          searchInput.focus();
+          return;
+        }
+
+        // 5. Toggle whole Click GUI via menu key (default RSHIFT)
+        if (e.code === menuKey) {
+          e.preventDefault();
+          menuVisible = !menuVisible;
+          document.getElementById('ui-root').style.display = menuVisible ? 'block' : 'none';
+          document.body.classList.toggle('menu-visible', menuVisible);
+          playSound(menuVisible ? 'open' : 'close');
+          if (!menuVisible) closeSheet();
+          return;
+        }
+
+        // 6. Bound Module Key Press Handlers
+        if (!e.repeat && document.activeElement !== searchInput && !sheetBackdrop.classList.contains('open')) {
+          CATEGORIES.forEach(cat => {
+            cat.modules.forEach(m => {
+              if (m.key && m.key === e.code) {
+                if (m.hold === 'Toggle') {
+                  // Toggle state
+                  document.querySelectorAll('.module-item').forEach(itemEl => {
+                    if (itemEl.querySelector('.module-name').textContent === m.name) {
+                      toggleModule(m, itemEl, itemEl.closest('.panel'), cat);
+                    }
+                  });
+                } else if (m.hold === 'Hold' && !m.enabled) {
+                  // Enable while key is held down
+                  document.querySelectorAll('.module-item').forEach(itemEl => {
+                    if (itemEl.querySelector('.module-name').textContent === m.name) {
+                      toggleModule(m, itemEl, itemEl.closest('.panel'), cat);
+                    }
+                  });
+                }
+              }
+            });
+          });
+        }
+      });
+
+      // Keyup handler for Hold mode modules
+      window.addEventListener('keyup', (e) => {
+        CATEGORIES.forEach(cat => {
+          cat.modules.forEach(m => {
+            if (m.key && m.key === e.code && m.hold === 'Hold' && m.enabled) {
+              document.querySelectorAll('.module-item').forEach(itemEl => {
+                if (itemEl.querySelector('.module-name').textContent === m.name) {
+                  toggleModule(m, itemEl, itemEl.closest('.panel'), cat);
+                }
+              });
+            }
+          });
+        });
+      });
+
+      // Initialize HUD state
+      updateHud();
+      applyTheme(0);
+      setCorners('Round');
+
+    })();
+  </script>
+</body>
+</html>
