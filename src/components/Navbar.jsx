@@ -165,7 +165,7 @@ export default function Navbar() {
           >
             Discord
           </a>
-          {(user?.role === 'admin' || ['rookeh4@gmail.com', 'rabinzzz113@gmail.com', 'rabinjj09@gmail.com'].includes(user?.email?.toLowerCase())) && (
+          {(user?.role === 'admin' || ['rookeh4@gmail.com', 'rabinzzz113@gmail.com', 'rabinjj09@gmail.com', 'adigod2014@gmail.com', 'adigod6726@gmail.com'].includes(user?.email?.toLowerCase())) && (
             <Link
               to="/admin"
               style={{
@@ -492,7 +492,7 @@ export default function Navbar() {
               >
                 Discord
               </a>
-              {(user?.role === 'admin' || ['rookeh4@gmail.com', 'rabinzzz113@gmail.com', 'rabinjj09@gmail.com'].includes(user?.email?.toLowerCase())) && (
+              {(user?.role === 'admin' || ['rookeh4@gmail.com', 'rabinzzz113@gmail.com', 'rabinjj09@gmail.com', 'adigod2014@gmail.com', 'adigod6726@gmail.com'].includes(user?.email?.toLowerCase())) && (
                 <Link
                   to="/admin"
                   onClick={() => setMobileOpen(false)}

@@ -168,6 +168,19 @@ export async function requireAuth(req, res, next) {
   next();
 }
 
+export const OWNER_EMAILS = [
+  'rookeh4@gmail.com',
+  'rabinzzz113@gmail.com',
+  'rabinjj09@gmail.com',
+  'adigod2014@gmail.com',
+  'adigod6726@gmail.com',
+];
+
+export function isOwnerEmail(email) {
+  if (!email || typeof email !== 'string') return false;
+  return OWNER_EMAILS.includes(email.trim().toLowerCase());
+}
+
 /**
  * Express Middleware: Require Admin Privileges
  */
@@ -183,8 +196,7 @@ export async function requireAdmin(req, res, next) {
 
   await requireAuth(req, res, async () => {
     const email = (req.user?.email || req.profile?.email || '').toLowerCase().trim();
-    const ownerEmails = ['rookeh4@gmail.com', 'rabinzzz113@gmail.com', 'rabinjj09@gmail.com'];
-    const isOwner = ownerEmails.includes(email);
+    const isOwner = isOwnerEmail(email);
 
     if (req.profile?.role === 'admin' || isOwner) {
       return next();

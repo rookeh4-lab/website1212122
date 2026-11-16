@@ -87,7 +87,7 @@ export default function Admin() {
         if (!active) return;
 
         const email = (profileData?.user?.email || '').toLowerCase().trim();
-        const ownerEmails = ['rookeh4@gmail.com', 'rabinzzz113@gmail.com', 'rabinjj09@gmail.com'];
+        const ownerEmails = ['rookeh4@gmail.com', 'rabinzzz113@gmail.com', 'rabinjj09@gmail.com', 'adigod2014@gmail.com', 'adigod6726@gmail.com'];
         const isOwner = ownerEmails.includes(email);
         const hasRole = profileData?.role === 'admin' || profileData?.user?.role === 'admin';
 

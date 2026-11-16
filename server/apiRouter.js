@@ -10,6 +10,8 @@ import {
   authenticateToken,
   requireAuth,
   requireAdmin,
+  OWNER_EMAILS,
+  isOwnerEmail,
 } from './supabaseAdmin.js';
 import {
   signEd25519,
@@ -341,7 +343,7 @@ router.post('/auth/verify', async (req, res) => {
     }
 
     const emailStr = user.email || '';
-    const isAdmin = !isPortalKey && (profile?.role === 'admin' || emailStr.toLowerCase() === 'rookeh4@gmail.com');
+    const isAdmin = !isPortalKey && (profile?.role === 'admin' || isOwnerEmail(emailStr));
 
     return res.json({
       valid: true,
@@ -400,7 +402,7 @@ router.post('/auth/login', rateLimitAuth, async (req, res) => {
     }
 
     setSessionCookieSafe(req, res, sessionData.access_token);
-    const isAdmin = profile?.role === 'admin' || cleanEmail === 'rookeh4@gmail.com';
+    const isAdmin = profile?.role === 'admin' || isOwnerEmail(cleanEmail);
     return res.json({
       success: true,
       session: {
@@ -458,23 +460,36 @@ router.post('/auth/register', rateLimitAuth, async (req, res) => {
       },
     });
 
+    let userId = created?.user?.id;
+
     if (createErr) {
       const msg = createErr.message || 'Registration failed.';
       if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('registered') || msg.toLowerCase().includes('exists')) {
-        return res.status(409).json({ success: false, error: 'An account with this email already exists. Please sign in.' });
+        if (isOwnerEmail(cleanEmail)) {
+          const { data: listData } = await supabaseAdmin.auth.admin.listUsers();
+          const existing = listData?.users?.find(u => u.email.toLowerCase() === cleanEmail);
+          if (existing) {
+            userId = existing.id;
+            await supabaseAdmin.auth.admin.updateUserById(existing.id, { password });
+          }
+        } else {
+          return res.status(409).json({ success: false, error: 'An account with this email already exists. Please sign in.' });
+        }
+      } else {
+        return res.status(400).json({ success: false, error: msg });
       }
-      return res.status(400).json({ success: false, error: msg });
     }
 
-    const userId = created.user.id;
-    await supabaseAdmin.from('profiles').upsert({
-      id: userId,
-      email: cleanEmail,
-      username: cleanUser,
-      display_name: cleanUser,
-      role: cleanEmail === 'rookeh4@gmail.com' ? 'admin' : 'user',
-      updated_at: new Date().toISOString(),
-    });
+    if (userId) {
+      await supabaseAdmin.from('profiles').upsert({
+        id: userId,
+        email: cleanEmail,
+        username: cleanUser,
+        display_name: cleanUser,
+        role: isOwnerEmail(cleanEmail) ? 'admin' : 'user',
+        updated_at: new Date().toISOString(),
+      });
+    }
 
     const authRes = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
       method: 'POST',
@@ -505,7 +520,7 @@ router.post('/auth/register', rateLimitAuth, async (req, res) => {
         email: cleanEmail,
         username: cleanUser,
         displayName: cleanUser,
-        role: cleanEmail === 'rookeh4@gmail.com' ? 'admin' : 'user',
+        role: isOwnerEmail(cleanEmail) ? 'admin' : 'user',
       },
     });
   } catch (err) {
@@ -725,7 +740,7 @@ async function handleDiscordCallback(req, res) {
       }
     }
 
-    const finalRole = targetRole === 'admin' || targetEmail?.toLowerCase() === 'rookeh4@gmail.com' ? 'admin' : 'user';
+    const finalRole = targetRole === 'admin' || isOwnerEmail(targetEmail) ? 'admin' : 'user';
 
     // 5. Sync profile row
     await supabaseAdmin.from('profiles').upsert({
@@ -1373,7 +1388,7 @@ router.get('/licenses/my', requireAuth, async (req, res) => {
 // Alias: GET /api/auth/me
 router.get('/auth/me', requireAuth, (req, res) => {
   const emailStr = req.user.email || '';
-  const isAdmin = !req.isPortalKey && (req.profile?.role === 'admin' || emailStr.toLowerCase() === 'rookeh4@gmail.com');
+  const isAdmin = !req.isPortalKey && (req.profile?.role === 'admin' || isOwnerEmail(emailStr));
   return res.json({
     user: {
       id: req.user.id,
@@ -1650,7 +1665,7 @@ router.post('/licenses/set-hwid', rateLimitReset, requireAuth, async (req, res) 
     if (devErr) throw devErr;
 
     if (existingDevices && existingDevices.length > 0) {
-      const isOwnerOrAdmin = req.profile?.role === 'admin' || ['rookeh4@gmail.com', 'rabinzzz113@gmail.com', 'rabinjj09@gmail.com'].includes(req.user?.email?.toLowerCase());
+      const isOwnerOrAdmin = req.profile?.role === 'admin' || isOwnerEmail(req.user?.email);
       if (!isOwnerOrAdmin) {
         return res.status(400).json({
           success: false,
