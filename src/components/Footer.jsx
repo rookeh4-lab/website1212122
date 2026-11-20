@@ -27,49 +27,50 @@ export default function Footer() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div
             style={{
-              width: '24px',
-              height: '24px',
+              width: '26px',
+              height: '26px',
               borderRadius: '50%',
-              background: 'var(--gold-foil)',
+              background: 'linear-gradient(135deg, #38bdf8, #6366f1)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#07060a',
-              fontSize: '0.72rem',
-              fontWeight: '700',
+              color: '#ffffff',
+              fontSize: '0.74rem',
+              fontWeight: '800',
+              boxShadow: '0 2px 8px rgba(56, 189, 248, 0.3)',
             }}
           >
             S
           </div>
-          <span style={{ color: 'var(--text)', fontWeight: '600' }}>
+          <span style={{ color: '#ffffff', fontWeight: '700' }}>
             Syndicate
           </span>
-          <span style={{ color: 'var(--dim)' }}>© 2026 • Community Client & Source Archive</span>
+          <span style={{ color: 'var(--text-dim)' }}>© 2026 • Community Client & Source Archive</span>
         </div>
 
         {/* Right: Quick Links */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', color: 'var(--muted)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', color: 'var(--text-muted)' }}>
           <Link
             to="/"
-            style={{ color: 'var(--muted)', textDecoration: 'none', transition: 'color 0.15s' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--muted)')}
+            style={{ color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.15s' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
           >
             Archive
           </Link>
           <Link
             to="/clients"
-            style={{ color: 'var(--muted)', textDecoration: 'none', transition: 'color 0.15s' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--muted)')}
+            style={{ color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.15s' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
           >
             Clients
           </Link>
           <Link
             to="/sources"
-            style={{ color: 'var(--muted)', textDecoration: 'none', transition: 'color 0.15s' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--muted)')}
+            style={{ color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.15s' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
           >
             Source Codes
           </Link>
@@ -77,15 +78,15 @@ export default function Footer() {
             href="https://discord.gg/syndicate"
             target="_blank"
             rel="noreferrer"
-            style={{ color: 'var(--gold)', textDecoration: 'none', fontWeight: '600' }}
+            style={{ color: 'var(--accent-primary)', textDecoration: 'none', fontWeight: '600' }}
           >
             Discord
           </a>
           <Link
             to="/admin"
-            style={{ color: 'var(--dim)', textDecoration: 'none' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--gold)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--dim)')}
+            style={{ color: 'var(--text-dim)', textDecoration: 'none' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent-primary)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-dim)')}
           >
             Admin
           </Link>

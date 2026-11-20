@@ -8,7 +8,7 @@ export default function ResourceCard({ resource }) {
   const isHot = resource.is_featured || (resource.downloads_count && resource.downloads_count > 1000);
   const formattedViews = Number(resource.views_count || 0).toLocaleString();
   const upvotes = resource.likes_count || 0;
-  const commentsCount = resource.comments_count || 4; // realistic fallback matching reference
+  const commentsCount = resource.comments_count || 4;
 
   return (
     <div className="resource-card-clean">
@@ -21,7 +21,7 @@ export default function ResourceCard({ resource }) {
           width: '100%',
           overflow: 'hidden',
           display: 'block',
-          backgroundColor: '#090807',
+          backgroundColor: '#101724',
         }}
       >
         <img
@@ -40,12 +40,12 @@ export default function ResourceCard({ resource }) {
           }}
         />
 
-        {/* Subtle Vignette Gradient */}
+        {/* Soft Vignette Gradient */}
         <div
           style={{
             position: 'absolute',
             inset: 0,
-            background: 'linear-gradient(to top, rgba(7, 6, 10, 0.75) 0%, transparent 60%)',
+            background: 'linear-gradient(to top, rgba(14, 19, 29, 0.8) 0%, transparent 60%)',
           }}
         />
 
@@ -66,17 +66,18 @@ export default function ResourceCard({ resource }) {
           {/* Hot Badge */}
           {isHot ? (
             <div className="badge-hot-clean">
-              <span>🔥 Hot</span>
+              <Flame size={12} />
+              <span>Hot</span>
             </div>
           ) : (
             <div
               style={{
-                fontSize: '0.7rem',
+                fontSize: '0.72rem',
                 fontWeight: '600',
-                padding: '2px 8px',
+                padding: '3px 9px',
                 borderRadius: '9999px',
-                backgroundColor: 'rgba(9, 8, 7, 0.75)',
-                color: 'var(--muted)',
+                backgroundColor: 'rgba(14, 19, 29, 0.75)',
+                color: 'var(--text-muted)',
                 border: '1px solid var(--edge)',
                 backdropFilter: 'blur(4px)',
               }}
@@ -92,7 +93,7 @@ export default function ResourceCard({ resource }) {
           </div>
         </div>
 
-        {/* Bottom-Left Tag on Thumbnail (• Minecraft Source Code) */}
+        {/* Bottom-Left Tag on Thumbnail (• Minecraft Category) */}
         <div
           style={{
             position: 'absolute',
@@ -104,8 +105,8 @@ export default function ResourceCard({ resource }) {
         >
           <div className="badge-tag-mc-clean">
             <span className="mc-dot-gold" />
-            <span style={{ color: 'var(--text)', fontWeight: '600' }}>Minecraft</span>
-            <span style={{ color: 'var(--muted)', fontWeight: '400' }}>{resource.category || 'Client'}</span>
+            <span style={{ color: '#ffffff', fontWeight: '700' }}>Minecraft</span>
+            <span style={{ color: '#94a3b8', fontWeight: '500' }}>{resource.category || 'Client'}</span>
           </div>
         </div>
       </Link>
@@ -113,11 +114,11 @@ export default function ResourceCard({ resource }) {
       {/* Card Body */}
       <div
         style={{
-          padding: '14px 16px 16px 16px',
+          padding: '16px 18px 18px 18px',
           display: 'flex',
           flexDirection: 'column',
           flex: 1,
-          background: 'var(--glass)',
+          background: 'var(--bg-card)',
         }}
       >
         {/* Version & Category Tags ([1.21.11] [Source Code]) */}
@@ -131,12 +132,12 @@ export default function ResourceCard({ resource }) {
           </span>
         </div>
 
-        {/* Title: Clean, bold text, gold hover */}
+        {/* Title: Clean, bold white text with cyan hover */}
         <Link
           to={`/resource/${resource.slug || resource.id}`}
           style={{
             fontFamily: "var(--font-sans)",
-            color: 'var(--text)',
+            color: '#ffffff',
             textDecoration: 'none',
             fontSize: '1.05rem',
             fontWeight: '700',
@@ -144,19 +145,19 @@ export default function ResourceCard({ resource }) {
             marginBottom: '6px',
             transition: 'color 0.18s ease',
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--gold)')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text)')}
+          onMouseEnter={(e) => (e.currentTarget.style.color = '#38bdf8')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = '#ffffff')}
         >
           {resource.title}
         </Link>
 
-        {/* Description: Clean muted text, 2 lines */}
+        {/* Description: Readable slate text, 2 lines */}
         <p
           style={{
             fontSize: '0.84rem',
-            color: 'var(--muted)',
-            lineHeight: '1.45',
-            marginBottom: '14px',
+            color: 'var(--text-muted)',
+            lineHeight: '1.5',
+            marginBottom: '16px',
             display: '-webkit-box',
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
@@ -182,18 +183,18 @@ export default function ResourceCard({ resource }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div
               style={{
-                width: '22px',
-                height: '22px',
+                width: '24px',
+                height: '24px',
                 borderRadius: '50%',
-                background: 'rgba(232, 196, 118, 0.12)',
-                border: '1px solid var(--edge-2)',
+                background: 'linear-gradient(135deg, #38bdf8, #6366f1)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '0.65rem',
+                fontSize: '0.68rem',
                 fontWeight: '700',
-                color: 'var(--gold)',
+                color: '#ffffff',
                 overflow: 'hidden',
+                boxShadow: '0 0 6px rgba(56, 189, 248, 0.3)',
               }}
             >
               {resource.author_avatar ? (
@@ -207,13 +208,13 @@ export default function ResourceCard({ resource }) {
               )}
             </div>
 
-            <span style={{ color: 'var(--text)', fontWeight: '600' }}>
+            <span style={{ color: '#ffffff', fontWeight: '600' }}>
               {resource.author_name || 'Biscuit'}
             </span>
           </div>
 
           {/* Metrics */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--dim)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-dim)' }}>
             {/* Upvotes */}
             <span
               style={{
@@ -223,8 +224,8 @@ export default function ResourceCard({ resource }) {
                 cursor: 'pointer',
                 transition: 'color 0.15s ease',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--gold)')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--dim)')}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#38bdf8')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-dim)')}
               title="Upvotes"
             >
               <ChevronUp size={14} />

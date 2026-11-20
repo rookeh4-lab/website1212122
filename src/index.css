@@ -1,68 +1,65 @@
 :root {
   /* ==========================================================================
-     XenntSquad Exact Design System & Colors
+     Lighter, High-Contrast & Sleek Slate Theme
      ========================================================================== */
-  /* Backgrounds & Glass */
-  --bg: #07060a;
-  --glass: #110f0c;
-  --glass-2: #17140f;
-  --glass-3: #201c15;
+  /* Backgrounds: Lighter, clean slate-charcoal (no pitch-black or murky yellow) */
+  --bg: #0e131d;
+  --bg-surface: #141b27;
+  --bg-card: #17202f;
+  --bg-card-hover: #1e283b;
+  --bg-dropdown: #17202f;
 
-  /* Typography Colors */
-  --text: #f5efe2;        /* Warm cream */
-  --text-main: #f5efe2;
-  --text-body: #d6cebf;
-  --muted: #b3aa98;       /* Muted beige */
-  --dim: #7d7566;         /* Dim grey-gold */
+  /* Typography: Crisp, High-Contrast & Highly Readable */
+  --text: #ffffff;
+  --text-main: #ffffff;
+  --text-body: #e2e8f0;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
 
-  /* Gold Theme Accents */
-  --gold: #e8c476;        /* Primary bright gold */
-  --gold-deep: #b8862f;   /* Deep burnished gold */
-  --glow: rgba(232, 196, 118, 0.5); /* Ambient gold glow */
+  /* Vibrant, Perfectly Matched Accent Palette (Electric Cyan & Royal Indigo) */
+  --accent-primary: #38bdf8;         /* Electric Sky Blue */
+  --accent-secondary: #6366f1;       /* Indigo */
+  --accent-violet: #818cf8;          /* Bright Violet */
+  --accent-glow: rgba(56, 189, 248, 0.35);
 
-  /* Borders & Edges */
-  --edge: rgba(255, 240, 214, 0.085);
-  --edge-2: rgba(232, 196, 118, 0.38);
+  /* Status & Category Accents */
+  --flame-orange: #ff7034;
+  --flame-yellow: #f59e0b;
+  --green-verified: #10b981;
+  --red-alert: #ef4444;
 
-  /* Gold Foil Gradients */
-  --gold-foil: linear-gradient(120deg, #8a6421 0%, #f7d58b 28%, #c9962e 52%, #fff0c2 70%, #b07f2a 100%);
-  --foil-loop: linear-gradient(110deg, #8a6421 0%, #f7d58b 18%, #c9962e 38%, #fff0c2 54%, #b07f2a 76%, #8a6421 100%);
+  /* Borders & Rims */
+  --edge: rgba(255, 255, 255, 0.1);
+  --edge-hover: rgba(56, 189, 248, 0.45);
+  --edge-subtle: rgba(255, 255, 255, 0.06);
 
-  /* Other Accents */
-  --red: #ff5a4e;
-  --green: #4ade80;
-  --flame-orange: #ff7a00;
+  /* Gradients */
+  --grad-primary: linear-gradient(135deg, #38bdf8 0%, #6366f1 100%);
+  --grad-primary-hover: linear-gradient(135deg, #0ea5e9 0%, #4f46e5 100%);
+  --grad-hot: linear-gradient(135deg, #ff5e36 0%, #f59e0b 100%);
+  --grad-card-overlay: linear-gradient(180deg, rgba(14, 19, 29, 0) 40%, rgba(14, 19, 29, 0.85) 100%);
 
-  /* Premium Liquid Glass System */
-  --lg-tint: rgba(22, 18, 12, 0.44);
-  --lg-tint-strong: rgba(15, 12, 8, 0.7);
-  --lg-blur: blur(22px) saturate(170%) brightness(1.06);
-  --lg-spec: radial-gradient(120% 70% at 18% -10%, rgba(255, 249, 232, 0.15), rgba(255, 249, 232, 0.04) 38%, transparent 62%);
-  --lg-gloss: linear-gradient(180deg, rgba(255, 246, 225, 0.07), rgba(255, 246, 225, 0) 46%);
-  --lg-edge: rgba(255, 240, 214, 0.12);
-  --lg-edge-top: rgba(255, 246, 228, 0.32);
-  --lg-rim: inset 0 1px 0 rgba(255, 250, 238, 0.28),
-            inset 1px 0 0 rgba(255, 246, 228, 0.08),
-            inset -1px 0 0 rgba(232, 196, 118, 0.07),
-            inset 0 -1px 0 rgba(0, 0, 0, 0.35),
-            inset 0 0 24px rgba(232, 196, 118, 0.05);
-  --lg-drop: 0 24px 60px -28px rgba(0, 0, 0, 0.9), 0 2px 8px -3px rgba(0, 0, 0, 0.5);
-  --lg-chip-rim: inset 0 1px 0 rgba(255, 250, 238, 0.2),
-                 inset 0 -1px 0 rgba(0, 0, 0, 0.3),
-                 0 8px 22px -14px rgba(0, 0, 0, 0.8);
+  /* Shadows */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-card: 0 8px 24px -4px rgba(0, 0, 0, 0.4), 0 0 1px 1px rgba(255, 255, 255, 0.07);
+  --shadow-card-hover: 0 16px 36px -6px rgba(0, 0, 0, 0.6), 0 0 20px -2px rgba(56, 189, 248, 0.3);
 
   /* Dimensions & Timing */
-  --radius: 16px;
-  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-sm: 8px;
   --wrap: 1180px;
-  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
-  --shadow: 0 20px 40px -28px rgba(0, 0, 0, 0.9);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
   /* Fonts */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Aliases for compatibility */
+  --color-bg: var(--bg);
+  --gold: var(--accent-primary);
+  --gold-foil: var(--grad-primary);
+  --edge-2: var(--edge-hover);
 }
 
 * {
@@ -92,7 +89,7 @@ body {
 }
 
 /* ==========================================================================
-   Background & Atmosphere (.bg-veil)
+   Background & Atmosphere (.bg-veil) - Lighter Slate with Cool Ambient Glow
    ========================================================================== */
 .bg-veil {
   position: fixed;
@@ -100,20 +97,11 @@ body {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(55% 45% at 12% -5%, rgba(232, 196, 118, 0.085), transparent 70%),
-    radial-gradient(45% 35% at 100% 0%, rgba(232, 196, 118, 0.04), transparent 70%),
-    var(--bg);
+    radial-gradient(60% 50% at 50% -10%, rgba(56, 189, 248, 0.12), transparent 70%),
+    radial-gradient(50% 40% at 85% 15%, rgba(99, 102, 241, 0.08), transparent 70%),
+    radial-gradient(40% 40% at 15% 30%, rgba(56, 189, 248, 0.06), transparent 70%),
+    linear-gradient(180deg, #101724 0%, #0e131d 100%);
   overflow: hidden;
-}
-
-.bg-veil:before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(30% 26% at 18% 14%, rgba(232, 196, 118, 0.22), transparent 70%),
-    radial-gradient(26% 24% at 86% 8%, rgba(201, 150, 46, 0.16), transparent 70%),
-    radial-gradient(34% 30% at 72% 72%, rgba(138, 100, 33, 0.16), transparent 72%);
 }
 
 .bg-veil:after {
@@ -121,11 +109,11 @@ body {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255, 240, 214, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 240, 214, 0.03) 1px, transparent 1px);
-  background-size: 56px 56px;
-  -webkit-mask-image: radial-gradient(120% 85% at 50% 0%, #000 0%, transparent 80%);
-  mask-image: radial-gradient(120% 85% at 50% 0%, #000 0%, transparent 80%);
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(100% 80% at 50% 0%, #000 0%, transparent 85%);
+  mask-image: radial-gradient(100% 80% at 50% 0%, #000 0%, transparent 85%);
 }
 
 /* Custom Scrollbar */
@@ -136,15 +124,15 @@ body {
   background: var(--bg);
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(232, 196, 118, 0.22);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--gold);
+  background: var(--accent-primary);
 }
 
 /* ==========================================================================
-   Discord Announcement Bar (.announce)
+   Discord Announcement Bar (.top-announcement-bar)
    ========================================================================== */
 .top-announcement-bar {
   position: relative;
@@ -156,128 +144,138 @@ body {
   max-width: 1180px;
   margin: 14px auto 0;
   width: calc(100% - 32px);
-  padding: 12px 20px;
-  border-radius: 16px;
-  color: var(--text);
+  padding: 10px 20px;
+  border-radius: 14px;
+  color: var(--text-body);
   background:
-    radial-gradient(120% 160% at 0% 0%, rgba(232, 196, 118, 0.24), transparent 55%),
-    linear-gradient(90deg, rgba(232, 196, 118, 0.14), rgba(88, 101, 242, 0.12)),
-    rgba(15, 12, 8, 0.88);
-  border: 1px solid rgba(232, 196, 118, 0.5);
-  border-top-color: rgba(255, 240, 194, 0.7);
-  box-shadow: inset 0 1px rgba(255, 250, 238, 0.3), 0 0 0 1px rgba(232, 196, 118, 0.12), 0 14px 40px -14px rgba(232, 196, 118, 0.45);
-  backdrop-filter: blur(18px) saturate(170%);
-  animation: announce-glow 2.8s ease-in-out infinite;
+    radial-gradient(120% 160% at 0% 0%, rgba(56, 189, 248, 0.16), transparent 60%),
+    rgba(23, 32, 48, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.35), 0 0 16px -2px rgba(56, 189, 248, 0.18);
+  backdrop-filter: blur(16px);
   font-size: 0.86rem;
+  transition: all 0.2s var(--ease-out);
 }
 
 .top-announcement-pill {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 4px 12px;
   border-radius: 999px;
-  color: #1a1408;
-  background: linear-gradient(180deg, #f9dd9c, #c9962e);
-  box-shadow: 0 0 18px -4px rgba(232, 196, 118, 0.9);
+  color: #ffffff;
+  background: var(--grad-primary);
+  box-shadow: 0 2px 10px rgba(56, 189, 248, 0.4);
   text-decoration: none;
   display: inline-flex;
   align-items: center;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-
-@keyframes announce-glow {
-  0%, 100% {
-    box-shadow: inset 0 1px rgba(255, 250, 238, 0.3), 0 0 0 1px rgba(232, 196, 118, 0.12), 0 14px 40px -14px rgba(232, 196, 118, 0.4);
-  }
-  50% {
-    box-shadow: inset 0 1px rgba(255, 250, 238, 0.3), 0 0 0 1px rgba(232, 196, 118, 0.25), 0 14px 48px -10px rgba(232, 196, 118, 0.65);
-  }
+.top-announcement-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(56, 189, 248, 0.6);
 }
 
 /* ==========================================================================
-   Primary Category Filter Pills (.cat-pill)
+   Typography
+   ========================================================================== */
+.font-clean-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--text);
+}
+
+.font-clean-heading {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--text);
+}
+
+.font-clean-body {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
+   Category Filter Pills (.cat-pill) - Clean, High Contrast Slate
    ========================================================================== */
 .cat-pill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 44px;
+  height: 42px;
   padding: 0 16px 0 14px;
-  border-radius: 14px;
-  font-size: 14px;
+  border-radius: 9999px;
+  font-size: 13.5px;
   font-weight: 600;
   white-space: nowrap;
-  color: var(--muted);
-  background: var(--lg-gloss), rgba(30, 25, 17, 0.4);
-  border: 1px solid var(--lg-edge);
-  border-top-color: rgba(255, 246, 228, 0.24);
-  backdrop-filter: blur(16px) saturate(170%);
-  box-shadow: var(--lg-chip-rim);
-  transition: color 0.15s ease, box-shadow 0.22s ease, transform 0.16s var(--ease-out);
+  color: var(--text-muted);
+  background: rgba(23, 32, 48, 0.7);
+  border: 1px solid var(--edge);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.18s var(--ease-out);
   cursor: pointer;
   user-select: none;
 }
 
 .cat-pill:not(.on):hover {
   color: var(--text);
-  background: var(--lg-gloss), rgba(48, 39, 24, 0.45);
-  border-top-color: rgba(255, 246, 228, 0.4);
-  box-shadow: 0 10px 28px -16px var(--glow);
+  background: rgba(30, 42, 62, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
 }
 
 .cat-pill.on {
-  color: #1a1306;
-  background:
-    radial-gradient(120% 90% at 30% 0%, rgba(255, 252, 240, 0.55), transparent 46%),
-    linear-gradient(180deg, #f9dd9c, #e4bb62 52%, #c9962e);
-  border: 1px solid rgba(255, 240, 194, 0.7);
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.75),
-    inset 0 -2px 5px rgba(120, 80, 20, 0.45),
-    inset 0 0 12px rgba(255, 240, 200, 0.25),
-    0 12px 32px -12px rgba(232, 196, 118, 0.7);
+  color: #ffffff;
+  background: var(--grad-primary);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 4px 18px rgba(56, 189, 248, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 .cat-pill .count {
-  padding: 1px 8px;
+  padding: 2px 7px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--gold);
-  background: rgba(232, 196, 118, 0.1);
-  border: 1px solid rgba(232, 196, 118, 0.2);
+  color: var(--accent-primary);
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.25);
 }
 
 .cat-pill.on .count {
-  color: #1a1306;
-  background: rgba(26, 19, 6, 0.15);
-  border-color: rgba(26, 19, 6, 0.25);
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 /* ==========================================================================
-   Secondary Filter Bar & Dropdowns (Exact Image Snippet Style)
+   Secondary Filter Bar & Dropdowns (Clean Rounded Slate Pills)
    ========================================================================== */
 .filter-pill-input {
   width: 100%;
-  height: 44px;
-  padding: 0 16px 0 44px;
-  border-radius: 12px;
+  height: 42px;
+  padding: 0 16px 0 42px;
+  border-radius: 9999px;
   outline: none;
-  font-size: 14px;
+  font-size: 13.5px;
   color: var(--text);
-  background: var(--lg-gloss), rgba(30, 25, 17, 0.4);
-  border: 1px solid var(--lg-edge);
-  border-top-color: rgba(255, 246, 228, 0.24);
-  backdrop-filter: blur(16px) saturate(170%);
-  box-shadow: var(--lg-chip-rim);
-  transition: border-color 0.15s ease, background-color 0.15s ease;
+  background: rgba(23, 32, 48, 0.85);
+  border: 1px solid var(--edge);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.18s var(--ease-out);
   font-family: var(--font-sans);
 }
 
 .filter-pill-input:focus {
-  border-color: var(--edge-2);
-  background: rgba(30, 25, 17, 0.65);
+  border-color: var(--accent-primary);
+  background: rgba(28, 39, 58, 0.95);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
 }
 
 /* Dropdown Buttons (.dd-btn / .filter-dropdown-pill) */
@@ -285,77 +283,75 @@ body {
 .dd-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 44px;
-  padding: 0 15px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 500;
+  gap: 7px;
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 9999px;
+  font-size: 13.5px;
+  font-weight: 600;
   white-space: nowrap;
-  color: var(--text);
-  background: var(--lg-gloss), rgba(30, 25, 17, 0.4);
-  border: 1px solid var(--lg-edge);
-  border-top-color: rgba(255, 246, 228, 0.24);
-  backdrop-filter: blur(16px) saturate(170%);
-  box-shadow: var(--lg-chip-rim);
-  transition: border-color 0.15s ease, transform 0.16s var(--ease-out), color 0.15s ease;
+  color: var(--text-body);
+  background: rgba(23, 32, 48, 0.85);
+  border: 1px solid var(--edge);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-sm);
+  transition: all 0.18s var(--ease-out);
   cursor: pointer;
   user-select: none;
 }
 
 .filter-dropdown-pill:hover,
 .dd-btn:hover {
-  border-color: var(--edge-2);
-  background: var(--lg-gloss), rgba(48, 39, 24, 0.45);
-  border-top-color: rgba(255, 246, 228, 0.4);
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(30, 42, 62, 0.95);
+  color: #ffffff;
+  transform: translateY(-1px);
 }
 
 .filter-dropdown-pill.active {
-  color: #8ce6ab;
-  border-color: rgba(85, 193, 125, 0.45);
-  background: rgba(85, 193, 125, 0.08);
+  color: var(--accent-primary);
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.1);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
 }
 
 /* Stat Pill Item */
 .stat-pill-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  background: var(--lg-gloss), rgba(26, 21, 14, 0.5);
-  border: 1px solid var(--lg-edge);
-  border-top-color: rgba(255, 246, 228, 0.22);
+  gap: 7px;
+  background: rgba(23, 32, 48, 0.75);
+  border: 1px solid var(--edge);
   border-radius: 9999px;
   padding: 6px 14px;
   font-size: 0.82rem;
-  color: var(--muted);
-  box-shadow: var(--lg-chip-rim);
+  color: var(--text-muted);
+  box-shadow: var(--shadow-sm);
 }
 .stat-pill-item strong {
   color: var(--text);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* ==========================================================================
-   Resource Card (.card / .resource-card-clean) - Exact XenntSquad Lift & Glow
+   Resource Cards (.resource-card-clean) - Elevated, Crisp & Modern
    ========================================================================== */
 .resource-card-clean {
   display: flex;
   flex-direction: column;
-  border-radius: var(--radius); /* 16px */
+  border-radius: var(--radius);
   overflow: hidden;
-  background: var(--lg-spec), var(--lg-gloss), var(--lg-tint);
-  border: 1px solid var(--lg-edge);
-  border-top-color: var(--lg-edge-top);
-  backdrop-filter: var(--lg-blur);
-  box-shadow: var(--lg-rim), var(--lg-drop);
-  transition: transform 0.22s var(--ease-out), border-color 0.2s ease, box-shadow 0.22s ease;
+  background: var(--bg-card);
+  border: 1px solid var(--edge);
+  box-shadow: var(--shadow-card);
+  transition: transform 0.24s var(--ease-out), border-color 0.2s ease, box-shadow 0.24s var(--ease-out);
   position: relative;
 }
 
 .resource-card-clean:hover {
-  transform: translateY(-4px);
-  border-color: var(--edge-2);
-  box-shadow: var(--shadow), 0 18px 50px -24px rgba(232, 196, 118, 0.35);
+  transform: translateY(-5px);
+  border-color: var(--edge-hover);
+  box-shadow: var(--shadow-card-hover);
 }
 
 /* Badges on Card Media */
@@ -365,25 +361,25 @@ body {
   gap: 4px;
   padding: 4px 10px;
   border-radius: 999px;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: #1a0c04;
-  background: linear-gradient(135deg, #ffb347, #ff6a1f);
-  box-shadow: 0 0 14px rgba(255, 106, 31, 0.45);
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #ffffff;
+  background: var(--grad-hot);
+  box-shadow: 0 2px 10px rgba(255, 94, 54, 0.45);
+  letter-spacing: 0.02em;
 }
 
 .badge-verified-clean {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.35;
-  color: #7fe0a0;
-  background: #090807c7;
-  border: 1px solid rgba(85, 193, 125, 0.4);
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
   backdrop-filter: blur(8px);
 }
 
@@ -391,13 +387,13 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text);
-  background: #090807c7;
-  border: 1px solid var(--edge);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(14, 19, 29, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   backdrop-filter: blur(8px);
 }
 
@@ -405,37 +401,36 @@ body {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--gold);
-  box-shadow: 0 0 8px var(--gold);
+  background: var(--accent-primary);
+  box-shadow: 0 0 8px var(--accent-primary);
 }
 
 /* Version & Category Tags */
 .tag-pill-ver {
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
+  padding: 3px 9px;
   border-radius: 6px;
-  font: 500 12px/1.35 var(--font-mono);
-  letter-spacing: 0.01em;
-  color: #bfe3d0;
-  background: rgba(120, 210, 165, 0.08);
-  border: 1px solid rgba(120, 210, 165, 0.32);
+  font: 600 11.5px/1.35 var(--font-mono);
+  color: var(--accent-primary);
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.28);
 }
 
 .tag-pill-cat {
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
+  padding: 3px 9px;
   border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11.5px;
+  font-weight: 600;
   line-height: 1.35;
-  color: #ffc4ad;
-  background: rgba(255, 143, 107, 0.08);
-  border: 1px solid rgba(255, 143, 107, 0.35);
+  color: var(--accent-violet);
+  background: rgba(129, 140, 248, 0.1);
+  border: 1px solid rgba(129, 140, 248, 0.28);
 }
 
-/* Gold Buttons */
+/* Buttons */
 .btn-gold,
 .btn-pill-primary {
   display: inline-flex;
@@ -444,20 +439,21 @@ body {
   gap: 7px;
   padding: 9px 20px;
   border-radius: 9999px;
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 700;
-  color: #1a1306;
-  background: var(--gold-foil);
-  border: 1px solid rgba(255, 240, 194, 0.7);
+  color: #ffffff;
+  background: var(--grad-primary);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   cursor: pointer;
   text-decoration: none;
-  box-shadow: 0 4px 18px rgba(232, 196, 118, 0.35);
+  box-shadow: 0 4px 16px rgba(56, 189, 248, 0.35);
   transition: all 0.2s var(--ease-out);
 }
 .btn-gold:hover,
 .btn-pill-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(232, 196, 118, 0.55);
+  background: var(--grad-primary-hover);
+  box-shadow: 0 6px 22px rgba(56, 189, 248, 0.55);
 }
 
 /* Grid Layout */
@@ -480,7 +476,7 @@ body {
   }
 }
 
-/* Fade In */
+/* Animations */
 @keyframes fadeIn {
   from {
     opacity: 0;

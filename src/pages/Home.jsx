@@ -22,7 +22,6 @@ export default function Home() {
   const [selectedVersion, setSelectedVersion] = useState('All versions');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('top_rated'); // 'top_rated' | 'downloads' | 'newest' | 'views'
-  const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [sourceCodeOnly, setSourceCodeOnly] = useState(false);
   const [showDiscordBanner, setShowDiscordBanner] = useState(true);
 
@@ -94,7 +93,6 @@ export default function Home() {
       Launchers: 0,
     };
     allResources.forEach((res) => {
-      // Minecraft count
       if (res.game === 'Minecraft' || !res.game || res.category !== 'Software') {
         counts.Minecraft = (counts.Minecraft || 0) + 1;
       }
@@ -102,7 +100,6 @@ export default function Home() {
         counts[res.category] = (counts[res.category] || 0) + 1;
       }
     });
-    // Sensible defaults if db has few rows
     if (counts.Minecraft === 0) counts.Minecraft = 33;
     if (counts.Clients === 0) counts.Clients = 18;
     if (counts['Source Codes'] === 0) counts['Source Codes'] = 12;
@@ -183,12 +180,12 @@ export default function Home() {
   return (
     <div style={{ minHeight: '100vh', paddingBottom: '80px' }}>
       {/* ------------------------------------------------------------------
-          1. Top Announcement Bar (XenntSquad Discord banner style)
+          1. Top Announcement Bar (Discord Banner)
           ------------------------------------------------------------------ */}
       {showDiscordBanner && (
         <div className="top-announcement-bar">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span>NEW Join our new Discord:</span>
+            <span style={{ fontWeight: '500' }}>NEW Join our official Discord:</span>
             <a
               href="https://discord.gg/syndicate"
               target="_blank"
@@ -197,7 +194,7 @@ export default function Home() {
             >
               discord.gg/syndicate
             </a>
-            <span style={{ color: 'var(--muted)', fontSize: '0.80rem' }}>Join now</span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.80rem' }}>Join community</span>
           </div>
 
           <button
@@ -208,7 +205,7 @@ export default function Home() {
               right: '16px',
               background: 'none',
               border: 'none',
-              color: 'var(--muted)',
+              color: 'var(--text-muted)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -222,8 +219,7 @@ export default function Home() {
 
       <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '36px 20px 0 20px' }}>
         {/* ------------------------------------------------------------------
-            2. Hero Branding Section (XenntSquad Gold Theme)
-            Note: User explicitly requested to remove "saved money" and "online"
+            2. Hero Branding Section (Lighter, Crisp Modern Slate)
             ------------------------------------------------------------------ */}
         <div
           style={{
@@ -240,16 +236,16 @@ export default function Home() {
               width: '68px',
               height: '68px',
               borderRadius: '18px',
-              background: 'linear-gradient(135deg, #17140f 0%, #0d0b08 100%)',
-              border: '1px solid var(--edge-2)',
+              background: 'linear-gradient(135deg, #1e293b 0%, #111827 100%)',
+              border: '1px solid rgba(56, 189, 248, 0.35)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
-              boxShadow: '0 10px 26px rgba(0, 0, 0, 0.7), 0 0 16px rgba(232, 196, 118, 0.15)',
+              boxShadow: '0 10px 26px rgba(0, 0, 0, 0.4), 0 0 16px rgba(56, 189, 248, 0.2)',
             }}
           >
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
             </svg>
           </div>
@@ -260,10 +256,9 @@ export default function Home() {
               className="font-clean-title"
               style={{
                 fontSize: '2.1rem',
-                color: 'var(--text)',
+                color: '#ffffff',
                 lineHeight: '1.15',
                 marginBottom: '4px',
-                letterSpacing: '-0.02em',
               }}
             >
               Syndicate Solutions
@@ -273,7 +268,7 @@ export default function Home() {
               className="font-clean-body"
               style={{
                 fontSize: '0.94rem',
-                color: 'var(--muted)',
+                color: 'var(--text-muted)',
                 marginBottom: '14px',
               }}
             >
@@ -290,17 +285,17 @@ export default function Home() {
               }}
             >
               <div className="stat-pill-item">
-                <Package size={13} style={{ color: 'var(--gold)' }} />
+                <Package size={14} style={{ color: '#38bdf8' }} />
                 <span><strong>{totalUploads}</strong> uploads</span>
               </div>
 
               <div className="stat-pill-item">
-                <Download size={13} style={{ color: 'var(--gold)' }} />
+                <Download size={14} style={{ color: '#818cf8' }} />
                 <span><strong>151.2k</strong> downloads</span>
               </div>
 
               <div className="stat-pill-item">
-                <Users size={13} style={{ color: 'var(--muted)' }} />
+                <Users size={14} style={{ color: 'var(--text-muted)' }} />
                 <span><strong>15,645</strong> members</span>
               </div>
             </div>
@@ -308,7 +303,7 @@ export default function Home() {
         </div>
 
         {/* ------------------------------------------------------------------
-            3. XenntSquad Category Tabs Row (All 43 | Minecraft 33 | ...)
+            3. Category Tabs Row (All 43 | Minecraft 33 | ...)
             ------------------------------------------------------------------ */}
         <div
           style={{
@@ -338,12 +333,12 @@ export default function Home() {
         </div>
 
         {/* ------------------------------------------------------------------
-            4. Filter Controls (Matching user screenshot media_1795162716612_fe91ac6f.png)
+            4. Filter Controls
                [ Search title, tag, version or author ]
                [ All versions ⌄ ]
                [ 🎛️ Top rated ⌄ ]
-               [ Verified only ]
                [ Source Code ]
+               [ All posts ]
             ------------------------------------------------------------------ */}
         <div
           style={{
@@ -368,7 +363,7 @@ export default function Home() {
                   left: '14px',
                   top: '50%',
                   transform: 'translateY(-50%)',
-                  color: 'var(--muted)',
+                  color: 'var(--text-muted)',
                 }}
               />
               <input
@@ -381,7 +376,7 @@ export default function Home() {
               />
             </div>
 
-            {/* Version Dropdown (Exact [ All versions ⌄ ] pill) */}
+            {/* Version Dropdown */}
             <div className="dropdown-container" style={{ position: 'relative' }}>
               <div
                 className={`filter-dropdown-pill ${selectedVersion !== 'All versions' ? 'active' : ''}`}
@@ -403,11 +398,11 @@ export default function Home() {
                     left: 0,
                     zIndex: 50,
                     minWidth: '150px',
-                    background: 'var(--glass)',
+                    background: 'var(--bg-dropdown)',
                     border: '1px solid var(--edge)',
-                    borderRadius: '10px',
+                    borderRadius: '12px',
                     padding: '6px',
-                    boxShadow: '0 12px 28px rgba(0, 0, 0, 0.7)',
+                    boxShadow: '0 14px 34px rgba(0, 0, 0, 0.6)',
                   }}
                 >
                   {versionOptions.map((ver) => (
@@ -420,17 +415,17 @@ export default function Home() {
                       style={{
                         padding: '7px 12px',
                         fontSize: '0.82rem',
-                        color: selectedVersion === ver ? 'var(--gold)' : 'var(--text-body)',
-                        fontWeight: selectedVersion === ver ? '600' : '400',
+                        color: selectedVersion === ver ? '#38bdf8' : 'var(--text-body)',
+                        fontWeight: selectedVersion === ver ? '700' : '500',
                         borderRadius: '6px',
                         cursor: 'pointer',
-                        backgroundColor: selectedVersion === ver ? 'rgba(232, 196, 118, 0.12)' : 'transparent',
-                        transition: 'background 0.1s ease',
+                        backgroundColor: selectedVersion === ver ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                        transition: 'background 0.12s ease',
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 240, 214, 0.06)')}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
                       onMouseLeave={(e) =>
                         (e.currentTarget.style.backgroundColor =
-                          selectedVersion === ver ? 'rgba(232, 196, 118, 0.12)' : 'transparent')
+                          selectedVersion === ver ? 'rgba(56, 189, 248, 0.12)' : 'transparent')
                       }
                     >
                       {ver}
@@ -440,7 +435,7 @@ export default function Home() {
               )}
             </div>
 
-            {/* Sort Dropdown (Exact [ 🎛️ Top rated ⌄ ] pill) */}
+            {/* Sort Dropdown */}
             <div className="dropdown-container" style={{ position: 'relative' }}>
               <div
                 className={`filter-dropdown-pill ${sortBy !== 'top_rated' ? 'active' : ''}`}
@@ -463,11 +458,11 @@ export default function Home() {
                     left: 0,
                     zIndex: 50,
                     minWidth: '160px',
-                    background: 'var(--glass)',
+                    background: 'var(--bg-dropdown)',
                     border: '1px solid var(--edge)',
-                    borderRadius: '10px',
+                    borderRadius: '12px',
                     padding: '6px',
-                    boxShadow: '0 12px 28px rgba(0, 0, 0, 0.7)',
+                    boxShadow: '0 14px 34px rgba(0, 0, 0, 0.6)',
                   }}
                 >
                   {sortOptions.map((s) => (
@@ -480,17 +475,17 @@ export default function Home() {
                       style={{
                         padding: '7px 12px',
                         fontSize: '0.82rem',
-                        color: sortBy === s.id ? 'var(--gold)' : 'var(--text-body)',
-                        fontWeight: sortBy === s.id ? '600' : '400',
+                        color: sortBy === s.id ? '#38bdf8' : 'var(--text-body)',
+                        fontWeight: sortBy === s.id ? '700' : '500',
                         borderRadius: '6px',
                         cursor: 'pointer',
-                        backgroundColor: sortBy === s.id ? 'rgba(232, 196, 118, 0.12)' : 'transparent',
-                        transition: 'background 0.1s ease',
+                        backgroundColor: sortBy === s.id ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                        transition: 'background 0.12s ease',
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 240, 214, 0.06)')}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
                       onMouseLeave={(e) =>
                         (e.currentTarget.style.backgroundColor =
-                          sortBy === s.id ? 'rgba(232, 196, 118, 0.12)' : 'transparent')
+                          sortBy === s.id ? 'rgba(56, 189, 248, 0.12)' : 'transparent')
                       }
                     >
                       {s.label}
@@ -504,7 +499,7 @@ export default function Home() {
             <button
               onClick={() => setSourceCodeOnly(!sourceCodeOnly)}
               className={`filter-dropdown-pill ${sourceCodeOnly ? 'active' : ''}`}
-              style={{ padding: '7px 13px', borderRadius: '9999px' }}
+              style={{ padding: '7px 14px', borderRadius: '9999px' }}
             >
               <span>Source Code</span>
             </button>
@@ -524,7 +519,7 @@ export default function Home() {
               style={{
                 padding: '7px 14px',
                 borderRadius: '9999px',
-                color: 'var(--muted)',
+                color: 'var(--text-muted)',
               }}
             >
               All posts
@@ -533,14 +528,14 @@ export default function Home() {
         </div>
 
         {/* ------------------------------------------------------------------
-            5. Resource Cards Grid (3 Columns Desktop, XenntSquad Style)
+            5. Resource Cards Grid (3 Columns Desktop)
             ------------------------------------------------------------------ */}
         {loading ? (
           <div
             style={{
               padding: '60px 0',
               textAlign: 'center',
-              color: 'var(--muted)',
+              color: 'var(--text-muted)',
               fontSize: '0.95rem',
             }}
           >
@@ -551,13 +546,13 @@ export default function Home() {
             style={{
               padding: '60px 20px',
               textAlign: 'center',
-              background: 'var(--glass)',
+              background: 'var(--bg-card)',
               border: '1px solid var(--edge)',
               borderRadius: '16px',
-              color: 'var(--muted)',
+              color: 'var(--text-muted)',
             }}
           >
-            <p style={{ fontSize: '1rem', color: 'var(--text)', marginBottom: '8px', fontWeight: '600' }}>
+            <p style={{ fontSize: '1rem', color: '#ffffff', marginBottom: '8px', fontWeight: '700' }}>
               No resources found matching your filters.
             </p>
             <button

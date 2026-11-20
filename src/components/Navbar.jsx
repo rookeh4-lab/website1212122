@@ -42,7 +42,7 @@ export default function Navbar() {
     >
       <div
         style={{
-          background: 'rgba(17, 15, 12, 0.92)',
+          background: 'rgba(20, 28, 42, 0.88)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
           borderRadius: '9999px',
@@ -50,11 +50,11 @@ export default function Navbar() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          border: '1px solid var(--edge)',
-          boxShadow: '0 10px 30px -10px rgba(0, 0, 0, 0.8), 0 0 1px 1px rgba(255, 240, 214, 0.05)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          boxShadow: '0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 0 1px 1px rgba(255, 255, 255, 0.08)',
         }}
       >
-        {/* Brand Logo & Name (XenntSquad Gold Theme) */}
+        {/* Brand Logo & Name */}
         <Link
           to="/"
           style={{
@@ -69,15 +69,15 @@ export default function Navbar() {
               width: '32px',
               height: '32px',
               borderRadius: '50%',
-              background: 'var(--gold-foil)',
+              background: 'linear-gradient(135deg, #38bdf8 0%, #6366f1 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#07060a',
-              boxShadow: '0 2px 10px rgba(232, 196, 118, 0.35)',
+              color: '#ffffff',
+              boxShadow: '0 2px 10px rgba(56, 189, 248, 0.4)',
             }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#07060a" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
             </svg>
           </div>
@@ -85,10 +85,10 @@ export default function Navbar() {
           <span
             style={{
               fontFamily: "var(--font-sans)",
-              fontWeight: '700',
+              fontWeight: '800',
               fontSize: '1.15rem',
-              color: 'var(--text)',
-              letterSpacing: '-0.01em',
+              color: '#ffffff',
+              letterSpacing: '-0.02em',
             }}
           >
             Syndicate
@@ -114,23 +114,23 @@ export default function Navbar() {
                   padding: '6px 14px',
                   borderRadius: '9999px',
                   fontSize: '0.84rem',
-                  fontWeight: active ? '600' : '400',
-                  color: active ? 'var(--gold)' : 'var(--muted)',
-                  backgroundColor: active ? 'rgba(232, 196, 118, 0.12)' : 'transparent',
-                  border: active ? '1px solid var(--gold)' : '1px solid transparent',
+                  fontWeight: active ? '600' : '500',
+                  color: active ? '#ffffff' : 'var(--text-muted)',
+                  backgroundColor: active ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                  border: active ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid transparent',
                   textDecoration: 'none',
-                  transition: 'all 0.2s var(--ease-out)',
-                  boxShadow: active ? '0 0 12px rgba(232, 196, 118, 0.15)' : 'none',
+                  transition: 'all 0.18s var(--ease-out)',
+                  boxShadow: active ? '0 0 12px rgba(56, 189, 248, 0.2)' : 'none',
                 }}
                 onMouseEnter={(e) => {
                   if (!active) {
-                    e.currentTarget.style.color = 'var(--text)';
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 240, 214, 0.05)';
+                    e.currentTarget.style.color = '#ffffff';
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.06)';
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!active) {
-                    e.currentTarget.style.color = 'var(--muted)';
+                    e.currentTarget.style.color = 'var(--text-muted)';
                     e.currentTarget.style.backgroundColor = 'transparent';
                   }
                 }}
@@ -155,19 +155,19 @@ export default function Navbar() {
               borderRadius: '9999px',
               fontSize: '0.82rem',
               fontWeight: '500',
-              color: 'var(--muted)',
-              backgroundColor: 'var(--glass)',
+              color: 'var(--text-muted)',
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
               border: '1px solid var(--edge)',
               textDecoration: 'none',
-              transition: 'all 0.2s var(--ease-out)',
+              transition: 'all 0.18s var(--ease-out)',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'var(--edge-2)';
-              e.currentTarget.style.color = 'var(--gold)';
+              e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.4)';
+              e.currentTarget.style.color = 'var(--accent-primary)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.borderColor = 'var(--edge)';
-              e.currentTarget.style.color = 'var(--muted)';
+              e.currentTarget.style.color = 'var(--text-muted)';
             }}
           >
             <MessageSquare size={13} />
@@ -195,12 +195,12 @@ export default function Navbar() {
               borderRadius: '9999px',
               fontSize: '0.80rem',
               fontWeight: '500',
-              color: 'var(--dim)',
+              color: 'var(--text-dim)',
               textDecoration: 'none',
               transition: 'color 0.15s ease',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--dim)')}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-dim)')}
           >
             Admin
           </Link>
@@ -229,14 +229,14 @@ export default function Navbar() {
         <div
           style={{
             marginTop: '8px',
-            background: 'var(--glass)',
+            background: 'rgba(20, 28, 42, 0.96)',
             border: '1px solid var(--edge)',
             borderRadius: '16px',
             padding: '12px',
             display: 'flex',
             flexDirection: 'column',
             gap: '6px',
-            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.85)',
+            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.7)',
           }}
         >
           {navLinks.map((item) => (
@@ -247,10 +247,10 @@ export default function Navbar() {
                 padding: '10px 14px',
                 borderRadius: '8px',
                 fontSize: '0.88rem',
-                color: isActive(item.path) ? 'var(--gold)' : 'var(--muted)',
+                color: isActive(item.path) ? 'var(--accent-primary)' : 'var(--text-muted)',
                 fontWeight: isActive(item.path) ? '600' : '400',
                 textDecoration: 'none',
-                backgroundColor: isActive(item.path) ? 'rgba(232, 196, 118, 0.1)' : 'transparent',
+                backgroundColor: isActive(item.path) ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
               }}
             >
               {item.name}
