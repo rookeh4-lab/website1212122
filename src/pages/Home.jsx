@@ -388,7 +388,6 @@ export default function Home() {
         >
           {categories.map((cat) => {
             const isSelected = activeCategory === cat.name;
-            const count = categoryCounts[cat.name] || 0;
             return (
               <button
                 key={cat.name}
