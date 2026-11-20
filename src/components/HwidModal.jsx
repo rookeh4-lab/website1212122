@@ -71,12 +71,12 @@ export default function HwidModal({ open, onClose, licenseKey, userEmail }) {
         window.location.href = data.url;
       } else {
         setErrorMsg(
-          'HWID resets use single-use Admin Reset Keys on your Dashboard. Open a support ticket on Discord (discord.gg/xx7Ns6vW8) to receive a reset key.'
+          'HWID resets use single-use Admin Reset Keys on your Dashboard. Open a support ticket on Discord (discord.gg/AxB7PuYmM) to receive a reset key.'
         );
       }
     } catch {
       setErrorMsg(
-        'HWID resets use single-use Admin Reset Keys on your Dashboard. Open a support ticket on Discord (discord.gg/xx7Ns6vW8) to receive a reset key.'
+        'HWID resets use single-use Admin Reset Keys on your Dashboard. Open a support ticket on Discord (discord.gg/AxB7PuYmM) to receive a reset key.'
       );
     } finally {
       setSubmitting(false);

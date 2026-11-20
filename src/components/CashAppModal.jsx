@@ -109,7 +109,7 @@ export default function CashAppModal({
             </a>
           )}
           <a
-            href="https://discord.gg/xx7Ns6vW8"
+            href="https://discord.gg/AxB7PuYmM"
             target="_blank"
             rel="noopener noreferrer"
             style={{

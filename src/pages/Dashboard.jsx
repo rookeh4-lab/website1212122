@@ -40,7 +40,7 @@ const PRODUCT_CATALOG = [
     subtitle: 'External utility · Windows',
     productSlug: 'external',
     placeholder: '555E-XXXX-XXXX-XXXX',
-    checkoutUrl: 'https://discord.gg/xx7Ns6vW8',
+    checkoutUrl: 'https://discord.gg/AxB7PuYmM',
     onHold: true,
     matches: (lic) =>
       lic.product === 'external' ||
@@ -779,7 +779,7 @@ export default function Dashboard() {
                 <span style={{ fontSize: '11px' }}>↗</span>
               </Link>
               <a
-                href="https://discord.gg/xx7Ns6vW8"
+                href="https://discord.gg/AxB7PuYmM"
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
@@ -1490,7 +1490,7 @@ export default function Dashboard() {
                     </p>
 
                     <a
-                      href="https://discord.gg/xx7Ns6vW8"
+                      href="https://discord.gg/AxB7PuYmM"
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{

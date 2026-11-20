@@ -113,7 +113,7 @@ export default function Navbar() {
         {/* Right Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <a
-            href="https://discord.gg/syndicate"
+            href="https://discord.gg/AxB7PuYmM"
             target="_blank"
             rel="noreferrer"
             style={{

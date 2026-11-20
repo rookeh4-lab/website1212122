@@ -545,7 +545,7 @@ export default function ResourceDetail() {
             Client Syndicate • Site made with 💜 for Minecraft
           </div>
           <a
-            href="https://discord.gg/syndicate"
+            href="https://discord.gg/AxB7PuYmM"
             target="_blank"
             rel="noreferrer"
             style={{ color: '#38bdf8', textDecoration: 'none' }}

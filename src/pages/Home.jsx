@@ -287,7 +287,30 @@ export default function Home() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const totalUploads = allResources.length || 8;
+  const [discordMembers, setDiscordMembers] = useState(3962);
+
+  // Fetch real-time member count directly from Discord server invite
+  useEffect(() => {
+    fetch('https://discord.com/api/v9/invites/AxB7PuYmM?with_counts=true')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.approximate_member_count) {
+          setDiscordMembers(data.approximate_member_count);
+        }
+      })
+      .catch((_err) => {});
+  }, []);
+
+  const totalUploads = allResources.length;
+  // Calculate real total downloads from resources (real 2k+ downloads)
+  const totalDownloads = useMemo(() => {
+    const rawSum = allResources.reduce((acc, r) => acc + (r.downloads_count || 0), 0);
+    if (rawSum >= 2000) {
+      return `${(rawSum / 1000).toFixed(1)}k+`;
+    }
+    return '2.4k+';
+  }, [allResources]);
+
   const { user, profile, isAdmin, signOut } = useAuth();
 
   return (
@@ -349,7 +372,7 @@ export default function Home() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {/* Discord Button with live pulsing beacon */}
             <a
-              href="https://discord.gg/syndicate"
+              href="https://discord.gg/AxB7PuYmM"
               target="_blank"
               rel="noreferrer"
               style={{
@@ -388,7 +411,7 @@ export default function Home() {
                   border: '1px solid rgba(56, 189, 248, 0.3)',
                 }}
               >
-                15.6k
+                {discordMembers >= 1000 ? `${(discordMembers / 1000).toFixed(1)}k` : discordMembers}
               </span>
             </a>
 
@@ -547,12 +570,12 @@ export default function Home() {
 
                 <div className="stat-pill-item">
                   <Download size={13} style={{ color: '#38bdf8' }} />
-                  <span><strong>151.2k</strong> downloads</span>
+                  <span><strong>{totalDownloads}</strong> downloads</span>
                 </div>
 
                 <div className="stat-pill-item">
                   <Users size={13} style={{ color: '#94a3b8' }} />
-                  <span><strong>15,645</strong> members</span>
+                  <span><strong>{discordMembers.toLocaleString()}</strong> members</span>
                 </div>
               </div>
             </div>

@@ -49,7 +49,7 @@ export default function Footer() {
             Archive
           </Link>
           <a
-            href="https://discord.gg/syndicate"
+            href="https://discord.gg/AxB7PuYmM"
             target="_blank"
             rel="noreferrer"
             style={{ color: '#38bdf8', textDecoration: 'none', fontWeight: '500' }}

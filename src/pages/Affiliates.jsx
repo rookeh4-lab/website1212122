@@ -158,7 +158,7 @@ export default function Affiliates() {
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <span className="badge badge-success">20% Recurring Share</span>
           <a
-            href="https://discord.gg/xx7Ns6vW8"
+            href="https://discord.gg/AxB7PuYmM"
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn-secondary btn-sm"
