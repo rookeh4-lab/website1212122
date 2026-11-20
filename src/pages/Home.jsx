@@ -1,34 +1,26 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Search,
   CheckCircle,
   Flame,
-  ChevronDown,
   X,
-  SlidersHorizontal,
   Package,
   Download,
-  Users
+  Users,
+  Plus,
+  MessageSquare,
+  Sparkles
 } from 'lucide-react';
 import ResourceCard from '../components/ResourceCard';
 import { supabase } from '../lib/supabaseClient';
 
 export default function Home() {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const searchInputRef = useRef(null);
 
   // Filter state
   const [activeCategory, setActiveCategory] = useState('All');
-  const [selectedVersion, setSelectedVersion] = useState('All versions');
   const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState('top_rated'); // 'top_rated' | 'downloads' | 'newest' | 'views'
-  const [sourceCodeOnly, setSourceCodeOnly] = useState(false);
-  const [showDiscordBanner, setShowDiscordBanner] = useState(true);
-
-  // Dropdown menus state
-  const [catMenuOpen, setCatMenuOpen] = useState(false);
-  const [verMenuOpen, setVerMenuOpen] = useState(false);
-  const [sortMenuOpen, setSortMenuOpen] = useState(false);
 
   // Resources state
   const [allResources, setAllResources] = useState([]);
@@ -44,26 +36,6 @@ export default function Home() {
     { name: 'Tools', id: 'Tools' },
     { name: 'Macros', id: 'Macros' },
     { name: 'Launchers', id: 'Launchers' },
-  ];
-
-  // Version options
-  const versionOptions = [
-    'All versions',
-    '1.21.11',
-    '1.21.4',
-    '1.21',
-    '1.20.4',
-    '1.19.4',
-    '1.16.5',
-    '1.8.9',
-  ];
-
-  // Sort options
-  const sortOptions = [
-    { id: 'top_rated', label: 'Top rated' },
-    { id: 'downloads', label: 'Most downloaded' },
-    { id: 'newest', label: 'Newest' },
-    { id: 'views', label: 'Most viewed' },
   ];
 
   // Initial fetch of all resources for counts
@@ -84,7 +56,7 @@ export default function Home() {
   // Compute category counts
   const categoryCounts = useMemo(() => {
     const counts = {
-      All: allResources.length || 43,
+      All: allResources.length || 8,
       Minecraft: 0,
       Clients: 0,
       'Source Codes': 0,
@@ -100,12 +72,12 @@ export default function Home() {
         counts[res.category] = (counts[res.category] || 0) + 1;
       }
     });
-    if (counts.Minecraft === 0) counts.Minecraft = 33;
-    if (counts.Clients === 0) counts.Clients = 18;
-    if (counts['Source Codes'] === 0) counts['Source Codes'] = 12;
-    if (counts.Tools === 0) counts.Tools = 8;
-    if (counts.Macros === 0) counts.Macros = 4;
-    if (counts.Launchers === 0) counts.Launchers = 2;
+    if (counts.Minecraft === 0) counts.Minecraft = 8;
+    if (counts.Clients === 0) counts.Clients = 3;
+    if (counts['Source Codes'] === 0) counts['Source Codes'] = 2;
+    if (counts.Tools === 0) counts.Tools = 1;
+    if (counts.Macros === 0) counts.Macros = 1;
+    if (counts.Launchers === 0) counts.Launchers = 1;
     return counts;
   }, [allResources]);
 
@@ -124,187 +96,273 @@ export default function Home() {
           }
         }
 
-        if (selectedVersion !== 'All versions') {
-          query = query.eq('version', selectedVersion);
-        }
-
-        if (sourceCodeOnly) {
-          query = query.or('category.eq.Source Codes,has_source_code.eq.true');
-        }
-
         if (search.trim()) {
           const q = search.trim();
-          query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%,author_name.ilike.%${q}%,tags.cs.{${q}}`);
+          query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%,author_name.ilike.%${q}%,version.ilike.%${q}%`);
         }
 
-        // Sorting
-        if (sortBy === 'top_rated') {
-          query = query.order('likes_count', { ascending: false });
-        } else if (sortBy === 'downloads') {
-          query = query.order('downloads_count', { ascending: false });
-        } else if (sortBy === 'views') {
-          query = query.order('views_count', { ascending: false });
-        } else {
-          query = query.order('created_at', { ascending: false });
-        }
+        // Sort by likes & downloads
+        query = query.order('likes_count', { ascending: false }).order('downloads_count', { ascending: false });
 
         const { data, error } = await query;
-        if (!error && data) {
-          setResources(data);
-        }
+        if (error) throw error;
+        setResources(data || []);
       } catch (err) {
-        console.error('Failed to query resources:', err);
+        console.error('Failed to fetch resources:', err);
       } finally {
         setLoading(false);
       }
     }
-
     fetchResources();
-  }, [activeCategory, selectedVersion, search, sortBy, sourceCodeOnly]);
+  }, [activeCategory, search]);
 
-  // Close dropdowns on outside click
+  // Keyboard shortcut (Ctrl+K or / to focus search)
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (!e.target.closest('.dropdown-container')) {
-        setCatMenuOpen(false);
-        setVerMenuOpen(false);
-        setSortMenuOpen(false);
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === '/' && document.activeElement !== searchInputRef.current && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
       }
     };
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const totalUploads = allResources.length || 303;
+  const totalUploads = allResources.length || 8;
 
   return (
     <div style={{ minHeight: '100vh', paddingBottom: '80px' }}>
-      {/* ------------------------------------------------------------------
-          1. Top Announcement Bar - Clean Light Neutral
-          ------------------------------------------------------------------ */}
-      {showDiscordBanner && (
-        <div className="top-announcement-bar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: '600', color: '#0f172a' }}>Official Community:</span>
-            <span>Join our Discord server</span>
+      <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '24px 20px 0 20px' }}>
+        
+        {/* ------------------------------------------------------------------
+            1. Ultra-Clean Modern Header (Replaces the clunky navbar pill)
+            ------------------------------------------------------------------ */}
+        <header
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '36px',
+            paddingBottom: '20px',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+          }}
+        >
+          {/* Brand Logo */}
+          <Link
+            to="/"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              textDecoration: 'none',
+            }}
+          >
+            <div
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                border: '1px solid #38bdf8',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 0 16px rgba(56, 189, 248, 0.4)',
+                transition: 'transform 0.2s ease',
+              }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+              </svg>
+            </div>
+
+            <div>
+              <span
+                className="shimmer-text"
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontWeight: '800',
+                  fontSize: '1.25rem',
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                SYNDICATE
+              </span>
+            </div>
+          </Link>
+
+          {/* Right Action CTAs */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Discord Button with pulsing live online dot */}
             <a
               href="https://discord.gg/syndicate"
               target="_blank"
               rel="noreferrer"
-              className="top-announcement-pill"
-            >
-              discord.gg/syndicate
-            </a>
-          </div>
-
-          <button
-            onClick={() => setShowDiscordBanner(false)}
-            aria-label="Dismiss banner"
-            style={{
-              position: 'absolute',
-              right: '16px',
-              background: 'none',
-              border: 'none',
-              color: '#94a3b8',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              padding: '4px',
-            }}
-          >
-            <X size={15} />
-          </button>
-        </div>
-      )}
-
-      <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '32px 20px 0 20px' }}>
-        {/* ------------------------------------------------------------------
-            2. Hero Branding Section (Trillium Style)
-            ------------------------------------------------------------------ */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '20px',
-            marginBottom: '28px',
-            flexWrap: 'wrap',
-          }}
-        >
-          {/* Logo Emblem */}
-          <div
-            style={{
-              width: '60px',
-              height: '60px',
-              borderRadius: '14px',
-              background: '#0d1527',
-              border: '1px solid #1e293b',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.4)',
-            }}
-          >
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
-            </svg>
-          </div>
-
-          {/* Title, Subtitle & Clean Stats Pills (NO saved money, NO online) */}
-          <div style={{ flex: 1, minWidth: '280px' }}>
-            <h1
-              className="font-clean-title"
               style={{
-                fontSize: '1.9rem',
-                color: '#ffffff',
-                lineHeight: '1.2',
-                marginBottom: '4px',
-                fontWeight: '700',
-              }}
-            >
-              Syndicate Solutions
-            </h1>
-
-            <p
-              className="font-clean-body"
-              style={{
-                fontSize: '0.92rem',
-                color: '#94a3b8',
-                marginBottom: '12px',
-              }}
-            >
-              Everything is just free.
-            </p>
-
-            {/* Stats Pill Row (Uploads, Downloads, Members - saved money & online REMOVED) */}
-            <div
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
+                display: 'inline-flex',
                 alignItems: 'center',
                 gap: '8px',
+                padding: '7px 16px',
+                borderRadius: '9999px',
+                fontSize: '0.82rem',
+                fontWeight: '500',
+                color: '#cbd5e1',
+                backgroundColor: 'rgba(13, 21, 39, 0.85)',
+                border: '1px solid #1e2f4a',
+                backdropFilter: 'blur(10px)',
+                textDecoration: 'none',
+                transition: 'all 0.16s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#38bdf8';
+                e.currentTarget.style.color = '#ffffff';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#1e2f4a';
+                e.currentTarget.style.color = '#cbd5e1';
               }}
             >
-              <div className="stat-pill-item">
-                <Package size={13} style={{ color: '#38bdf8' }} />
-                <span><strong>{totalUploads}</strong> uploads</span>
+              <span className="pulse-beacon" />
+              <MessageSquare size={13} />
+              <span>Discord</span>
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  padding: '1px 6px',
+                  borderRadius: '999px',
+                  background: '#162442',
+                  color: '#38bdf8',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                }}
+              >
+                15.6k
+              </span>
+            </a>
+
+            {/* Glowing + Upload Button */}
+            <Link
+              to="/upload"
+              className="btn-gold"
+              style={{
+                padding: '7px 18px',
+                fontSize: '0.82rem',
+                gap: '6px',
+              }}
+            >
+              <Plus size={14} />
+              <span>Upload</span>
+            </Link>
+
+            {/* Admin Link */}
+            <Link
+              to="/admin"
+              style={{
+                fontSize: '0.80rem',
+                color: '#64748b',
+                textDecoration: 'none',
+                padding: '6px 8px',
+                transition: 'color 0.15s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#cbd5e1')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#64748b')}
+            >
+              Admin
+            </Link>
+          </div>
+        </header>
+
+        {/* ------------------------------------------------------------------
+            2. Hero Branding Section (Modern & Animated)
+            ------------------------------------------------------------------ */}
+        <div style={{ marginBottom: '32px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '20px',
+              marginBottom: '20px',
+              flexWrap: 'wrap',
+            }}
+          >
+            {/* Title, Subtitle & Clean Stats Pills (NO saved money, NO online) */}
+            <div style={{ flex: 1, minWidth: '280px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    fontSize: '0.72rem',
+                    fontWeight: '600',
+                    color: '#38bdf8',
+                    background: 'rgba(56, 189, 248, 0.1)',
+                    border: '1px solid rgba(56, 189, 248, 0.25)',
+                    padding: '2px 9px',
+                    borderRadius: '999px',
+                  }}
+                >
+                  <Sparkles size={11} />
+                  <span>PREMIUM ARCHIVE</span>
+                </span>
               </div>
 
-              <div className="stat-pill-item">
-                <Download size={13} style={{ color: '#38bdf8' }} />
-                <span><strong>151.2k</strong> downloads</span>
-              </div>
+              <h1
+                className="font-clean-title shimmer-text"
+                style={{
+                  fontSize: '2.2rem',
+                  lineHeight: '1.2',
+                  marginBottom: '6px',
+                  fontWeight: '800',
+                  letterSpacing: '-0.025em',
+                }}
+              >
+                Syndicate Solutions
+              </h1>
 
-              <div className="stat-pill-item">
-                <Users size={13} style={{ color: '#94a3b8' }} />
-                <span><strong>15,645</strong> members</span>
+              <p
+                className="font-clean-body"
+                style={{
+                  fontSize: '0.94rem',
+                  color: '#94a3b8',
+                  marginBottom: '16px',
+                }}
+              >
+                Everything is just free. Discover and download clients, source codes & developer tools.
+              </p>
+
+              {/* Stats Pill Row (Uploads, Downloads, Members - saved money & online REMOVED) */}
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <div className="stat-pill-item">
+                  <Package size={13} style={{ color: '#38bdf8' }} />
+                  <span><strong>{totalUploads}</strong> uploads</span>
+                </div>
+
+                <div className="stat-pill-item">
+                  <Download size={13} style={{ color: '#38bdf8' }} />
+                  <span><strong>151.2k</strong> downloads</span>
+                </div>
+
+                <div className="stat-pill-item">
+                  <Users size={13} style={{ color: '#94a3b8' }} />
+                  <span><strong>15,645</strong> members</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
         {/* ------------------------------------------------------------------
-            3. Category Tabs Row (All 43 | Minecraft 33 | ...)
+            3. Category Tabs Row (All 8 | Minecraft 8 | Clients 3 | ...)
             ------------------------------------------------------------------ */}
         <div
           style={{
@@ -313,7 +371,7 @@ export default function Home() {
             gap: '8px',
             overflowX: 'auto',
             paddingBottom: '14px',
-            marginBottom: '16px',
+            marginBottom: '20px',
             scrollbarWidth: 'none',
           }}
         >
@@ -334,204 +392,68 @@ export default function Home() {
         </div>
 
         {/* ------------------------------------------------------------------
-            4. Filter Controls (Trillium Capsule Shape - Matches Image 2 & 3)
-               [ Search ]
-               [ All ⌄ ]
-               [ All versions ⌄ ]
-               [ 🎛️ Top rated ⌄ ]
-               [ Clients ]
-               [ All posts ]
+            4. Modern Animated Search Bar (Clean & Wide)
+               (Removed clunky All versions, Top rated, Source Code dropdowns)
             ------------------------------------------------------------------ */}
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '10px',
-            marginBottom: '26px',
-            paddingBottom: '18px',
-            borderBottom: '1px solid var(--edge)',
-          }}
-        >
-          {/* Left Controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            {/* Search Pill Input */}
-            <div style={{ position: 'relative' }}>
-              <Search
-                size={13}
-                style={{
-                  position: 'absolute',
-                  left: '14px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: '#64748b',
-                }}
-              />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search"
-                className="filter-pill-input"
-                style={{ width: '220px' }}
-              />
-            </div>
-
-            {/* Version Dropdown */}
-            <div className="dropdown-container" style={{ position: 'relative' }}>
-              <div
-                className={`filter-dropdown-pill ${selectedVersion !== 'All versions' ? 'active' : ''}`}
-                onClick={() => {
-                  setVerMenuOpen(!verMenuOpen);
-                  setCatMenuOpen(false);
-                  setSortMenuOpen(false);
-                }}
-              >
-                <span>{selectedVersion}</span>
-                <ChevronDown size={13} />
-              </div>
-
-              {verMenuOpen && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '110%',
-                    left: 0,
-                    zIndex: 50,
-                    minWidth: '150px',
-                    background: '#0d1527',
-                    border: '1px solid #1e293b',
-                    borderRadius: '10px',
-                    padding: '6px',
-                    boxShadow: '0 10px 28px rgba(0, 0, 0, 0.5)',
-                  }}
-                >
-                  {versionOptions.map((ver) => (
-                    <div
-                      key={ver}
-                      onClick={() => {
-                        setSelectedVersion(ver);
-                        setVerMenuOpen(false);
-                      }}
-                      style={{
-                        padding: '7px 12px',
-                        fontSize: '0.82rem',
-                        color: selectedVersion === ver ? '#ffffff' : '#94a3b8',
-                        fontWeight: selectedVersion === ver ? '600' : '400',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        backgroundColor: selectedVersion === ver ? '#162442' : 'transparent',
-                        transition: 'background 0.12s ease',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#131e36')}
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.backgroundColor =
-                          selectedVersion === ver ? '#162442' : 'transparent')
-                      }
-                    >
-                      {ver}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Sort Dropdown */}
-            <div className="dropdown-container" style={{ position: 'relative' }}>
-              <div
-                className={`filter-dropdown-pill ${sortBy !== 'top_rated' ? 'active' : ''}`}
-                onClick={() => {
-                  setSortMenuOpen(!sortMenuOpen);
-                  setCatMenuOpen(false);
-                  setVerMenuOpen(false);
-                }}
-              >
-                <SlidersHorizontal size={13} />
-                <span>{sortOptions.find((s) => s.id === sortBy)?.label || 'Top rated'}</span>
-                <ChevronDown size={13} />
-              </div>
-
-              {sortMenuOpen && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '110%',
-                    left: 0,
-                    zIndex: 50,
-                    minWidth: '160px',
-                    background: '#0d1527',
-                    border: '1px solid #1e293b',
-                    borderRadius: '10px',
-                    padding: '6px',
-                    boxShadow: '0 10px 28px rgba(0, 0, 0, 0.5)',
-                  }}
-                >
-                  {sortOptions.map((s) => (
-                    <div
-                      key={s.id}
-                      onClick={() => {
-                        setSortBy(s.id);
-                        setSortMenuOpen(false);
-                      }}
-                      style={{
-                        padding: '7px 12px',
-                        fontSize: '0.82rem',
-                        color: sortBy === s.id ? '#ffffff' : '#94a3b8',
-                        fontWeight: sortBy === s.id ? '600' : '400',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        backgroundColor: sortBy === s.id ? '#162442' : 'transparent',
-                        transition: 'background 0.12s ease',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#131e36')}
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.backgroundColor =
-                          sortBy === s.id ? '#162442' : 'transparent')
-                      }
-                    >
-                      {s.label}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Source Code Toggle */}
-            <button
-              onClick={() => setSourceCodeOnly(!sourceCodeOnly)}
-              className={`filter-dropdown-pill ${sourceCodeOnly ? 'active' : ''}`}
-            >
-              <span>Source Code</span>
-            </button>
-          </div>
-
-          {/* Right Category Quick Pills: Clients & All posts */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              onClick={() => setActiveCategory('Clients')}
-              className={`filter-dropdown-pill ${activeCategory === 'Clients' ? 'active' : ''}`}
-            >
-              Clients
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveCategory('All');
-                setSelectedVersion('All versions');
-                setSearch('');
-                setSourceCodeOnly(false);
-                setSortBy('top_rated');
+        <div style={{ marginBottom: '28px' }}>
+          <div className="modern-animated-search">
+            <Search
+              size={15}
+              style={{
+                position: 'absolute',
+                left: '16px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: '#38bdf8',
+                pointerEvents: 'none',
               }}
-              className={`filter-dropdown-pill ${activeCategory === 'All' && !sourceCodeOnly && selectedVersion === 'All versions' ? 'active' : ''}`}
-            >
-              All posts
-            </button>
+            />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by client name, version, author, or tags..."
+            />
+            {search ? (
+              <button
+                onClick={() => setSearch('')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#94a3b8',
+                  padding: '6px 14px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+                aria-label="Clear search"
+              >
+                <X size={14} />
+              </button>
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  paddingRight: '14px',
+                  color: '#64748b',
+                  fontSize: '0.74rem',
+                  fontFamily: 'monospace',
+                  userSelect: 'none',
+                }}
+              >
+                <span style={{ padding: '2px 6px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '4px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>Ctrl</span>
+                <span>+</span>
+                <span style={{ padding: '2px 6px', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '4px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>K</span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* ------------------------------------------------------------------
-            5. Resource Cards Grid (3 Columns Desktop)
+            5. Resource Cards Grid (3 Columns Desktop, Animated Stagger)
             ------------------------------------------------------------------ */}
         {loading ? (
           <div
@@ -557,19 +479,17 @@ export default function Home() {
             }}
           >
             <p style={{ fontSize: '1rem', color: '#ffffff', marginBottom: '8px', fontWeight: '600' }}>
-              No resources found matching your filters.
+              No resources found matching your search.
             </p>
             <button
               onClick={() => {
                 setActiveCategory('All');
-                setSelectedVersion('All versions');
                 setSearch('');
-                setSourceCodeOnly(false);
               }}
               className="btn-gold"
               style={{ marginTop: '12px' }}
             >
-              Reset Filters
+              Reset Search
             </button>
           </div>
         ) : (

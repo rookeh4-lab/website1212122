@@ -15,19 +15,10 @@ export default function Navbar() {
     setMobileOpen(false);
   }, [location.pathname]);
 
-  const navLinks = [
-    { name: 'Archive', path: '/' },
-    { name: 'Clients', path: '/clients' },
-    { name: 'Source Codes', path: '/sources' },
-    { name: 'Tools', path: '/tools' },
-    { name: 'Macros', path: '/macros' },
-    { name: 'Launchers', path: '/launchers' },
-  ];
-
-  const isActive = (path) => {
-    if (path === '/') return location.pathname === '/';
-    return location.pathname.startsWith(path);
-  };
+  // Remove the navbar pill from Home page as requested
+  if (location.pathname === '/') {
+    return null;
+  }
 
   return (
     <header
@@ -42,16 +33,16 @@ export default function Navbar() {
     >
       <div
         style={{
-          background: 'rgba(13, 21, 39, 0.90)',
+          background: 'rgba(13, 21, 39, 0.92)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
           borderRadius: '9999px',
-          padding: '8px 16px 8px 18px',
+          padding: '8px 18px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           border: '1px solid #1e293b',
-          boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.4)',
+          boxShadow: '0 4px 24px -2px rgba(0, 0, 0, 0.5)',
         }}
       >
         {/* Brand Logo & Name */}
@@ -69,12 +60,12 @@ export default function Navbar() {
               width: '32px',
               height: '32px',
               borderRadius: '50%',
-              background: '#0284c7',
+              background: 'linear-gradient(135deg, #0284c7, #0369a1)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#ffffff',
-              boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)',
+              boxShadow: '0 0 12px rgba(56, 189, 248, 0.4)',
             }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
@@ -86,7 +77,7 @@ export default function Navbar() {
             style={{
               fontFamily: "var(--font-sans)",
               fontWeight: '700',
-              fontSize: '1.12rem',
+              fontSize: '1.1rem',
               color: '#ffffff',
               letterSpacing: '-0.02em',
             }}
@@ -95,54 +86,32 @@ export default function Navbar() {
           </span>
         </Link>
 
-        {/* Center Navigation Links */}
-        <nav
+        {/* Center Back to Archive */}
+        <Link
+          to="/"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
+            padding: '6px 14px',
+            borderRadius: '9999px',
+            fontSize: '0.84rem',
+            fontWeight: '600',
+            color: '#94a3b8',
+            textDecoration: 'none',
+            transition: 'all 0.16s ease',
           }}
-          className="desktop-nav-menu"
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = '#ffffff';
+            e.currentTarget.style.backgroundColor = '#131e36';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = '#94a3b8';
+            e.currentTarget.style.backgroundColor = 'transparent';
+          }}
         >
-          {navLinks.map((item) => {
-            const active = isActive(item.path);
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                style={{
-                  padding: '6px 14px',
-                  borderRadius: '9999px',
-                  fontSize: '0.84rem',
-                  fontWeight: active ? '600' : '500',
-                  color: active ? '#ffffff' : '#94a3b8',
-                  backgroundColor: active ? '#162442' : 'transparent',
-                  border: active ? '1px solid #38bdf8' : '1px solid transparent',
-                  textDecoration: 'none',
-                  transition: 'all 0.16s var(--ease-out)',
-                  boxShadow: active ? '0 0 12px rgba(56, 189, 248, 0.15)' : 'none',
-                }}
-                onMouseEnter={(e) => {
-                  if (!active) {
-                    e.currentTarget.style.color = '#ffffff';
-                    e.currentTarget.style.backgroundColor = '#131e36';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!active) {
-                    e.currentTarget.style.color = '#94a3b8';
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                  }
-                }}
-              >
-                {item.name}
-              </Link>
-            );
-          })}
-        </nav>
+          ← Return to Archive
+        </Link>
 
         {/* Right Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <a
             href="https://discord.gg/syndicate"
             target="_blank"
@@ -151,7 +120,7 @@ export default function Navbar() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '6px 13px',
+              padding: '6px 14px',
               borderRadius: '9999px',
               fontSize: '0.82rem',
               fontWeight: '500',
@@ -159,17 +128,15 @@ export default function Navbar() {
               backgroundColor: '#0d1527',
               border: '1px solid #1e293b',
               textDecoration: 'none',
-              transition: 'all 0.16s var(--ease-out)',
+              transition: 'all 0.16s ease',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#334155';
+              e.currentTarget.style.borderColor = '#38bdf8';
               e.currentTarget.style.color = '#ffffff';
-              e.currentTarget.style.backgroundColor = '#131e36';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.borderColor = '#1e293b';
               e.currentTarget.style.color = '#cbd5e1';
-              e.currentTarget.style.backgroundColor = '#0d1527';
             }}
           >
             <MessageSquare size={13} />
@@ -180,7 +147,7 @@ export default function Navbar() {
             to="/upload"
             className="btn-gold"
             style={{
-              padding: '6px 15px',
+              padding: '6px 16px',
               fontSize: '0.82rem',
             }}
           >
@@ -191,10 +158,7 @@ export default function Navbar() {
           <Link
             to="/admin"
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
               padding: '6px 10px',
-              borderRadius: '9999px',
               fontSize: '0.80rem',
               fontWeight: '500',
               color: '#64748b',
@@ -206,60 +170,8 @@ export default function Navbar() {
           >
             Admin
           </Link>
-
-          {/* Mobile Menu Hamburger */}
-          <button
-            onClick={() => setMobileOpen(!mobileOpen)}
-            aria-label="Toggle mobile menu"
-            className="mobile-nav-toggle"
-            style={{
-              display: 'none',
-              background: 'none',
-              border: 'none',
-              color: '#ffffff',
-              padding: '6px',
-              cursor: 'pointer',
-            }}
-          >
-            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
         </div>
       </div>
-
-      {/* Mobile Drawer */}
-      {mobileOpen && (
-        <div
-          style={{
-            marginTop: '8px',
-            background: '#0d1527',
-            border: '1px solid #1e293b',
-            borderRadius: '16px',
-            padding: '12px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '6px',
-            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.5)',
-          }}
-        >
-          {navLinks.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              style={{
-                padding: '10px 14px',
-                borderRadius: '8px',
-                fontSize: '0.88rem',
-                color: isActive(item.path) ? '#ffffff' : '#94a3b8',
-                fontWeight: isActive(item.path) ? '600' : '500',
-                textDecoration: 'none',
-                backgroundColor: isActive(item.path) ? '#162442' : 'transparent',
-              }}
-            >
-              {item.name}
-            </Link>
-          ))}
-        </div>
-      )}
     </header>
   );
 }
