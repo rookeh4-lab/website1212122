@@ -300,6 +300,14 @@ export default function AdminPage() {
 
       setMessage(`Successfully published "${uploadForm.title}" directly to Client Syndicate!`);
 
+      // Update local cache immediately so it shows instantly everywhere
+      try {
+        const cached = localStorage.getItem('cached_syndicate_resources');
+        const list = cached ? JSON.parse(cached) : [];
+        const updatedList = [newResource, ...list.filter(r => r.title !== newResource.title)];
+        localStorage.setItem('cached_syndicate_resources', JSON.stringify(updatedList));
+      } catch (_e) {}
+
       // Reset form
       setUploadForm({
         title: '',

@@ -18,6 +18,101 @@ import ResourceCard from '../components/ResourceCard';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
+const FALLBACK_RESOURCES = [
+  {
+    id: "6c671cbd-fc59-4201-b9cf-4137d9038106",
+    title: "Plutora Client",
+    slug: "plutora-client-mwp35daf",
+    category: "Clients",
+    version: "1.21.11",
+    loader: "Fabric",
+    type: "Client",
+    author_name: "Rookeh",
+    author_avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
+    thumbnail_url: "https://ooxshxykdujgxcyezofo.supabase.co/storage/v1/object/public/client-images/1795185576140-1q2j8.png",
+    client_file_name: "Plutora_Cracked_By_JP.zip",
+    client_file_size: "17.3 MB",
+    client_download_url: "https://github.com/rookeh4-lab/website1212122/releases/download/v1.0.0/Plutora_Cracked_By_JP.zip",
+    download_url: "https://github.com/rookeh4-lab/website1212122/releases/download/v1.0.0/Plutora_Cracked_By_JP.zip",
+    downloads_count: 104,
+    likes_count: 5,
+    description: "Plutora Client 1.21.11 verified clean cracked release. High performance Fabric utility client.",
+    credits: "• Plutora Devs\n• Cracked by JP\n• Client Syndicate",
+    is_clean: true,
+    is_approved: true,
+    created_at: "2026-11-20T14:39:51.752Z"
+  },
+  {
+    id: "f84b1b9e-valk-4201-b9cf-4137d9038106",
+    title: "Valkyrie Client",
+    slug: "valkyrie-client-mwp5ebrf",
+    category: "Clients",
+    version: "1.21.11",
+    loader: "Fabric",
+    type: "Client",
+    author_name: "Rookeh",
+    author_avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
+    thumbnail_url: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800",
+    client_file_name: "valkyrie-client.jar",
+    client_file_size: "16.4 MB",
+    client_download_url: "https://github.com/rookeh4-lab/website1212122/releases/download/v1.0.0/valkyrie-client.jar",
+    download_url: "https://github.com/rookeh4-lab/website1212122/releases/download/v1.0.0/valkyrie-client.jar",
+    downloads_count: 102,
+    likes_count: 4,
+    description: "Valkyrie Client verified direct download release.",
+    credits: "• Rookeh\n• Client Syndicate Archive",
+    is_clean: true,
+    is_approved: true,
+    created_at: "2026-11-20T15:43:00.000Z"
+  },
+  {
+    id: "2fcde785-6658-415a-a1b1-ed91eb85ef2a",
+    title: "Rookeh Injector",
+    slug: "rookeh-injector-mwp3mngo",
+    category: "Clients",
+    version: "1.21.11",
+    loader: "Fabric",
+    type: "Client",
+    author_name: "Rookeh",
+    author_avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
+    thumbnail_url: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800",
+    client_file_name: "rookeh-injector.jar",
+    client_file_size: "7.2 MB",
+    client_download_url: "https://github.com/rookeh4-lab/website1212122/releases/download/v1.0.0/rookeh-injector.jar",
+    download_url: "https://github.com/rookeh4-lab/website1212122/releases/download/v1.0.0/rookeh-injector.jar",
+    downloads_count: 102,
+    likes_count: 4,
+    description: "Rookeh Injector verified direct download release.",
+    credits: "• Rookeh\n• Client Syndicate Archive",
+    is_clean: true,
+    is_approved: true,
+    created_at: "2026-11-20T14:53:18.320Z"
+  },
+  {
+    id: "4b24d743-5f82-4fa2-ab34-2280d1bbaf93",
+    title: "R3MU Client",
+    slug: "r3mu-client-mwp2ylxg",
+    category: "Clients",
+    version: "1.21.11",
+    loader: "Fabric",
+    type: "Client",
+    author_name: "Rookeh",
+    author_avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
+    thumbnail_url: "https://ooxshxykdujgxcyezofo.supabase.co/storage/v1/object/public/client-images/1795185246849-x9g79e.png",
+    client_file_name: "r3mu-client.jar",
+    client_file_size: "6.8 MB",
+    client_download_url: "https://github.com/rookeh4-lab/website1212122/releases/download/v1.0.0/r3mu-client.jar",
+    download_url: "https://github.com/rookeh4-lab/website1212122/releases/download/v1.0.0/r3mu-client.jar",
+    downloads_count: 102,
+    likes_count: 4,
+    description: "R3MU Client verified clean release.",
+    credits: "• Rookeh\n• Client Syndicate Archive",
+    is_clean: true,
+    is_approved: true,
+    created_at: "2026-11-20T14:34:36.593Z"
+  }
+];
+
 export default function Home() {
   const searchInputRef = useRef(null);
 
@@ -25,9 +120,18 @@ export default function Home() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [search, setSearch] = useState('');
 
-  // Resources state
-  const [allResources, setAllResources] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Resources state - Guaranteed initial data from cache or fallback so friends never see empty page
+  const [allResources, setAllResources] = useState(() => {
+    try {
+      const cached = localStorage.getItem('cached_syndicate_resources');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_e) {}
+    return FALLBACK_RESOURCES;
+  });
+  const [loading, setLoading] = useState(false);
 
   // Category list - Strictly Clients, Source Codes, Tools
   const categories = [
@@ -37,25 +141,54 @@ export default function Home() {
     { name: 'Tools', id: 'Tools' },
   ];
 
-  // Fetch all resources with real-time updates and ultra-fast caching
+  // Fetch all resources with resilient fallback and real-time updates
   useEffect(() => {
     async function loadData() {
+      let fetched = null;
+
+      // 1. Primary: Supabase SDK
       try {
-        setLoading(true);
         const { data, error } = await supabase
           .from('resources')
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (!error && data) {
-          setAllResources(data);
+        if (!error && Array.isArray(data) && data.length > 0) {
+          fetched = data;
         }
-      } catch (err) {
-        console.error('Failed to fetch resources:', err);
-      } finally {
-        setLoading(false);
+      } catch (e) {
+        console.warn('Supabase SDK query failed, trying direct REST fetch:', e.message);
+      }
+
+      // 2. Secondary: Direct REST fetch (in case SDK or websockets fail)
+      if (!fetched) {
+        try {
+          const res = await fetch('https://ooxshxykdujgxcyezofo.supabase.co/rest/v1/resources?select=*&order=created_at.desc', {
+            headers: {
+              'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9veHNoeHlrZHVqZ3hjeWV6b2ZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQzODQ2MjksImV4cCI6MjEwOTk2MDYyOX0.sHcd4AHqEiCKsMMMM2L8muhpZ_gwPhQJ1-qhHtcKyvo',
+              'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9veHNoeHlrZHVqZ3hjeWV6b2ZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQzODQ2MjksImV4cCI6MjEwOTk2MDYyOX0.sHcd4AHqEiCKsMMMM2L8muhpZ_gwPhQJ1-qhHtcKyvo'
+            }
+          });
+          if (res.ok) {
+            const json = await res.json();
+            if (Array.isArray(json) && json.length > 0) {
+              fetched = json;
+            }
+          }
+        } catch (e) {
+          console.warn('Direct REST fetch failed:', e.message);
+        }
+      }
+
+      // 3. Update state and persistent cache
+      if (fetched && fetched.length > 0) {
+        setAllResources(fetched);
+        try {
+          localStorage.setItem('cached_syndicate_resources', JSON.stringify(fetched));
+        } catch (_e) {}
       }
     }
+
     loadData();
 
     // Realtime subscription: new clients published from admin appear instantly for everyone!
@@ -66,11 +199,23 @@ export default function Home() {
         { event: '*', schema: 'public', table: 'resources' },
         (payload) => {
           if (payload.eventType === 'INSERT' && payload.new) {
-            setAllResources((prev) => [payload.new, ...prev.filter((r) => r.id !== payload.new.id)]);
+            setAllResources((prev) => {
+              const updated = [payload.new, ...prev.filter((r) => r.id !== payload.new.id)];
+              try { localStorage.setItem('cached_syndicate_resources', JSON.stringify(updated)); } catch (_e) {}
+              return updated;
+            });
           } else if (payload.eventType === 'UPDATE' && payload.new) {
-            setAllResources((prev) => prev.map((r) => (r.id === payload.new.id ? payload.new : r)));
+            setAllResources((prev) => {
+              const updated = prev.map((r) => (r.id === payload.new.id ? payload.new : r));
+              try { localStorage.setItem('cached_syndicate_resources', JSON.stringify(updated)); } catch (_e) {}
+              return updated;
+            });
           } else if (payload.eventType === 'DELETE' && payload.old) {
-            setAllResources((prev) => prev.filter((r) => r.id !== payload.old.id));
+            setAllResources((prev) => {
+              const updated = prev.filter((r) => r.id !== payload.old.id);
+              try { localStorage.setItem('cached_syndicate_resources', JSON.stringify(updated)); } catch (_e) {}
+              return updated;
+            });
           } else {
             loadData();
           }
