@@ -230,8 +230,8 @@ export default function AdminPage() {
 
       // 3. Prepare Payload
       const generatedSlug = uploadForm.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now().toString(36);
-      const authorName = profile?.username || uploadForm.author_name || 'Rookeh';
-      const authorAvatar = profile?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150';
+      const authorName = profile?.username || uploadForm.author_name || 'rain';
+      const authorAvatar = profile?.avatar_url || 'https://ooxshxykdujgxcyezofo.supabase.co/storage/v1/object/public/client-images/rain-avatar.jpg';
       const customCredits = uploadForm.credits?.trim() || `• ${authorName}\n• Client Syndicate Archive`;
 
       const newResource = {

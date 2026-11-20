@@ -22,6 +22,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabaseClient';
 
 const PRESET_AVATARS = [
+  { name: 'Rain (Apolocheese)', url: 'https://ooxshxykdujgxcyezofo.supabase.co/storage/v1/object/public/client-images/rain-avatar.jpg' },
   { name: 'Syndicate Pixel', url: '/logo.png' },
   { name: 'Reverse Engineer', url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150' },
   { name: 'Cyber Phantom', url: 'https://images.unsplash.com/photo-1566492031773-4f4e44671857?w=150' },
@@ -42,13 +43,19 @@ export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Profile Editor State (when logged in)
-  const [editName, setEditName] = useState(profile?.username || 'Rookeh');
-  const [editAvatar, setEditAvatar] = useState(profile?.avatar_url || PRESET_AVATARS[1].url);
+  // Profile Editor State (when logged in) - initialized with persistent profile
+  const [editName, setEditName] = useState(profile?.username || 'rain');
+  const [editAvatar, setEditAvatar] = useState(profile?.avatar_url || 'https://ooxshxykdujgxcyezofo.supabase.co/storage/v1/object/public/client-images/rain-avatar.jpg');
   const [customAvatarUrl, setCustomAvatarUrl] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMsg, setProfileMsg] = useState('');
   const [profileError, setProfileError] = useState('');
+
+  // Keep editor in sync with profile
+  useEffect(() => {
+    if (profile?.username) setEditName(profile.username);
+    if (profile?.avatar_url) setEditAvatar(profile.avatar_url);
+  }, [profile]);
 
   // States
   const [loading, setLoading] = useState(false);

@@ -5,25 +5,28 @@ const AuthContext = createContext(null);
 
 const AUTHORIZED_ADMIN_EMAIL = 'rookeh4@gmail.com';
 
-const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150';
+const DEFAULT_AVATAR = 'https://ooxshxykdujgxcyezofo.supabase.co/storage/v1/object/public/client-images/rain-avatar.jpg';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Profile State (Display Name & PFP)
+  // Profile State (Display Name & PFP) - permanent, defaults to 'rain' + apolocheese cat
   const [profile, setProfile] = useState(() => {
     try {
       const saved = localStorage.getItem('syndicate_user_profile');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.username) return parsed;
+      }
     } catch {}
     return {
-      username: 'Rookeh',
+      username: 'rain',
       avatar_url: DEFAULT_AVATAR,
     };
   });
 
-  // Sync profile when user changes
+  // Sync profile when user changes - NEVER resets what the user saved
   const syncProfile = async (currentUser) => {
     if (!currentUser) return;
 
@@ -45,10 +48,32 @@ export function AuthProvider({ children }) {
     }
 
     setProfile((prev) => {
+      let savedLocal = null;
+      try {
+        const saved = localStorage.getItem('syndicate_user_profile');
+        if (saved) savedLocal = JSON.parse(saved);
+      } catch {}
+
+      // Saved profile in localStorage has absolute priority
+      const cleanUsername =
+        savedLocal?.username ||
+        prev?.username ||
+        dbProfile?.username ||
+        metaUsername ||
+        'rain';
+
+      const cleanAvatar =
+        savedLocal?.avatar_url ||
+        prev?.avatar_url ||
+        dbProfile?.avatar_url ||
+        metaAvatar ||
+        DEFAULT_AVATAR;
+
       const updated = {
-        username: dbProfile?.username || metaUsername || prev.username || currentUser.email?.split('@')[0] || 'Rookeh',
-        avatar_url: dbProfile?.avatar_url || metaAvatar || prev.avatar_url || DEFAULT_AVATAR,
+        username: cleanUsername,
+        avatar_url: cleanAvatar,
       };
+
       try {
         localStorage.setItem('syndicate_user_profile', JSON.stringify(updated));
       } catch {}
@@ -71,10 +96,19 @@ export function AuthProvider({ children }) {
           // Check if local admin session exists for quick admin access
           const localAdmin = localStorage.getItem('admin_user');
           if (localAdmin === AUTHORIZED_ADMIN_EMAIL) {
+            let saved = { username: 'rain', avatar_url: DEFAULT_AVATAR };
+            try {
+              const raw = localStorage.getItem('syndicate_user_profile');
+              if (raw) saved = JSON.parse(raw);
+            } catch {}
+
             const adminUser = {
               email: AUTHORIZED_ADMIN_EMAIL,
               id: 'admin-local',
-              user_metadata: { username: 'Rookeh', avatar_url: DEFAULT_AVATAR }
+              user_metadata: {
+                username: saved.username || 'rain',
+                avatar_url: saved.avatar_url || DEFAULT_AVATAR,
+              }
             };
             setUser(adminUser);
             await syncProfile(adminUser);
@@ -104,10 +138,19 @@ export function AuthProvider({ children }) {
       } else {
         const localAdmin = localStorage.getItem('admin_user');
         if (localAdmin === AUTHORIZED_ADMIN_EMAIL) {
+          let saved = { username: 'rain', avatar_url: DEFAULT_AVATAR };
+          try {
+            const raw = localStorage.getItem('syndicate_user_profile');
+            if (raw) saved = JSON.parse(raw);
+          } catch {}
+
           const adminUser = {
             email: AUTHORIZED_ADMIN_EMAIL,
             id: 'admin-local',
-            user_metadata: { username: 'Rookeh', avatar_url: DEFAULT_AVATAR }
+            user_metadata: {
+              username: saved.username || 'rain',
+              avatar_url: saved.avatar_url || DEFAULT_AVATAR,
+            }
           };
           setUser(adminUser);
           await syncProfile(adminUser);
@@ -123,9 +166,9 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  // Update Profile Name & PFP
+  // Update Profile Name & PFP - permanently saved
   const updateProfile = async ({ username, avatar_url }) => {
-    const cleanUsername = username?.trim() || profile.username || 'Rookeh';
+    const cleanUsername = username?.trim() || profile.username || 'rain';
     const cleanAvatar = avatar_url?.trim() || profile.avatar_url || DEFAULT_AVATAR;
 
     const newProfile = {
@@ -137,6 +180,20 @@ export function AuthProvider({ children }) {
     try {
       localStorage.setItem('syndicate_user_profile', JSON.stringify(newProfile));
     } catch {}
+
+    // Update in-memory user_metadata
+    setUser((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        user_metadata: {
+          ...prev.user_metadata,
+          username: cleanUsername,
+          display_name: cleanUsername,
+          avatar_url: cleanAvatar,
+        },
+      };
+    });
 
     // Update Supabase Auth user metadata
     try {
