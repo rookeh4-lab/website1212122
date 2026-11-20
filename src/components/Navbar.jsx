@@ -4,7 +4,8 @@ import {
   Plus,
   Menu,
   X,
-  MessageSquare
+  MessageSquare,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -55,34 +56,28 @@ export default function Navbar() {
             textDecoration: 'none',
           }}
         >
-          <div
+          <img
+            src="/logo.png"
+            alt="Client Syndicate"
             style={{
               width: '32px',
               height: '32px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #0284c7, #0369a1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              boxShadow: '0 0 12px rgba(56, 189, 248, 0.4)',
+              borderRadius: '8px',
+              objectFit: 'cover',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
             }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
-            </svg>
-          </div>
+          />
 
           <span
             style={{
               fontFamily: "var(--font-sans)",
               fontWeight: '700',
-              fontSize: '1.1rem',
+              fontSize: '1.05rem',
               color: '#ffffff',
               letterSpacing: '-0.02em',
             }}
           >
-            Syndicate
+            Client Syndicate
           </span>
         </Link>
 
@@ -144,31 +139,15 @@ export default function Navbar() {
           </a>
 
           <Link
-            to="/upload"
+            to="/admin"
             className="btn-gold"
             style={{
               padding: '6px 16px',
               fontSize: '0.82rem',
             }}
           >
-            <Plus size={14} />
-            <span>Upload</span>
-          </Link>
-
-          <Link
-            to="/admin"
-            style={{
-              padding: '6px 10px',
-              fontSize: '0.80rem',
-              fontWeight: '500',
-              color: '#64748b',
-              textDecoration: 'none',
-              transition: 'color 0.15s ease',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#cbd5e1')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#64748b')}
-          >
-            Admin
+            <ShieldCheck size={14} />
+            <span>Admin</span>
           </Link>
         </div>
       </div>

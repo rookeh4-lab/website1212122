@@ -2,15 +2,14 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Search,
-  CheckCircle,
-  Flame,
   X,
   Package,
   Download,
   Users,
-  Plus,
+  ShieldAlert,
   MessageSquare,
-  Sparkles
+  ShieldCheck,
+  Plus
 } from 'lucide-react';
 import ResourceCard from '../components/ResourceCard';
 import { supabase } from '../lib/supabaseClient';
@@ -18,7 +17,7 @@ import { supabase } from '../lib/supabaseClient';
 export default function Home() {
   const searchInputRef = useRef(null);
 
-  // Filter state
+  // Filter state (ONLY 3 categories: clients, source codes, tools)
   const [activeCategory, setActiveCategory] = useState('All');
   const [search, setSearch] = useState('');
 
@@ -27,15 +26,12 @@ export default function Home() {
   const [resources, setResources] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Category list
+  // Category list - Strictly Clients, Source Codes, Tools
   const categories = [
     { name: 'All', id: 'All' },
-    { name: 'Minecraft', id: 'Minecraft' },
     { name: 'Clients', id: 'Clients' },
     { name: 'Source Codes', id: 'Source Codes' },
     { name: 'Tools', id: 'Tools' },
-    { name: 'Macros', id: 'Macros' },
-    { name: 'Launchers', id: 'Launchers' },
   ];
 
   // Initial fetch of all resources for counts
@@ -57,27 +53,25 @@ export default function Home() {
   const categoryCounts = useMemo(() => {
     const counts = {
       All: allResources.length || 8,
-      Minecraft: 0,
       Clients: 0,
       'Source Codes': 0,
       Tools: 0,
-      Macros: 0,
-      Launchers: 0,
     };
     allResources.forEach((res) => {
-      if (res.game === 'Minecraft' || !res.game || res.category !== 'Software') {
-        counts.Minecraft = (counts.Minecraft || 0) + 1;
-      }
-      if (res.category) {
-        counts[res.category] = (counts[res.category] || 0) + 1;
+      const cat = res.category;
+      if (cat === 'Clients' || cat === 'Minecraft') {
+        counts.Clients = (counts.Clients || 0) + 1;
+      } else if (cat === 'Source Codes') {
+        counts['Source Codes'] = (counts['Source Codes'] || 0) + 1;
+      } else if (cat === 'Tools') {
+        counts.Tools = (counts.Tools || 0) + 1;
+      } else {
+        counts.Clients = (counts.Clients || 0) + 1;
       }
     });
-    if (counts.Minecraft === 0) counts.Minecraft = 8;
-    if (counts.Clients === 0) counts.Clients = 3;
+    if (counts.Clients === 0) counts.Clients = 5;
     if (counts['Source Codes'] === 0) counts['Source Codes'] = 2;
     if (counts.Tools === 0) counts.Tools = 1;
-    if (counts.Macros === 0) counts.Macros = 1;
-    if (counts.Launchers === 0) counts.Launchers = 1;
     return counts;
   }, [allResources]);
 
@@ -89,8 +83,8 @@ export default function Home() {
         let query = supabase.from('resources').select('*');
 
         if (activeCategory !== 'All') {
-          if (activeCategory === 'Minecraft') {
-            query = query.or('game.eq.Minecraft,category.neq.Software');
+          if (activeCategory === 'Clients') {
+            query = query.or('category.eq.Clients,category.eq.Minecraft');
           } else {
             query = query.eq('category', activeCategory);
           }
@@ -132,13 +126,14 @@ export default function Home() {
   }, []);
 
   const totalUploads = allResources.length || 8;
+  const isAdmin = localStorage.getItem('admin_user') === 'rookeh4@gmail.com';
 
   return (
     <div style={{ minHeight: '100vh', paddingBottom: '80px' }}>
       <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '24px 20px 0 20px' }}>
         
         {/* ------------------------------------------------------------------
-            1. Ultra-Clean Modern Header (Replaces the clunky navbar pill)
+            1. Ultra-Clean Modern Header with User's Uploaded Logo
             ------------------------------------------------------------------ */}
         <header
           style={{
@@ -150,7 +145,7 @@ export default function Home() {
             borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
           }}
         >
-          {/* Brand Logo */}
+          {/* Brand Logo & Name: ONLY "Client Syndicate" */}
           <Link
             to="/"
             style={{
@@ -160,43 +155,37 @@ export default function Home() {
               textDecoration: 'none',
             }}
           >
-            <div
+            <img
+              src="/logo.png"
+              alt="Client Syndicate"
               style={{
-                width: '38px',
-                height: '38px',
+                width: '42px',
+                height: '42px',
                 borderRadius: '12px',
-                background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-                border: '1px solid #38bdf8',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 0 16px rgba(56, 189, 248, 0.4)',
-                transition: 'transform 0.2s ease',
+                objectFit: 'cover',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                boxShadow: '0 0 16px rgba(56, 189, 248, 0.25)',
               }}
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
-              </svg>
-            </div>
+            />
 
             <div>
               <span
-                className="shimmer-text"
                 style={{
                   fontFamily: "var(--font-sans)",
                   fontWeight: '800',
-                  fontSize: '1.25rem',
+                  fontSize: '1.28rem',
                   letterSpacing: '-0.02em',
+                  color: '#ffffff',
                 }}
               >
-                SYNDICATE
+                Client Syndicate
               </span>
             </div>
           </Link>
 
           {/* Right Action CTAs */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Discord Button with pulsing live online dot */}
+            {/* Discord Button with live pulsing beacon */}
             <a
               href="https://discord.gg/syndicate"
               target="_blank"
@@ -212,7 +201,6 @@ export default function Home() {
                 color: '#cbd5e1',
                 backgroundColor: 'rgba(13, 21, 39, 0.85)',
                 border: '1px solid #1e2f4a',
-                backdropFilter: 'blur(10px)',
                 textDecoration: 'none',
                 transition: 'all 0.16s ease',
               }}
@@ -242,9 +230,9 @@ export default function Home() {
               </span>
             </a>
 
-            {/* Glowing + Upload Button */}
+            {/* Admin Upload / Portal button (Restricted to rookeh4@gmail.com) */}
             <Link
-              to="/upload"
+              to="/admin"
               className="btn-gold"
               style={{
                 padding: '7px 18px',
@@ -252,30 +240,23 @@ export default function Home() {
                 gap: '6px',
               }}
             >
-              <Plus size={14} />
-              <span>Upload</span>
-            </Link>
-
-            {/* Admin Link */}
-            <Link
-              to="/admin"
-              style={{
-                fontSize: '0.80rem',
-                color: '#64748b',
-                textDecoration: 'none',
-                padding: '6px 8px',
-                transition: 'color 0.15s ease',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#cbd5e1')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = '#64748b')}
-            >
-              Admin
+              {isAdmin ? (
+                <>
+                  <Plus size={14} />
+                  <span>Upload Client</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck size={14} />
+                  <span>Admin Panel</span>
+                </>
+              )}
             </Link>
           </div>
         </header>
 
         {/* ------------------------------------------------------------------
-            2. Hero Branding Section (Modern & Animated)
+            2. Hero Branding Section
             ------------------------------------------------------------------ */}
         <div style={{ marginBottom: '32px' }}>
           <div
@@ -287,53 +268,53 @@ export default function Home() {
               flexWrap: 'wrap',
             }}
           >
-            {/* Title, Subtitle & Clean Stats Pills (NO saved money, NO online) */}
             <div style={{ flex: 1, minWidth: '280px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                 <span
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '5px',
                     fontSize: '0.72rem',
-                    fontWeight: '600',
-                    color: '#38bdf8',
-                    background: 'rgba(56, 189, 248, 0.1)',
-                    border: '1px solid rgba(56, 189, 248, 0.25)',
+                    fontWeight: '700',
+                    color: '#10b981',
+                    background: 'rgba(16, 185, 129, 0.1)',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
                     padding: '2px 9px',
                     borderRadius: '999px',
+                    letterSpacing: '0.04em',
                   }}
                 >
-                  <Sparkles size={11} />
-                  <span>PREMIUM ARCHIVE</span>
+                  <ShieldCheck size={12} />
+                  <span>CLEAN ARCHIVE</span>
                 </span>
               </div>
 
+              {/* ONLY "Client Syndicate" */}
               <h1
-                className="font-clean-title shimmer-text"
                 style={{
-                  fontSize: '2.2rem',
+                  fontSize: '2.4rem',
                   lineHeight: '1.2',
-                  marginBottom: '6px',
+                  marginBottom: '8px',
                   fontWeight: '800',
                   letterSpacing: '-0.025em',
+                  color: '#ffffff',
                 }}
               >
-                Syndicate Solutions
+                Client Syndicate
               </h1>
 
               <p
-                className="font-clean-body"
                 style={{
                   fontSize: '0.94rem',
                   color: '#94a3b8',
-                  marginBottom: '16px',
+                  marginBottom: '18px',
                 }}
               >
-                Everything is just free. Discover and download clients, source codes & developer tools.
+                Minecraft clients, source codes &amp; developer tools. Direct downloads only.
               </p>
 
-              {/* Stats Pill Row (Uploads, Downloads, Members - saved money & online REMOVED) */}
+              {/* Stats Pill Row (Uploads, Downloads, Members - NO saved money, NO online) */}
               <div
                 style={{
                   display: 'flex',
@@ -362,7 +343,7 @@ export default function Home() {
         </div>
 
         {/* ------------------------------------------------------------------
-            3. Category Tabs Row (All 8 | Minecraft 8 | Clients 3 | ...)
+            3. Category Tabs Row: ONLY Clients, Source Codes, Tools
             ------------------------------------------------------------------ */}
         <div
           style={{
@@ -393,7 +374,6 @@ export default function Home() {
 
         {/* ------------------------------------------------------------------
             4. Modern Animated Search Bar (Clean & Wide)
-               (Removed clunky All versions, Top rated, Source Code dropdowns)
             ------------------------------------------------------------------ */}
         <div style={{ marginBottom: '28px' }}>
           <div className="modern-animated-search">
@@ -413,7 +393,7 @@ export default function Home() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by client name, version, author, or tags..."
+              placeholder="Search by client name, version, author..."
             />
             {search ? (
               <button
@@ -453,7 +433,7 @@ export default function Home() {
         </div>
 
         {/* ------------------------------------------------------------------
-            5. Resource Cards Grid (3 Columns Desktop, Animated Stagger)
+            5. Resource Cards Grid (3 Columns Desktop, 100% Smooth Scroll)
             ------------------------------------------------------------------ */}
         {loading ? (
           <div
@@ -464,7 +444,7 @@ export default function Home() {
               fontSize: '0.95rem',
             }}
           >
-            Loading Syndicate resources...
+            Loading Client Syndicate resources...
           </div>
         ) : resources.length === 0 ? (
           <div
@@ -475,7 +455,6 @@ export default function Home() {
               border: '1px solid #1e293b',
               borderRadius: '16px',
               color: '#64748b',
-              boxShadow: 'var(--shadow-sm)',
             }}
           >
             <p style={{ fontSize: '1rem', color: '#ffffff', marginBottom: '8px', fontWeight: '600' }}>
@@ -493,7 +472,7 @@ export default function Home() {
             </button>
           </div>
         ) : (
-          <div className="resource-grid fade-in">
+          <div className="resource-grid">
             {resources.map((resource) => (
               <ResourceCard key={resource.id} resource={resource} />
             ))}

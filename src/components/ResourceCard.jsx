@@ -1,14 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Eye, MessageSquare, Flame, CheckCircle, ChevronUp } from 'lucide-react';
+import { Flame, ShieldCheck, AlertCircle } from 'lucide-react';
 
 export default function ResourceCard({ resource }) {
   if (!resource) return null;
 
-  const isHot = resource.is_featured || (resource.downloads_count && resource.downloads_count > 1000) || true;
-  const formattedViews = Number(resource.views_count || resource.downloads_count ? (resource.views_count || resource.downloads_count * 2 + 89) : 289).toLocaleString();
-  const upvotes = resource.likes_count !== undefined ? resource.likes_count : (resource.downloads_count ? Math.floor(resource.downloads_count / 800) : 2);
-  const commentsCount = resource.comments_count || 4;
+  const isHot = resource.is_featured || (resource.downloads_count && resource.downloads_count > 1000);
+  const isClean = resource.is_clean !== false && resource.status !== 'unverified';
 
   return (
     <div className="resource-card-clean">
@@ -34,14 +32,14 @@ export default function ResourceCard({ resource }) {
             objectFit: 'cover',
             transition: 'transform 0.25s var(--ease-out)',
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.03)')}
+          onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.04)')}
           onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
           onError={(e) => {
             e.currentTarget.src = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800';
           }}
         />
 
-        {/* Top Badges Row: Hot & Verified */}
+        {/* Top Badges Row: Hot & CLEAN/UNVERIFIED */}
         <div
           style={{
             position: 'absolute',
@@ -56,23 +54,34 @@ export default function ResourceCard({ resource }) {
           }}
         >
           {/* Hot Badge */}
-          <div className="badge-hot-clean">
-            <Flame size={12} />
-            <span>Hot</span>
-          </div>
+          {isHot ? (
+            <div className="badge-hot-clean">
+              <Flame size={12} />
+              <span>Hot</span>
+            </div>
+          ) : (
+            <div />
+          )}
 
-          {/* Verified Badge */}
-          <div className="badge-verified-clean">
-            <CheckCircle size={11} />
-            <span>Verified</span>
-          </div>
+          {/* CLEAN / UNVERIFIED Badge */}
+          {isClean ? (
+            <div className="badge-clean-tag">
+              <ShieldCheck size={11} />
+              <span>CLEAN</span>
+            </div>
+          ) : (
+            <div className="badge-unverified-tag">
+              <AlertCircle size={11} />
+              <span>UNVERIFIED</span>
+            </div>
+          )}
         </div>
 
-        {/* Top/Middle Tag on Thumbnail (• Minecraft Category) */}
+        {/* Top Tag on Thumbnail (• Minecraft Category) */}
         <div
           style={{
             position: 'absolute',
-            top: '38px',
+            top: isHot ? '40px' : '10px',
             left: '10px',
             zIndex: 2,
             pointerEvents: 'none',
@@ -81,7 +90,7 @@ export default function ResourceCard({ resource }) {
           <div className="badge-tag-mc-clean">
             <span className="mc-dot-gold" />
             <span style={{ color: '#ffffff', fontWeight: '600' }}>Minecraft</span>
-            <span style={{ color: '#94a3b8', fontWeight: '400' }}>{resource.category || 'Source Code'}</span>
+            <span style={{ color: '#94a3b8', fontWeight: '400' }}>{resource.category || 'Client'}</span>
           </div>
         </div>
       </Link>
@@ -96,15 +105,47 @@ export default function ResourceCard({ resource }) {
           background: '#0e1526',
         }}
       >
-        {/* Version & Category Tags ([1.21.11] [Source Code]) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+        {/* Version & Category Tags ([1.21.11] [Client] [CLEAN]) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
           <span className="tag-pill-ver">
             {resource.version || '1.21.11'}
           </span>
 
           <span className="tag-pill-cat">
-            {resource.category === 'Source Codes' || resource.category === 'Clients' ? (resource.category === 'Source Codes' ? 'Source Code' : 'Client') : (resource.category || 'Source Code')}
+            {resource.category === 'Source Codes' ? 'Source Code' : resource.category === 'Tools' ? 'Tool' : 'Client'}
           </span>
+
+          {isClean ? (
+            <span
+              style={{
+                fontSize: '10px',
+                fontWeight: '700',
+                padding: '2px 7px',
+                borderRadius: '4px',
+                color: '#10b981',
+                background: 'rgba(16, 185, 129, 0.1)',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                letterSpacing: '0.02em',
+              }}
+            >
+              CLEAN
+            </span>
+          ) : (
+            <span
+              style={{
+                fontSize: '10px',
+                fontWeight: '700',
+                padding: '2px 7px',
+                borderRadius: '4px',
+                color: '#f59e0b',
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                letterSpacing: '0.02em',
+              }}
+            >
+              UNVERIFIED
+            </span>
+          )}
         </div>
 
         {/* Title: Clean bold white text with blue hover */}
@@ -139,10 +180,10 @@ export default function ResourceCard({ resource }) {
             overflow: 'hidden',
           }}
         >
-          {resource.short_description || resource.description || 'Skidded slop addon by Dexter'}
+          {resource.short_description || resource.description || 'Verified Minecraft resource release.'}
         </p>
 
-        {/* Card Footer: Author & Metrics (Caret Up, Comment, Views) */}
+        {/* Card Footer: Clean Author only (Comments/Views removed per user request) */}
         <div
           style={{
             marginTop: 'auto',
@@ -179,52 +220,18 @@ export default function ResourceCard({ resource }) {
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
               ) : (
-                (resource.author_name || 'B')[0].toUpperCase()
+                (resource.author_name || 'S')[0].toUpperCase()
               )}
             </div>
 
             <span style={{ color: '#cbd5e1', fontWeight: '500', fontSize: '0.82rem' }}>
-              {resource.author_name || 'Biscuit'}
+              {resource.author_name || 'Syndicate Team'}
             </span>
           </div>
 
-          {/* Metrics: ^ upvotes, chat comments, eye views */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8', fontSize: '0.78rem' }}>
-            {/* Upvotes */}
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '3px',
-                cursor: 'pointer',
-                transition: 'color 0.15s ease',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
-              title="Upvotes"
-            >
-              <ChevronUp size={13} strokeWidth={2.4} />
-              <span>{upvotes}</span>
-            </span>
-
-            {/* Comments */}
-            <span
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-              title="Comments"
-            >
-              <MessageSquare size={12} />
-              <span>{commentsCount}</span>
-            </span>
-
-            {/* Views */}
-            <span
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-              title="Views"
-            >
-              <Eye size={12} />
-              <span>{formattedViews}</span>
-            </span>
-          </div>
+          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+            {resource.loader || 'Fabric'}
+          </span>
         </div>
       </div>
     </div>

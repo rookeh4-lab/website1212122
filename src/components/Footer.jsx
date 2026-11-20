@@ -8,7 +8,7 @@ export default function Footer() {
         marginTop: 'auto',
         borderTop: '1px solid #1a2438',
         backgroundColor: '#090e1a',
-        padding: '32px 20px',
+        padding: '28px 20px',
       }}
     >
       <div
@@ -23,29 +23,17 @@ export default function Footer() {
           fontSize: '0.86rem',
         }}
       >
-        {/* Left: Brand Copyright */}
+        {/* Left: Brand Logo & Copyright */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <div
-            style={{
-              width: '26px',
-              height: '26px',
-              borderRadius: '50%',
-              background: '#0284c7',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-              fontSize: '0.74rem',
-              fontWeight: '700',
-              boxShadow: '0 1px 4px rgba(2, 132, 199, 0.3)',
-            }}
-          >
-            S
-          </div>
+          <img
+            src="/logo.png"
+            alt="Client Syndicate"
+            style={{ width: '26px', height: '26px', borderRadius: '6px', objectFit: 'cover' }}
+          />
           <span style={{ color: '#ffffff', fontWeight: '700' }}>
-            Syndicate
+            Client Syndicate
           </span>
-          <span style={{ color: '#64748b' }}>© 2026 • Community Client & Source Archive</span>
+          <span style={{ color: '#64748b' }}>© 2026 • Minecraft Clients, Sources &amp; Tools</span>
         </div>
 
         {/* Right: Quick Links */}
@@ -57,22 +45,6 @@ export default function Footer() {
             onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
           >
             Archive
-          </Link>
-          <Link
-            to="/clients"
-            style={{ color: '#94a3b8', textDecoration: 'none', transition: 'color 0.15s' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
-          >
-            Clients
-          </Link>
-          <Link
-            to="/sources"
-            style={{ color: '#94a3b8', textDecoration: 'none', transition: 'color 0.15s' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
-          >
-            Source Codes
           </Link>
           <a
             href="https://discord.gg/syndicate"

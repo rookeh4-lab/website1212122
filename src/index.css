@@ -70,6 +70,7 @@ html {
   color: var(--text);
   font-family: var(--font-sans);
   scroll-behavior: smooth;
+  overflow-y: scroll;
   overflow-x: hidden;
   font-size: 15px;
   -webkit-font-smoothing: antialiased;
@@ -83,73 +84,50 @@ body {
   display: flex;
   flex-direction: column;
   position: relative;
+  overflow-x: hidden;
 }
 
-/* Deep Slate Background with Animated Aurora Glow (.bg-veil) */
+/* Deep Obsidian Background - 100% Smooth GPU Gradients (Zero Blur Lag) */
 .bg-veil {
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background-color: #070b14;
-  overflow: hidden;
+  background:
+    radial-gradient(ellipse 60% 40% at 20% 0%, rgba(14, 165, 233, 0.12) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 35% at 80% 10%, rgba(99, 102, 241, 0.09) 0%, transparent 65%),
+    #070b14;
+  transform: translateZ(0);
+  will-change: transform;
 }
 
-/* Animated Ambient Glow Orbs */
-.bg-veil::before {
-  content: "";
-  position: absolute;
-  top: -20%;
-  left: 15%;
-  width: 650px;
-  height: 650px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(14, 165, 233, 0.12) 0%, rgba(56, 189, 248, 0.03) 50%, transparent 70%);
-  filter: blur(80px);
-  animation: auroraFloat1 18s ease-in-out infinite alternate;
+/* Status Badges */
+.badge-clean-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  letter-spacing: 0.02em;
 }
 
-.bg-veil::after {
-  content: "";
-  position: absolute;
-  top: 10%;
-  right: 15%;
-  width: 550px;
-  height: 550px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.10) 0%, rgba(139, 92, 246, 0.03) 50%, transparent 70%);
-  filter: blur(90px);
-  animation: auroraFloat2 22s ease-in-out infinite alternate;
-}
-
-@keyframes auroraFloat1 {
-  0% {
-    transform: translate(0, 0) scale(1);
-    opacity: 0.8;
-  }
-  50% {
-    transform: translate(60px, 40px) scale(1.1);
-    opacity: 1;
-  }
-  100% {
-    transform: translate(-30px, 70px) scale(0.95);
-    opacity: 0.85;
-  }
-}
-
-@keyframes auroraFloat2 {
-  0% {
-    transform: translate(0, 0) scale(1);
-    opacity: 0.7;
-  }
-  50% {
-    transform: translate(-50px, 50px) scale(1.15);
-    opacity: 0.95;
-  }
-  100% {
-    transform: translate(40px, -30px) scale(0.9);
-    opacity: 0.75;
-  }
+.badge-unverified-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  letter-spacing: 0.02em;
 }
 
 /* Custom Scrollbar */

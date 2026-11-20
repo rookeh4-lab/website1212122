@@ -1,11 +1,10 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
 import Browse from './pages/Browse';
 import ResourceDetail from './pages/ResourceDetail';
-import UploadPage from './pages/Upload';
 import AdminPage from './pages/Admin';
 
 function ScrollToTop() {
@@ -41,7 +40,7 @@ function AppShell() {
           <Route path="/launchers" element={<Browse defaultCategory="Launchers" />} />
           <Route path="/resources" element={<Browse defaultCategory="All" />} />
           <Route path="/resource/:idOrSlug" element={<ResourceDetail />} />
-          <Route path="/upload" element={<UploadPage />} />
+          <Route path="/upload" element={<Navigate to="/admin" replace />} />
           <Route path="/admin" element={<AdminPage />} />
           {/* Catch-all redirect to Home */}
           <Route path="*" element={<Home />} />
