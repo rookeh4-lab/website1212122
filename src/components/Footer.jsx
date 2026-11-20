@@ -6,9 +6,9 @@ export default function Footer() {
     <footer
       style={{
         marginTop: 'auto',
-        borderTop: '1px solid var(--edge)',
-        backgroundColor: 'var(--bg)',
-        padding: '36px 20px',
+        borderTop: '1px solid #1a2438',
+        backgroundColor: '#090e1a',
+        padding: '32px 20px',
       }}
     >
       <div
@@ -30,14 +30,14 @@ export default function Footer() {
               width: '26px',
               height: '26px',
               borderRadius: '50%',
-              background: 'linear-gradient(135deg, #38bdf8, #6366f1)',
+              background: '#0284c7',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#ffffff',
               fontSize: '0.74rem',
-              fontWeight: '800',
-              boxShadow: '0 2px 8px rgba(56, 189, 248, 0.3)',
+              fontWeight: '700',
+              boxShadow: '0 1px 4px rgba(2, 132, 199, 0.3)',
             }}
           >
             S
@@ -45,32 +45,32 @@ export default function Footer() {
           <span style={{ color: '#ffffff', fontWeight: '700' }}>
             Syndicate
           </span>
-          <span style={{ color: 'var(--text-dim)' }}>© 2026 • Community Client & Source Archive</span>
+          <span style={{ color: '#64748b' }}>© 2026 • Community Client & Source Archive</span>
         </div>
 
         {/* Right: Quick Links */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', color: 'var(--text-muted)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', color: '#94a3b8' }}>
           <Link
             to="/"
-            style={{ color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.15s' }}
+            style={{ color: '#94a3b8', textDecoration: 'none', transition: 'color 0.15s' }}
             onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
           >
             Archive
           </Link>
           <Link
             to="/clients"
-            style={{ color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.15s' }}
+            style={{ color: '#94a3b8', textDecoration: 'none', transition: 'color 0.15s' }}
             onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
           >
             Clients
           </Link>
           <Link
             to="/sources"
-            style={{ color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.15s' }}
+            style={{ color: '#94a3b8', textDecoration: 'none', transition: 'color 0.15s' }}
             onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
           >
             Source Codes
           </Link>
@@ -78,15 +78,15 @@ export default function Footer() {
             href="https://discord.gg/syndicate"
             target="_blank"
             rel="noreferrer"
-            style={{ color: 'var(--accent-primary)', textDecoration: 'none', fontWeight: '600' }}
+            style={{ color: '#38bdf8', textDecoration: 'none', fontWeight: '500' }}
           >
             Discord
           </a>
           <Link
             to="/admin"
-            style={{ color: 'var(--text-dim)', textDecoration: 'none' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--accent-primary)')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-dim)')}
+            style={{ color: '#64748b', textDecoration: 'none' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#cbd5e1')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#64748b')}
           >
             Admin
           </Link>

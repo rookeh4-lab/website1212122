@@ -198,13 +198,17 @@ export default function ResourceDetail() {
 
   // Handle Comment Like
   const handleCommentLike = async (commentId) => {
+    setComments((prev) =>
+      prev.map((c) => (c.id === commentId ? { ...c, likes_count: (c.likes_count || 0) + 1 } : c))
+    );
     try {
       const target = comments.find((c) => c.id === commentId);
-      const newLikes = (target?.likes_count || 0) + 1;
-      await supabase.from('comments').update({ likes_count: newLikes }).eq('id', commentId);
-      setComments((prev) =>
-        prev.map((c) => (c.id === commentId ? { ...c, likes_count: newLikes } : c))
-      );
+      if (target) {
+        await supabase
+          .from('comments')
+          .update({ likes_count: (target.likes_count || 0) + 1 })
+          .eq('id', commentId);
+      }
     } catch (_e) {}
   };
 
@@ -217,7 +221,7 @@ export default function ResourceDetail() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>
+      <div style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
         Loading release details...
       </div>
     );
@@ -225,14 +229,16 @@ export default function ResourceDetail() {
 
   if (!resource) {
     return (
-      <div style={{ minHeight: '70vh', padding: '80px 20px', textAlign: 'center' }}>
-        <h2 style={{ color: '#fff', fontSize: '1.8rem', marginBottom: '12px' }}>Release Not Found</h2>
-        <p style={{ color: '#9ca3af', marginBottom: '24px' }}>
-          This release does not exist or has been removed from the Syndicate archive.
+      <div style={{ minHeight: '80vh', padding: '60px 20px', textAlign: 'center' }}>
+        <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#0f172a', marginBottom: '12px' }}>
+          Resource Not Found
+        </h2>
+        <p style={{ color: '#64748b', marginBottom: '20px' }}>
+          This resource may have been removed or does not exist.
         </p>
-        <Link to="/" className="gta-pill-btn gta-pill-btn-primary">
-          Back to Releases
-        </Link>
+        <button onClick={() => navigate('/')} className="btn-gold">
+          Return to Archive
+        </button>
       </div>
     );
   }
@@ -250,21 +256,21 @@ export default function ResourceDetail() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              color: '#9ca3af',
+              color: '#94a3b8',
               fontSize: '0.88rem',
-              fontWeight: '600',
+              fontWeight: '500',
               textDecoration: 'none',
               transition: 'color 0.15s ease',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#ff2a85')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#9ca3af')}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
           >
             <ArrowLeft size={15} />
             <span>All posts</span>
           </Link>
         </div>
 
-        {/* Badges Row (XenntSquad Format) */}
+        {/* Badges Row */}
         <div
           style={{
             display: 'flex',
@@ -275,34 +281,23 @@ export default function ResourceDetail() {
           }}
         >
           {isHot && (
-            <div className="badge-hot">
+            <div className="badge-hot-clean">
               <Flame size={13} />
               <span>Hot</span>
             </div>
           )}
 
-          <div className="badge-tag-dark">
-            <span className="dot-indicator" />
-            <span style={{ color: '#fff', fontWeight: '700' }}>Minecraft</span>
-            <span style={{ color: '#9ca3af' }}>{resource.category || 'Client'}</span>
+          <div className="badge-tag-mc-clean">
+            <span className="mc-dot-gold" />
+            <span style={{ color: '#ffffff', fontWeight: '600' }}>Minecraft</span>
+            <span style={{ color: '#94a3b8' }}>{resource.category || 'Client'}</span>
           </div>
 
-          <div
-            style={{
-              fontSize: '0.74rem',
-              fontWeight: '700',
-              padding: '3px 10px',
-              borderRadius: '9999px',
-              backgroundColor: 'rgba(0, 240, 255, 0.1)',
-              color: '#00f0ff',
-              border: '1px solid rgba(0, 240, 255, 0.3)',
-              fontFamily: "'JetBrains Mono', monospace",
-            }}
-          >
+          <div className="tag-pill-ver">
             {resource.version || '1.21.11'}
           </div>
 
-          <div className="badge-verified">
+          <div className="badge-verified-clean">
             <CheckCircle size={13} />
             <span>Verified</span>
           </div>
@@ -313,16 +308,16 @@ export default function ResourceDetail() {
               fontWeight: '600',
               padding: '3px 10px',
               borderRadius: '9999px',
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              color: '#cbd5e1',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              backgroundColor: '#111e30',
+              color: '#38bdf8',
+              border: '1px solid #1e3352',
             }}
           >
             {resource.loader || 'Native C++'}
           </div>
         </div>
 
-        {/* Clean Normal Title */}
+        {/* Title */}
         <h1
           className="font-clean-title"
           style={{
@@ -331,7 +326,6 @@ export default function ResourceDetail() {
             color: '#ffffff',
             lineHeight: '1.25',
             marginBottom: '16px',
-            letterSpacing: '-0.015em',
           }}
         >
           {resource.title}
@@ -346,7 +340,7 @@ export default function ResourceDetail() {
             justifyContent: 'space-between',
             gap: '16px',
             paddingBottom: '20px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+            borderBottom: '1px solid #1e293b',
             marginBottom: '20px',
           }}
         >
@@ -360,41 +354,42 @@ export default function ResourceDetail() {
                 height: '32px',
                 borderRadius: '50%',
                 objectFit: 'cover',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
+                border: '1px solid #1e293b',
               }}
             />
-            <span style={{ fontWeight: '700', color: '#fff', fontSize: '0.92rem' }}>
+            <span style={{ fontWeight: '600', color: '#ffffff', fontSize: '0.92rem' }}>
               {resource.author_name || 'Syndicate'}
             </span>
-            <span style={{ color: '#6b7280', fontSize: '0.84rem' }}>
+            <span style={{ color: '#94a3b8', fontSize: '0.84rem' }}>
               {resource.created_at ? new Date(resource.created_at).toLocaleDateString() : '3d ago'}
             </span>
-            <span style={{ color: '#4b5563' }}>•</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#9ca3af', fontSize: '0.84rem' }}>
-              <Eye size={14} style={{ color: '#ff2a85' }} />
+            <span style={{ color: '#334155' }}>•</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#94a3b8', fontSize: '0.84rem' }}>
+              <Eye size={14} />
               <span>{Number(resource.views_count || 0).toLocaleString()}</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#9ca3af', fontSize: '0.84rem' }}>
-              <Download size={14} style={{ color: '#00f0ff' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#94a3b8', fontSize: '0.84rem' }}>
+              <Download size={14} />
               <span>{Number(resource.downloads_count || 0).toLocaleString()}</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#9ca3af', fontSize: '0.84rem' }}>
-              <MessageSquare size={14} style={{ color: '#ff7a00' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#94a3b8', fontSize: '0.84rem' }}>
+              <MessageSquare size={14} />
               <span>{comments.length}</span>
             </div>
           </div>
 
-          {/* Upvote Pill (XenntSquad ▲ 2 ▼) */}
+          {/* Upvote Pill */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '8px',
-                backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                backgroundColor: '#0d1527',
+                border: '1px solid #1e293b',
                 borderRadius: '9999px',
                 padding: '5px 14px',
+                boxShadow: 'var(--shadow-sm)',
               }}
             >
               <button
@@ -402,7 +397,7 @@ export default function ResourceDetail() {
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: hasUpvoted ? '#ff7a00' : '#9ca3af',
+                  color: hasUpvoted ? '#ea580c' : '#94a3b8',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
@@ -411,7 +406,7 @@ export default function ResourceDetail() {
               >
                 <ChevronUp size={16} />
               </button>
-              <span style={{ fontWeight: '800', color: hasUpvoted ? '#ff7a00' : '#fff', fontSize: '0.88rem' }}>
+              <span style={{ fontWeight: '700', color: hasUpvoted ? '#ea580c' : '#ffffff', fontSize: '0.88rem' }}>
                 {upvotes}
               </span>
               <button
@@ -419,7 +414,7 @@ export default function ResourceDetail() {
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#6b7280',
+                  color: '#475569',
                   cursor: 'default',
                   display: 'flex',
                   alignItems: 'center',
@@ -431,8 +426,8 @@ export default function ResourceDetail() {
 
             <button
               onClick={handleShare}
-              className="gta-pill-btn gta-pill-btn-secondary"
-              style={{ padding: '6px 14px', fontSize: '0.8rem' }}
+              className="filter-dropdown-pill"
+              style={{ padding: '6px 14px', fontSize: '0.8rem', height: 'auto' }}
             >
               {copiedLink ? <Check size={13} style={{ color: '#10b981' }} /> : <Share2 size={13} />}
               <span>{copiedLink ? 'Copied' : 'Share'}</span>
@@ -454,21 +449,22 @@ export default function ResourceDetail() {
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '5px',
+                gap: '6px',
                 padding: '5px 12px',
                 borderRadius: '9999px',
                 border: '1px solid',
-                borderColor: userReactions[item.key] ? 'rgba(255, 42, 133, 0.6)' : 'rgba(255, 255, 255, 0.08)',
-                backgroundColor: userReactions[item.key] ? 'rgba(255, 42, 133, 0.18)' : 'rgba(255, 255, 255, 0.03)',
-                color: '#fff',
+                borderColor: userReactions[item.key] ? '#38bdf8' : '#1e293b',
+                backgroundColor: userReactions[item.key] ? '#162442' : '#0d1527',
+                color: '#ffffff',
                 fontSize: '0.82rem',
                 fontWeight: '600',
                 cursor: 'pointer',
+                boxShadow: 'var(--shadow-sm)',
                 transition: 'all 0.15s ease',
               }}
             >
               <span>{item.emoji}</span>
-              <span style={{ color: userReactions[item.key] ? '#ff2a85' : '#9ca3af' }}>{item.count}</span>
+              <span style={{ color: userReactions[item.key] ? '#38bdf8' : '#94a3b8' }}>{item.count}</span>
             </button>
           ))}
         </div>
@@ -483,10 +479,10 @@ export default function ResourceDetail() {
                   fontSize: '0.74rem',
                   padding: '3px 9px',
                   borderRadius: '6px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                  color: '#9ca3af',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  fontFamily: "'JetBrains Mono', monospace",
+                  backgroundColor: '#111827',
+                  color: '#94a3b8',
+                  border: '1px solid #1e293b',
+                  fontFamily: "ui-monospace, monospace",
                 }}
               >
                 {tag}
@@ -495,23 +491,23 @@ export default function ResourceDetail() {
           </div>
         )}
 
-        {/* FILES CONTAINER (XenntSquad Files Box) */}
+        {/* FILES CONTAINER */}
         <div
           style={{
-            backgroundColor: 'rgba(18, 15, 27, 0.85)',
-            border: '1px solid rgba(255, 255, 255, 0.09)',
-            boxShadow: '0 12px 30px -10px rgba(0, 0, 0, 0.6)',
-            borderRadius: '16px',
+            backgroundColor: '#0e1526',
+            border: '1px solid #1a2438',
+            boxShadow: 'var(--shadow-card)',
+            borderRadius: '14px',
             padding: '24px 28px',
             marginBottom: '32px',
           }}
         >
-          <div style={{ fontSize: '1rem', fontWeight: '800', color: '#fff', marginBottom: '18px' }}>
-            Files <span style={{ color: '#ff2a85' }}>2</span>
+          <div style={{ fontSize: '1rem', fontWeight: '700', color: '#ffffff', marginBottom: '18px' }}>
+            Download Files
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {/* File 1: Client Binary (.jar / .dll) */}
+            {/* File 1: Client Binary */}
             {resource.client_download_url && (
               <div
                 style={{
@@ -521,9 +517,9 @@ export default function ResourceDetail() {
                   justifyContent: 'space-between',
                   gap: '14px',
                   padding: '14px 18px',
-                  borderRadius: '12px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  borderRadius: '10px',
+                  backgroundColor: '#090e1a',
+                  border: '1px solid #1e293b',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -531,22 +527,22 @@ export default function ResourceDetail() {
                     style={{
                       width: '40px',
                       height: '40px',
-                      borderRadius: '10px',
-                      backgroundColor: 'rgba(255, 42, 133, 0.12)',
-                      border: '1px solid rgba(255, 42, 133, 0.25)',
+                      borderRadius: '8px',
+                      backgroundColor: '#111e30',
+                      border: '1px solid #1e3352',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#ff2a85',
+                      color: '#38bdf8',
                     }}
                   >
                     <FileCode size={20} />
                   </div>
                   <div>
-                    <div style={{ fontWeight: '700', color: '#fff', fontSize: '0.92rem', fontFamily: 'monospace' }}>
+                    <div style={{ fontWeight: '600', color: '#ffffff', fontSize: '0.92rem', fontFamily: 'monospace' }}>
                       {resource.client_file_name || 'Client-Release.dll'}
                     </div>
-                    <div style={{ fontSize: '0.78rem', color: '#6b7280' }}>
+                    <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
                       {resource.client_file_size || '3.4 MB'} • {resource.downloads_count || 1420} downloads
                     </div>
                   </div>
@@ -555,7 +551,7 @@ export default function ResourceDetail() {
                 <button
                   onClick={() => handleDownload('client')}
                   disabled={downloadingClient}
-                  className="gta-pill-btn gta-pill-btn-primary"
+                  className="btn-gold"
                   style={{ padding: '8px 22px', fontSize: '0.86rem' }}
                 >
                   <Download size={15} />
@@ -564,7 +560,7 @@ export default function ResourceDetail() {
               </div>
             )}
 
-            {/* File 2: Source Code (.zip) */}
+            {/* File 2: Source Code */}
             {resource.source_download_url && (
               <div
                 style={{
@@ -574,9 +570,9 @@ export default function ResourceDetail() {
                   justifyContent: 'space-between',
                   gap: '14px',
                   padding: '14px 18px',
-                  borderRadius: '12px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  borderRadius: '10px',
+                  backgroundColor: '#090e1a',
+                  border: '1px solid #1e293b',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -584,22 +580,22 @@ export default function ResourceDetail() {
                     style={{
                       width: '40px',
                       height: '40px',
-                      borderRadius: '10px',
-                      backgroundColor: 'rgba(0, 240, 255, 0.12)',
-                      border: '1px solid rgba(0, 240, 255, 0.25)',
+                      borderRadius: '8px',
+                      backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#00f0ff',
+                      color: '#10b981',
                     }}
                   >
                     <Code2 size={20} />
                   </div>
                   <div>
-                    <div style={{ fontWeight: '700', color: '#fff', fontSize: '0.92rem', fontFamily: 'monospace' }}>
+                    <div style={{ fontWeight: '600', color: '#ffffff', fontSize: '0.92rem', fontFamily: 'monospace' }}>
                       {resource.source_file_name || 'source-code.zip'}
                     </div>
-                    <div style={{ fontSize: '0.78rem', color: '#6b7280' }}>
+                    <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>
                       {resource.source_file_size || '1.8 MB'} • Source Archive
                     </div>
                   </div>
@@ -608,10 +604,10 @@ export default function ResourceDetail() {
                 <button
                   onClick={() => handleDownload('source')}
                   disabled={downloadingSource}
-                  className="gta-pill-btn gta-pill-btn-secondary"
-                  style={{ padding: '8px 22px', fontSize: '0.86rem' }}
+                  className="filter-dropdown-pill"
+                  style={{ padding: '8px 22px', fontSize: '0.86rem', height: 'auto' }}
                 >
-                  <Download size={15} style={{ color: '#00f0ff' }} />
+                  <Download size={15} />
                   <span>{downloadingSource ? 'Preparing...' : 'Download Source'}</span>
                 </button>
               </div>
@@ -625,14 +621,14 @@ export default function ResourceDetail() {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   padding: '12px 18px',
-                  borderRadius: '12px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
+                  borderRadius: '10px',
+                  backgroundColor: '#090e1a',
+                  border: '1px solid #1e293b',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <GithubIcon size={18} style={{ color: '#9ca3af' }} />
-                  <span style={{ fontSize: '0.86rem', color: '#e5e7eb', fontWeight: '500' }}>
+                  <GithubIcon size={18} style={{ color: '#ffffff' }} />
+                  <span style={{ fontSize: '0.86rem', color: '#cbd5e1', fontWeight: '500' }}>
                     Official Git Repository
                   </span>
                 </div>
@@ -641,8 +637,8 @@ export default function ResourceDetail() {
                   href={resource.github_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="gta-pill-btn gta-pill-btn-secondary"
-                  style={{ padding: '6px 14px', fontSize: '0.8rem' }}
+                  className="filter-dropdown-pill"
+                  style={{ padding: '6px 14px', fontSize: '0.8rem', height: 'auto', textDecoration: 'none' }}
                 >
                   <span>Open GitHub</span>
                   <ExternalLink size={12} />
@@ -655,18 +651,19 @@ export default function ResourceDetail() {
         {/* Content Body / Description */}
         <div
           style={{
-            backgroundColor: 'rgba(18, 15, 27, 0.65)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            borderRadius: '16px',
-            padding: '32px',
+            backgroundColor: '#0e1526',
+            border: '1px solid #1a2438',
+            boxShadow: 'var(--shadow-card)',
+            borderRadius: '14px',
+            padding: '30px',
             marginBottom: '32px',
           }}
         >
           <div
             style={{
-              fontSize: '0.98rem',
+              fontSize: '0.96rem',
               lineHeight: '1.7',
-              color: '#d1d5db',
+              color: '#cbd5e1',
               whiteSpace: 'pre-wrap',
             }}
           >
@@ -674,18 +671,19 @@ export default function ResourceDetail() {
           </div>
         </div>
 
-        {/* COMMUNITY COMMENTS SECTION (Threaded XenntSquad Layout) */}
+        {/* COMMUNITY COMMENTS SECTION */}
         <div
           style={{
-            backgroundColor: 'rgba(18, 15, 27, 0.85)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            borderRadius: '16px',
-            padding: '32px',
+            backgroundColor: '#0e1526',
+            border: '1px solid #1a2438',
+            boxShadow: 'var(--shadow-card)',
+            borderRadius: '14px',
+            padding: '30px',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px' }}>
-            <MessageSquare size={20} style={{ color: '#ff2a85' }} />
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#fff' }}>
+            <MessageSquare size={19} style={{ color: '#38bdf8' }} />
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ffffff' }}>
               Discussion ({comments.length})
             </h3>
           </div>
@@ -694,26 +692,26 @@ export default function ResourceDetail() {
           <form
             onSubmit={handleCommentSubmit}
             style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.02)',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-              borderRadius: '12px',
-              padding: '20px',
-              marginBottom: '32px',
+              backgroundColor: '#090e1a',
+              border: '1px solid #1e293b',
+              borderRadius: '10px',
+              padding: '18px',
+              marginBottom: '28px',
             }}
           >
             <div style={{ marginBottom: '12px' }}>
               <input
                 type="text"
-                placeholder="Your username or alias (e.g. ViceCityPro)"
+                placeholder="Your username or alias"
                 value={commentName}
                 onChange={(e) => setCommentName(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '10px 14px',
                   borderRadius: '8px',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                  color: '#fff',
+                  border: '1px solid #1e293b',
+                  backgroundColor: '#0d1527',
+                  color: '#ffffff',
                   fontSize: '0.88rem',
                   outline: 'none',
                 }}
@@ -730,9 +728,9 @@ export default function ResourceDetail() {
                   width: '100%',
                   padding: '12px 14px',
                   borderRadius: '8px',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  backgroundColor: 'rgba(0, 0, 0, 0.3)',
-                  color: '#fff',
+                  border: '1px solid #1e293b',
+                  backgroundColor: '#0d1527',
+                  color: '#ffffff',
                   fontSize: '0.9rem',
                   lineHeight: '1.5',
                   outline: 'none',
@@ -751,7 +749,7 @@ export default function ResourceDetail() {
               <button
                 type="submit"
                 disabled={submittingComment || !commentText.trim()}
-                className="gta-pill-btn gta-pill-btn-primary"
+                className="btn-gold"
                 style={{ padding: '8px 20px', fontSize: '0.84rem' }}
               >
                 <Send size={14} />
@@ -762,15 +760,15 @@ export default function ResourceDetail() {
 
           {/* Comments List */}
           {comments.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {comments.map((comment) => (
                 <div
                   key={comment.id}
                   style={{
                     padding: '16px 20px',
-                    borderRadius: '12px',
-                    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    borderRadius: '10px',
+                    backgroundColor: '#090e1a',
+                    border: '1px solid #1e293b',
                   }}
                 >
                   <div
@@ -787,24 +785,24 @@ export default function ResourceDetail() {
                         alt={comment.author_name}
                         style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover' }}
                       />
-                      <span style={{ fontWeight: '700', color: '#fff', fontSize: '0.88rem' }}>
+                      <span style={{ fontWeight: '600', color: '#ffffff', fontSize: '0.88rem' }}>
                         {comment.author_name}
                       </span>
                       <span
                         style={{
                           fontSize: '0.65rem',
-                          fontWeight: '800',
+                          fontWeight: '700',
                           padding: '2px 6px',
                           borderRadius: '4px',
-                          backgroundColor: 'rgba(255, 42, 133, 0.15)',
-                          color: '#ff2a85',
-                          border: '1px solid rgba(255, 42, 133, 0.3)',
+                          backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                          color: '#38bdf8',
+                          border: '1px solid rgba(56, 189, 248, 0.3)',
                           textTransform: 'uppercase',
                         }}
                       >
-                        Verified Member
+                        Verified
                       </span>
-                      <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
                         {comment.created_at ? new Date(comment.created_at).toLocaleDateString() : 'Just now'}
                       </span>
                     </div>
@@ -817,7 +815,7 @@ export default function ResourceDetail() {
                         gap: '5px',
                         background: 'none',
                         border: 'none',
-                        color: '#9ca3af',
+                        color: '#94a3b8',
                         fontSize: '0.78rem',
                         cursor: 'pointer',
                       }}
@@ -827,14 +825,14 @@ export default function ResourceDetail() {
                     </button>
                   </div>
 
-                  <p style={{ color: '#d1d5db', fontSize: '0.9rem', lineHeight: '1.5', margin: 0 }}>
+                  <p style={{ color: '#cbd5e1', fontSize: '0.9rem', lineHeight: '1.5', margin: 0 }}>
                     {comment.content}
                   </p>
                 </div>
               ))}
             </div>
           ) : (
-            <div style={{ textAlign: 'center', padding: '32px 0', color: '#6b7280', fontSize: '0.9rem' }}>
+            <div style={{ textAlign: 'center', padding: '32px 0', color: '#64748b', fontSize: '0.9rem' }}>
               No comments yet. Be the first to share your feedback!
             </div>
           )}

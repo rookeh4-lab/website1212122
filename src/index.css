@@ -1,64 +1,61 @@
 :root {
   /* ==========================================================================
-     Lighter, High-Contrast & Sleek Slate Theme
+     Syndicate Archive Design System — Trillium Clean Dark Navy & Slate Theme
      ========================================================================== */
-  /* Backgrounds: Lighter, clean slate-charcoal (no pitch-black or murky yellow) */
-  --bg: #0f172a;
-  --bg-surface: #1e293b;
-  --bg-card: #1e293b;
-  --bg-card-hover: #25334a;
-  --bg-dropdown: #1e293b;
+  /* Backgrounds: Deep Slate Navy (#090e1a / #0b1220) */
+  --bg: #090e1a;
+  --bg-surface: #0f172a;
+  --bg-card: #0f1523;
+  --bg-card-hover: #131c30;
+  --bg-dropdown: #0c1322;
+  --bg-subtle: #162035;
 
-  /* Typography: Crisp, High-Contrast & Highly Readable */
-  --text: #ffffff;
-  --text-main: #ffffff;
-  --text-body: #f1f5f9;
+  /* Typography: Crisp White & Slate */
+  --text: #f8fafc;
+  --text-main: #f8fafc;
+  --text-body: #cbd5e1;
   --text-muted: #94a3b8;
   --text-dim: #64748b;
 
-  /* Vibrant, Perfectly Matched Accent Palette (Electric Cyan & Royal Indigo) */
-  --accent-primary: #38bdf8;         /* Electric Sky Blue */
-  --accent-secondary: #6366f1;       /* Indigo */
-  --accent-violet: #818cf8;          /* Bright Violet */
-  --accent-glow: rgba(56, 189, 248, 0.35);
+  /* Accent Colors */
+  --accent-primary: #38bdf8;
+  --accent-blue: #3b82f6;
+  --accent-hover: #0284c7;
 
-  /* Status & Category Accents */
-  --flame-orange: #ff7034;
-  --flame-yellow: #f59e0b;
-  --green-verified: #10b981;
-  --red-alert: #ef4444;
+  /* Status Badges */
+  --badge-hot-bg: #f97316;
+  --badge-hot-text: #ffffff;
+  --badge-hot-border: #ea580c;
 
-  /* Borders & Rims */
-  --edge: rgba(255, 255, 255, 0.12);
-  --edge-hover: rgba(56, 189, 248, 0.5);
-  --edge-subtle: rgba(255, 255, 255, 0.08);
+  --badge-verified-bg: rgba(16, 185, 129, 0.1);
+  --badge-verified-text: #10b981;
+  --badge-verified-border: rgba(16, 185, 129, 0.4);
 
-  /* Gradients */
-  --grad-primary: linear-gradient(135deg, #38bdf8 0%, #6366f1 100%);
-  --grad-primary-hover: linear-gradient(135deg, #0ea5e9 0%, #4f46e5 100%);
-  --grad-hot: linear-gradient(135deg, #ff5e36 0%, #f59e0b 100%);
-  --grad-card-overlay: linear-gradient(180deg, rgba(15, 23, 42, 0) 40%, rgba(15, 23, 42, 0.85) 100%);
+  /* Clean Borders & Dividers */
+  --edge: #1e293b;
+  --edge-hover: #334155;
+  --edge-strong: #475569;
 
   /* Shadows */
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
-  --shadow-card: 0 8px 24px -4px rgba(0, 0, 0, 0.35), 0 0 1px 1px rgba(255, 255, 255, 0.08);
-  --shadow-card-hover: 0 16px 36px -6px rgba(0, 0, 0, 0.5), 0 0 20px -2px rgba(56, 189, 248, 0.3);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 4px 16px -2px rgba(0, 0, 0, 0.4);
+  --shadow-card-hover: 0 12px 28px -4px rgba(0, 0, 0, 0.6);
 
   /* Dimensions & Timing */
   --radius: 14px;
-  --radius-sm: 8px;
+  --radius-sm: 6px;
   --wrap: 1180px;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
-  /* Fonts */
+  /* Normal, clean, simple system sans-serif fonts */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Aliases for compatibility */
+  /* Legacy mappings */
   --color-bg: var(--bg);
   --gold: var(--accent-primary);
-  --gold-foil: var(--grad-primary);
+  --gold-foil: var(--accent-primary);
   --edge-2: var(--edge-hover);
 }
 
@@ -88,19 +85,15 @@ body {
   position: relative;
 }
 
-/* ==========================================================================
-   Background & Atmosphere (.bg-veil) - Lighter Slate with Cool Ambient Glow
-   ========================================================================== */
+/* Deep Slate Background (.bg-veil) */
 .bg-veil {
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(60% 50% at 50% -10%, rgba(56, 189, 248, 0.12), transparent 70%),
-    radial-gradient(50% 40% at 85% 15%, rgba(99, 102, 241, 0.08), transparent 70%),
-    radial-gradient(40% 40% at 15% 30%, rgba(56, 189, 248, 0.06), transparent 70%),
-    linear-gradient(180deg, #101724 0%, #0e131d 100%);
+    radial-gradient(ellipse 90% 50% at 50% -10%, #0f1c36 0%, #090e1a 100%),
+    #090e1a;
   overflow: hidden;
 }
 
@@ -111,9 +104,9 @@ body {
   background-image:
     linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 48px 48px;
-  -webkit-mask-image: radial-gradient(100% 80% at 50% 0%, #000 0%, transparent 85%);
-  mask-image: radial-gradient(100% 80% at 50% 0%, #000 0%, transparent 85%);
+  background-size: 40px 40px;
+  -webkit-mask-image: radial-gradient(100% 80% at 50% 0%, #000 0%, transparent 90%);
+  mask-image: radial-gradient(100% 80% at 50% 0%, #000 0%, transparent 90%);
 }
 
 /* Custom Scrollbar */
@@ -121,18 +114,18 @@ body {
   width: 7px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--bg);
+  background: #090e1a;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: #1e293b;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-primary);
+  background: #334155;
 }
 
 /* ==========================================================================
-   Discord Announcement Bar (.top-announcement-bar)
+   Top Announcement Bar - Trillium Style Discord Banner
    ========================================================================== */
 .top-announcement-bar {
   position: relative;
@@ -142,54 +135,51 @@ body {
   justify-content: center;
   gap: 12px;
   max-width: 1180px;
-  margin: 14px auto 0;
+  margin: 10px auto 0;
   width: calc(100% - 32px);
-  padding: 10px 20px;
-  border-radius: 14px;
-  color: var(--text-body);
-  background:
-    radial-gradient(120% 160% at 0% 0%, rgba(56, 189, 248, 0.16), transparent 60%),
-    rgba(23, 32, 48, 0.85);
-  border: 1px solid rgba(56, 189, 248, 0.3);
-  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.35), 0 0 16px -2px rgba(56, 189, 248, 0.18);
-  backdrop-filter: blur(16px);
+  padding: 8px 18px;
+  border-radius: 12px;
+  color: #94a3b8;
+  background: #0c1322;
+  border: 1px solid var(--edge);
+  box-shadow: var(--shadow-sm);
   font-size: 0.86rem;
-  transition: all 0.2s var(--ease-out);
 }
 
 .top-announcement-pill {
   font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   padding: 4px 12px;
   border-radius: 999px;
-  color: #ffffff;
-  background: var(--grad-primary);
-  box-shadow: 0 2px 10px rgba(56, 189, 248, 0.4);
+  color: #f8fafc;
+  background: #162238;
+  border: 1px solid #233454;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: all 0.15s ease;
 }
 .top-announcement-pill:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(56, 189, 248, 0.6);
+  background: #1e2e4a;
+  border-color: #38bdf8;
+  color: #ffffff;
 }
 
 /* ==========================================================================
-   Typography
+   Typography (Normal, Clean & Simple Standard Fonts)
    ========================================================================== */
 .font-clean-title {
   font-family: var(--font-display);
-  font-weight: 800;
-  letter-spacing: -0.025em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   color: var(--text);
 }
 
 .font-clean-heading {
   font-family: var(--font-display);
-  font-weight: 700;
-  letter-spacing: -0.015em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--text);
 }
 
@@ -200,82 +190,79 @@ body {
 }
 
 /* ==========================================================================
-   Category Filter Pills (.cat-pill) - Clean, High Contrast Slate
+   Category Filter Pills (.cat-pill) - Trillium Clean Dark Style
    ========================================================================== */
 .cat-pill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 42px;
+  height: 38px;
   padding: 0 16px 0 14px;
   border-radius: 9999px;
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   white-space: nowrap;
   color: var(--text-muted);
-  background: rgba(23, 32, 48, 0.7);
+  background: #0d1527;
   border: 1px solid var(--edge);
-  backdrop-filter: blur(12px);
   box-shadow: var(--shadow-sm);
-  transition: all 0.18s var(--ease-out);
+  transition: all 0.16s var(--ease-out);
   cursor: pointer;
   user-select: none;
 }
 
 .cat-pill:not(.on):hover {
-  color: var(--text);
-  background: rgba(30, 42, 62, 0.9);
-  border-color: rgba(255, 255, 255, 0.2);
-  transform: translateY(-1px);
+  color: #ffffff;
+  background: #131e36;
+  border-color: #2b3952;
 }
 
 .cat-pill.on {
   color: #ffffff;
-  background: var(--grad-primary);
-  border-color: rgba(255, 255, 255, 0.35);
-  box-shadow: 0 4px 18px rgba(56, 189, 248, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  background: #162442;
+  border-color: #38bdf8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.15);
 }
 
 .cat-pill .count {
   padding: 2px 7px;
   border-radius: 999px;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--accent-primary);
-  background: rgba(56, 189, 248, 0.12);
-  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: #94a3b8;
+  background: #090e1a;
+  border: 1px solid #1e293b;
 }
 
 .cat-pill.on .count {
-  color: #ffffff;
-  background: rgba(0, 0, 0, 0.25);
-  border-color: rgba(255, 255, 255, 0.2);
+  color: #38bdf8;
+  background: #0d1527;
+  border-color: rgba(56, 189, 248, 0.3);
 }
 
 /* ==========================================================================
-   Secondary Filter Bar & Dropdowns (Clean Rounded Slate Pills)
+   Secondary Filter Bar & Dropdowns (Trillium Pill Shape)
    ========================================================================== */
 .filter-pill-input {
   width: 100%;
-  height: 42px;
-  padding: 0 16px 0 42px;
+  height: 38px;
+  padding: 0 16px 0 38px;
   border-radius: 9999px;
   outline: none;
-  font-size: 13.5px;
-  color: var(--text);
-  background: rgba(23, 32, 48, 0.85);
+  font-size: 13px;
+  color: #ffffff;
+  background: #0d1527;
   border: 1px solid var(--edge);
-  backdrop-filter: blur(12px);
   box-shadow: var(--shadow-sm);
-  transition: all 0.18s var(--ease-out);
+  transition: all 0.16s var(--ease-out);
   font-family: var(--font-sans);
 }
 
 .filter-pill-input:focus {
-  border-color: var(--accent-primary);
-  background: rgba(28, 39, 58, 0.95);
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+  background: #0f182c;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
 }
 
 /* Dropdown Buttons (.dd-btn / .filter-dropdown-pill) */
@@ -284,35 +271,32 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  height: 42px;
+  height: 38px;
   padding: 0 16px;
   border-radius: 9999px;
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   white-space: nowrap;
-  color: var(--text-body);
-  background: rgba(23, 32, 48, 0.85);
+  color: #e2e8f0;
+  background: #0d1527;
   border: 1px solid var(--edge);
-  backdrop-filter: blur(12px);
   box-shadow: var(--shadow-sm);
-  transition: all 0.18s var(--ease-out);
+  transition: all 0.16s var(--ease-out);
   cursor: pointer;
   user-select: none;
 }
 
 .filter-dropdown-pill:hover,
 .dd-btn:hover {
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(30, 42, 62, 0.95);
+  border-color: #334155;
+  background: #131e36;
   color: #ffffff;
-  transform: translateY(-1px);
 }
 
 .filter-dropdown-pill.active {
-  color: var(--accent-primary);
-  border-color: rgba(56, 189, 248, 0.45);
-  background: rgba(56, 189, 248, 0.1);
-  box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+  color: #ffffff;
+  border-color: #38bdf8;
+  background: #162442;
 }
 
 /* Stat Pill Item */
@@ -320,38 +304,38 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  background: rgba(23, 32, 48, 0.75);
+  background: #0d1527;
   border: 1px solid var(--edge);
   border-radius: 9999px;
   padding: 6px 14px;
   font-size: 0.82rem;
-  color: var(--text-muted);
+  color: #94a3b8;
   box-shadow: var(--shadow-sm);
 }
 .stat-pill-item strong {
-  color: var(--text);
-  font-weight: 700;
+  color: #ffffff;
+  font-weight: 600;
 }
 
 /* ==========================================================================
-   Resource Cards (.resource-card-clean) - Elevated, Crisp & Modern
+   Resource Cards (.resource-card-clean) - Exact Image 1 Trillium Layout
    ========================================================================== */
 .resource-card-clean {
   display: flex;
   flex-direction: column;
-  border-radius: var(--radius);
+  border-radius: 16px;
   overflow: hidden;
-  background: var(--bg-card);
-  border: 1px solid var(--edge);
-  box-shadow: var(--shadow-card);
-  transition: transform 0.24s var(--ease-out), border-color 0.2s ease, box-shadow 0.24s var(--ease-out);
+  background: #0e1526;
+  border: 1px solid #1a2438;
+  box-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s var(--ease-out), border-color 0.2s ease, box-shadow 0.2s var(--ease-out);
   position: relative;
 }
 
 .resource-card-clean:hover {
-  transform: translateY(-5px);
-  border-color: var(--edge-hover);
-  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-3px);
+  border-color: #2b3b5c;
+  box-shadow: 0 12px 28px -4px rgba(0, 0, 0, 0.6);
 }
 
 /* Badges on Card Media */
@@ -359,75 +343,75 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
+  padding: 3px 10px;
   border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 700;
   color: #ffffff;
-  background: var(--grad-hot);
-  box-shadow: 0 2px 10px rgba(255, 94, 54, 0.45);
-  letter-spacing: 0.02em;
+  background: #ea580c;
+  border: 1px solid #f97316;
+  box-shadow: 0 2px 6px rgba(234, 88, 12, 0.3);
 }
 
 .badge-verified-clean {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   padding: 3px 9px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
-  color: #34d399;
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.4);
   backdrop-filter: blur(8px);
 }
 
 .badge-tag-mc-clean {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 600;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
   color: #ffffff;
-  background: rgba(14, 19, 29, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(9, 14, 26, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(8px);
 }
 
 .mc-dot-gold {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  background: var(--accent-primary);
-  box-shadow: 0 0 8px var(--accent-primary);
+  background: #f59e0b;
 }
 
-/* Version & Category Tags */
+/* Version & Category Tags below thumbnail */
 .tag-pill-ver {
   display: inline-flex;
   align-items: center;
-  padding: 3px 9px;
+  padding: 2px 8px;
   border-radius: 6px;
-  font: 600 11.5px/1.35 var(--font-mono);
-  color: var(--accent-primary);
-  background: rgba(56, 189, 248, 0.1);
-  border: 1px solid rgba(56, 189, 248, 0.28);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: #10b981;
+  background: #111e30;
+  border: 1px solid #1e3352;
 }
 
 .tag-pill-cat {
   display: inline-flex;
   align-items: center;
-  padding: 3px 9px;
+  padding: 2px 8px;
   border-radius: 6px;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 1.35;
-  color: var(--accent-violet);
-  background: rgba(129, 140, 248, 0.1);
-  border: 1px solid rgba(129, 140, 248, 0.28);
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
 /* Buttons */
@@ -437,30 +421,30 @@ body {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  padding: 9px 20px;
+  padding: 8px 18px;
   border-radius: 9999px;
-  font-size: 13.5px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   color: #ffffff;
-  background: var(--grad-primary);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: #0284c7;
+  border: 1px solid #38bdf8;
   cursor: pointer;
   text-decoration: none;
-  box-shadow: 0 4px 16px rgba(56, 189, 248, 0.35);
-  transition: all 0.2s var(--ease-out);
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25);
+  transition: all 0.16s var(--ease-out);
 }
 .btn-gold:hover,
 .btn-pill-primary:hover {
-  transform: translateY(-1px);
-  background: var(--grad-primary-hover);
-  box-shadow: 0 6px 22px rgba(56, 189, 248, 0.55);
+  background: #0369a1;
+  border-color: #7dd3fc;
+  box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
 }
 
 /* Grid Layout */
 .resource-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 22px;
+  gap: 20px;
 }
 
 @media (max-width: 1024px) {
@@ -480,7 +464,7 @@ body {
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -489,5 +473,5 @@ body {
 }
 
 .fade-in {
-  animation: fadeIn 0.22s var(--ease-out) forwards;
+  animation: fadeIn 0.2s var(--ease-out) forwards;
 }

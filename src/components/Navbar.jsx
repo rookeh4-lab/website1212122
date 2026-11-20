@@ -42,7 +42,7 @@ export default function Navbar() {
     >
       <div
         style={{
-          background: 'rgba(20, 28, 42, 0.88)',
+          background: 'rgba(13, 21, 39, 0.90)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
           borderRadius: '9999px',
@@ -50,8 +50,8 @@ export default function Navbar() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          boxShadow: '0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 0 1px 1px rgba(255, 255, 255, 0.08)',
+          border: '1px solid #1e293b',
+          boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.4)',
         }}
       >
         {/* Brand Logo & Name */}
@@ -69,12 +69,12 @@ export default function Navbar() {
               width: '32px',
               height: '32px',
               borderRadius: '50%',
-              background: 'linear-gradient(135deg, #38bdf8 0%, #6366f1 100%)',
+              background: '#0284c7',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#ffffff',
-              boxShadow: '0 2px 10px rgba(56, 189, 248, 0.4)',
+              boxShadow: '0 2px 8px rgba(2, 132, 199, 0.3)',
             }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
@@ -85,8 +85,8 @@ export default function Navbar() {
           <span
             style={{
               fontFamily: "var(--font-sans)",
-              fontWeight: '800',
-              fontSize: '1.15rem',
+              fontWeight: '700',
+              fontSize: '1.12rem',
               color: '#ffffff',
               letterSpacing: '-0.02em',
             }}
@@ -115,22 +115,22 @@ export default function Navbar() {
                   borderRadius: '9999px',
                   fontSize: '0.84rem',
                   fontWeight: active ? '600' : '500',
-                  color: active ? '#ffffff' : 'var(--text-muted)',
-                  backgroundColor: active ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
-                  border: active ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid transparent',
+                  color: active ? '#ffffff' : '#94a3b8',
+                  backgroundColor: active ? '#162442' : 'transparent',
+                  border: active ? '1px solid #38bdf8' : '1px solid transparent',
                   textDecoration: 'none',
-                  transition: 'all 0.18s var(--ease-out)',
-                  boxShadow: active ? '0 0 12px rgba(56, 189, 248, 0.2)' : 'none',
+                  transition: 'all 0.16s var(--ease-out)',
+                  boxShadow: active ? '0 0 12px rgba(56, 189, 248, 0.15)' : 'none',
                 }}
                 onMouseEnter={(e) => {
                   if (!active) {
                     e.currentTarget.style.color = '#ffffff';
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.06)';
+                    e.currentTarget.style.backgroundColor = '#131e36';
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!active) {
-                    e.currentTarget.style.color = 'var(--text-muted)';
+                    e.currentTarget.style.color = '#94a3b8';
                     e.currentTarget.style.backgroundColor = 'transparent';
                   }
                 }}
@@ -155,19 +155,21 @@ export default function Navbar() {
               borderRadius: '9999px',
               fontSize: '0.82rem',
               fontWeight: '500',
-              color: 'var(--text-muted)',
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid var(--edge)',
+              color: '#cbd5e1',
+              backgroundColor: '#0d1527',
+              border: '1px solid #1e293b',
               textDecoration: 'none',
-              transition: 'all 0.18s var(--ease-out)',
+              transition: 'all 0.16s var(--ease-out)',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.4)';
-              e.currentTarget.style.color = 'var(--accent-primary)';
+              e.currentTarget.style.borderColor = '#334155';
+              e.currentTarget.style.color = '#ffffff';
+              e.currentTarget.style.backgroundColor = '#131e36';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'var(--edge)';
-              e.currentTarget.style.color = 'var(--text-muted)';
+              e.currentTarget.style.borderColor = '#1e293b';
+              e.currentTarget.style.color = '#cbd5e1';
+              e.currentTarget.style.backgroundColor = '#0d1527';
             }}
           >
             <MessageSquare size={13} />
@@ -195,12 +197,12 @@ export default function Navbar() {
               borderRadius: '9999px',
               fontSize: '0.80rem',
               fontWeight: '500',
-              color: 'var(--text-dim)',
+              color: '#64748b',
               textDecoration: 'none',
               transition: 'color 0.15s ease',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-dim)')}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#cbd5e1')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#64748b')}
           >
             Admin
           </Link>
@@ -214,7 +216,7 @@ export default function Navbar() {
               display: 'none',
               background: 'none',
               border: 'none',
-              color: 'var(--text)',
+              color: '#ffffff',
               padding: '6px',
               cursor: 'pointer',
             }}
@@ -229,14 +231,14 @@ export default function Navbar() {
         <div
           style={{
             marginTop: '8px',
-            background: 'rgba(20, 28, 42, 0.96)',
-            border: '1px solid var(--edge)',
+            background: '#0d1527',
+            border: '1px solid #1e293b',
             borderRadius: '16px',
             padding: '12px',
             display: 'flex',
             flexDirection: 'column',
             gap: '6px',
-            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.7)',
+            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.5)',
           }}
         >
           {navLinks.map((item) => (
@@ -247,10 +249,10 @@ export default function Navbar() {
                 padding: '10px 14px',
                 borderRadius: '8px',
                 fontSize: '0.88rem',
-                color: isActive(item.path) ? 'var(--accent-primary)' : 'var(--text-muted)',
-                fontWeight: isActive(item.path) ? '600' : '400',
+                color: isActive(item.path) ? '#ffffff' : '#94a3b8',
+                fontWeight: isActive(item.path) ? '600' : '500',
                 textDecoration: 'none',
-                backgroundColor: isActive(item.path) ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                backgroundColor: isActive(item.path) ? '#162442' : 'transparent',
               }}
             >
               {item.name}

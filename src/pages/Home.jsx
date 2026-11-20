@@ -180,12 +180,13 @@ export default function Home() {
   return (
     <div style={{ minHeight: '100vh', paddingBottom: '80px' }}>
       {/* ------------------------------------------------------------------
-          1. Top Announcement Bar (Discord Banner)
+          1. Top Announcement Bar - Clean Light Neutral
           ------------------------------------------------------------------ */}
       {showDiscordBanner && (
         <div className="top-announcement-bar">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: '500' }}>NEW Join our official Discord:</span>
+            <span style={{ fontWeight: '600', color: '#0f172a' }}>Official Community:</span>
+            <span>Join our Discord server</span>
             <a
               href="https://discord.gg/syndicate"
               target="_blank"
@@ -194,7 +195,6 @@ export default function Home() {
             >
               discord.gg/syndicate
             </a>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.80rem' }}>Join community</span>
           </div>
 
           <button
@@ -205,7 +205,7 @@ export default function Home() {
               right: '16px',
               background: 'none',
               border: 'none',
-              color: 'var(--text-muted)',
+              color: '#94a3b8',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -217,35 +217,35 @@ export default function Home() {
         </div>
       )}
 
-      <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '36px 20px 0 20px' }}>
+      <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '32px 20px 0 20px' }}>
         {/* ------------------------------------------------------------------
-            2. Hero Branding Section (Lighter, Crisp Modern Slate)
+            2. Hero Branding Section (Trillium Style)
             ------------------------------------------------------------------ */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '24px',
-            marginBottom: '32px',
+            gap: '20px',
+            marginBottom: '28px',
             flexWrap: 'wrap',
           }}
         >
           {/* Logo Emblem */}
           <div
             style={{
-              width: '68px',
-              height: '68px',
-              borderRadius: '18px',
-              background: 'linear-gradient(135deg, #1e293b 0%, #111827 100%)',
-              border: '1px solid rgba(56, 189, 248, 0.35)',
+              width: '60px',
+              height: '60px',
+              borderRadius: '14px',
+              background: '#0d1527',
+              border: '1px solid #1e293b',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
-              boxShadow: '0 10px 26px rgba(0, 0, 0, 0.4), 0 0 16px rgba(56, 189, 248, 0.2)',
+              boxShadow: '0 4px 14px rgba(0, 0, 0, 0.4)',
             }}
           >
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
             </svg>
           </div>
@@ -255,10 +255,11 @@ export default function Home() {
             <h1
               className="font-clean-title"
               style={{
-                fontSize: '2.1rem',
+                fontSize: '1.9rem',
                 color: '#ffffff',
-                lineHeight: '1.15',
+                lineHeight: '1.2',
                 marginBottom: '4px',
+                fontWeight: '700',
               }}
             >
               Syndicate Solutions
@@ -267,9 +268,9 @@ export default function Home() {
             <p
               className="font-clean-body"
               style={{
-                fontSize: '0.94rem',
-                color: 'var(--text-muted)',
-                marginBottom: '14px',
+                fontSize: '0.92rem',
+                color: '#94a3b8',
+                marginBottom: '12px',
               }}
             >
               Everything is just free.
@@ -285,17 +286,17 @@ export default function Home() {
               }}
             >
               <div className="stat-pill-item">
-                <Package size={14} style={{ color: '#38bdf8' }} />
+                <Package size={13} style={{ color: '#38bdf8' }} />
                 <span><strong>{totalUploads}</strong> uploads</span>
               </div>
 
               <div className="stat-pill-item">
-                <Download size={14} style={{ color: '#818cf8' }} />
+                <Download size={13} style={{ color: '#38bdf8' }} />
                 <span><strong>151.2k</strong> downloads</span>
               </div>
 
               <div className="stat-pill-item">
-                <Users size={14} style={{ color: 'var(--text-muted)' }} />
+                <Users size={13} style={{ color: '#94a3b8' }} />
                 <span><strong>15,645</strong> members</span>
               </div>
             </div>
@@ -311,7 +312,7 @@ export default function Home() {
             alignItems: 'center',
             gap: '8px',
             overflowX: 'auto',
-            paddingBottom: '16px',
+            paddingBottom: '14px',
             marginBottom: '16px',
             scrollbarWidth: 'none',
           }}
@@ -333,11 +334,12 @@ export default function Home() {
         </div>
 
         {/* ------------------------------------------------------------------
-            4. Filter Controls
-               [ Search title, tag, version or author ]
+            4. Filter Controls (Trillium Capsule Shape - Matches Image 2 & 3)
+               [ Search ]
+               [ All ⌄ ]
                [ All versions ⌄ ]
                [ 🎛️ Top rated ⌄ ]
-               [ Source Code ]
+               [ Clients ]
                [ All posts ]
             ------------------------------------------------------------------ */}
         <div
@@ -346,33 +348,33 @@ export default function Home() {
             flexWrap: 'wrap',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '12px',
-            marginBottom: '28px',
-            paddingBottom: '20px',
+            gap: '10px',
+            marginBottom: '26px',
+            paddingBottom: '18px',
             borderBottom: '1px solid var(--edge)',
           }}
         >
           {/* Left Controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             {/* Search Pill Input */}
             <div style={{ position: 'relative' }}>
               <Search
-                size={14}
+                size={13}
                 style={{
                   position: 'absolute',
                   left: '14px',
                   top: '50%',
                   transform: 'translateY(-50%)',
-                  color: 'var(--text-muted)',
+                  color: '#64748b',
                 }}
               />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search title, tag, version or author"
+                placeholder="Search"
                 className="filter-pill-input"
-                style={{ width: '270px' }}
+                style={{ width: '220px' }}
               />
             </div>
 
@@ -398,11 +400,11 @@ export default function Home() {
                     left: 0,
                     zIndex: 50,
                     minWidth: '150px',
-                    background: 'var(--bg-dropdown)',
-                    border: '1px solid var(--edge)',
-                    borderRadius: '12px',
+                    background: '#0d1527',
+                    border: '1px solid #1e293b',
+                    borderRadius: '10px',
                     padding: '6px',
-                    boxShadow: '0 14px 34px rgba(0, 0, 0, 0.6)',
+                    boxShadow: '0 10px 28px rgba(0, 0, 0, 0.5)',
                   }}
                 >
                   {versionOptions.map((ver) => (
@@ -415,17 +417,17 @@ export default function Home() {
                       style={{
                         padding: '7px 12px',
                         fontSize: '0.82rem',
-                        color: selectedVersion === ver ? '#38bdf8' : 'var(--text-body)',
-                        fontWeight: selectedVersion === ver ? '700' : '500',
+                        color: selectedVersion === ver ? '#ffffff' : '#94a3b8',
+                        fontWeight: selectedVersion === ver ? '600' : '400',
                         borderRadius: '6px',
                         cursor: 'pointer',
-                        backgroundColor: selectedVersion === ver ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                        backgroundColor: selectedVersion === ver ? '#162442' : 'transparent',
                         transition: 'background 0.12s ease',
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#131e36')}
                       onMouseLeave={(e) =>
                         (e.currentTarget.style.backgroundColor =
-                          selectedVersion === ver ? 'rgba(56, 189, 248, 0.12)' : 'transparent')
+                          selectedVersion === ver ? '#162442' : 'transparent')
                       }
                     >
                       {ver}
@@ -458,11 +460,11 @@ export default function Home() {
                     left: 0,
                     zIndex: 50,
                     minWidth: '160px',
-                    background: 'var(--bg-dropdown)',
-                    border: '1px solid var(--edge)',
-                    borderRadius: '12px',
+                    background: '#0d1527',
+                    border: '1px solid #1e293b',
+                    borderRadius: '10px',
                     padding: '6px',
-                    boxShadow: '0 14px 34px rgba(0, 0, 0, 0.6)',
+                    boxShadow: '0 10px 28px rgba(0, 0, 0, 0.5)',
                   }}
                 >
                   {sortOptions.map((s) => (
@@ -475,17 +477,17 @@ export default function Home() {
                       style={{
                         padding: '7px 12px',
                         fontSize: '0.82rem',
-                        color: sortBy === s.id ? '#38bdf8' : 'var(--text-body)',
-                        fontWeight: sortBy === s.id ? '700' : '500',
+                        color: sortBy === s.id ? '#ffffff' : '#94a3b8',
+                        fontWeight: sortBy === s.id ? '600' : '400',
                         borderRadius: '6px',
                         cursor: 'pointer',
-                        backgroundColor: sortBy === s.id ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                        backgroundColor: sortBy === s.id ? '#162442' : 'transparent',
                         transition: 'background 0.12s ease',
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)')}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#131e36')}
                       onMouseLeave={(e) =>
                         (e.currentTarget.style.backgroundColor =
-                          sortBy === s.id ? 'rgba(56, 189, 248, 0.12)' : 'transparent')
+                          sortBy === s.id ? '#162442' : 'transparent')
                       }
                     >
                       {s.label}
@@ -499,14 +501,20 @@ export default function Home() {
             <button
               onClick={() => setSourceCodeOnly(!sourceCodeOnly)}
               className={`filter-dropdown-pill ${sourceCodeOnly ? 'active' : ''}`}
-              style={{ padding: '7px 14px', borderRadius: '9999px' }}
             >
               <span>Source Code</span>
             </button>
           </div>
 
-          {/* Right Reset Pill */}
+          {/* Right Category Quick Pills: Clients & All posts */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={() => setActiveCategory('Clients')}
+              className={`filter-dropdown-pill ${activeCategory === 'Clients' ? 'active' : ''}`}
+            >
+              Clients
+            </button>
+
             <button
               onClick={() => {
                 setActiveCategory('All');
@@ -515,12 +523,7 @@ export default function Home() {
                 setSourceCodeOnly(false);
                 setSortBy('top_rated');
               }}
-              className="filter-dropdown-pill"
-              style={{
-                padding: '7px 14px',
-                borderRadius: '9999px',
-                color: 'var(--text-muted)',
-              }}
+              className={`filter-dropdown-pill ${activeCategory === 'All' && !sourceCodeOnly && selectedVersion === 'All versions' ? 'active' : ''}`}
             >
               All posts
             </button>
@@ -535,7 +538,7 @@ export default function Home() {
             style={{
               padding: '60px 0',
               textAlign: 'center',
-              color: 'var(--text-muted)',
+              color: '#64748b',
               fontSize: '0.95rem',
             }}
           >
@@ -546,13 +549,14 @@ export default function Home() {
             style={{
               padding: '60px 20px',
               textAlign: 'center',
-              background: 'var(--bg-card)',
-              border: '1px solid var(--edge)',
+              background: '#0d1527',
+              border: '1px solid #1e293b',
               borderRadius: '16px',
-              color: 'var(--text-muted)',
+              color: '#64748b',
+              boxShadow: 'var(--shadow-sm)',
             }}
           >
-            <p style={{ fontSize: '1rem', color: '#ffffff', marginBottom: '8px', fontWeight: '700' }}>
+            <p style={{ fontSize: '1rem', color: '#ffffff', marginBottom: '8px', fontWeight: '600' }}>
               No resources found matching your filters.
             </p>
             <button
