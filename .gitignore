@@ -10,3 +10,5 @@ repo-clone/
 .env
 .env.local
 .env.*.local
+tests/
+clientgui.h

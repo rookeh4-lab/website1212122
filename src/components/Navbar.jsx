@@ -1,511 +1,343 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { auth } from '../utils/api';
+import { Link, useLocation } from 'react-router-dom';
+import {
+  Compass,
+  Code2,
+  Wrench,
+  Zap,
+  Box,
+  Upload,
+  Menu,
+  X,
+  ExternalLink,
+  ShieldCheck,
+  Search,
+  Sparkles
+} from 'lucide-react';
 
 export default function Navbar() {
-  const [user, setUser] = useState(null);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
-  const navigate = useNavigate();
 
   useEffect(() => {
-    let active = true;
-    async function loadUser() {
-      const data = await auth.getProfile();
-      if (active) setUser(data?.user || null);
-    }
-    loadUser();
-    return () => { active = false; };
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
   }, [location.pathname]);
 
-  useEffect(() => {
-    setMobileOpen(false);
-  }, [location.pathname, location.hash]);
+  const navLinks = [
+    { name: 'Archive', path: '/', icon: Compass },
+    { name: 'Clients', path: '/clients', icon: Zap },
+    { name: 'Source Codes', path: '/sources', icon: Code2 },
+    { name: 'Tools', path: '/tools', icon: Wrench },
+    { name: 'Macros', path: '/macros', icon: Sparkles },
+    { name: 'Launchers', path: '/launchers', icon: Box },
+  ];
 
-  const handleLogout = async () => {
-    await auth.clear();
-    setUser(null);
-    setMobileOpen(false);
-    navigate('/login');
+  const isActive = (path) => {
+    if (path === '/') return location.pathname === '/';
+    return location.pathname.startsWith(path);
   };
 
   return (
-    <header
+    <nav
       style={{
-        width: '100%',
-        padding: '16px 20px',
-        position: 'relative',
-        zIndex: 50,
+        position: 'sticky',
+        top: 0,
+        zIndex: 100,
+        backgroundColor: scrolled ? 'rgba(9, 10, 15, 0.94)' : 'rgba(9, 10, 15, 0.8)',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+        transition: 'all 0.25s ease',
       }}
     >
       <div
         style={{
-          maxWidth: '1280px',
+          maxWidth: '1240px',
           margin: '0 auto',
+          padding: '0 24px',
+          height: '70px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          position: 'relative',
         }}
       >
-        <div
+        {/* Brand / Logo */}
+        <Link
+          to="/"
           style={{
             display: 'flex',
             alignItems: 'center',
-            flex: 1,
-            justifyContent: 'flex-start',
             gap: '12px',
+            textDecoration: 'none',
           }}
         >
-          <Link
-            to="/"
+          <div
             style={{
-              display: 'inline-flex',
+              width: '38px',
+              height: '38px',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, #7c3aed, #3b82f6)',
+              display: 'flex',
               alignItems: 'center',
-              textDecoration: 'none',
-              gap: '10px',
+              justifyContent: 'center',
+              boxShadow: '0 0 20px rgba(124, 58, 237, 0.4)',
+              color: '#fff',
+              fontWeight: '800',
+              fontSize: '1.2rem',
+              letterSpacing: '-0.02em',
             }}
           >
-            <img
-              src="/logo.png"
-              alt="5.55 Client"
-              style={{
-                height: '38px',
-                width: 'auto',
-                maxWidth: '65px',
-                objectFit: 'contain',
-                borderRadius: '8px',
-              }}
-            />
+            S
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span
+                style={{
+                  fontSize: '1.15rem',
+                  fontWeight: '800',
+                  letterSpacing: '0.04em',
+                  color: '#ffffff',
+                }}
+              >
+                SYNDICATE
+              </span>
+              <span
+                style={{
+                  fontSize: '0.65rem',
+                  fontWeight: '700',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  background: 'rgba(124, 58, 237, 0.2)',
+                  color: '#c084fc',
+                  border: '1px solid rgba(124, 58, 237, 0.35)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                }}
+              >
+                ARCHIVE
+              </span>
+            </div>
             <span
               style={{
-                fontSize: '18px',
-                fontWeight: 800,
-                color: '#ffffff',
-                letterSpacing: '-0.02em',
+                fontSize: '0.7rem',
+                color: '#64748b',
+                fontWeight: '500',
+                letterSpacing: '0.02em',
               }}
             >
-              5.55 Client
+              Minecraft Client & Source Repository
             </span>
-          </Link>
+          </div>
+        </Link>
+
+        {/* Desktop Nav Items */}
+        <div
+          style={{
+            display: 'none',
+            alignItems: 'center',
+            gap: '4px',
+          }}
+          className="desktop-nav"
+        >
+          {navLinks.map((link) => {
+            const Icon = link.icon;
+            const active = isActive(link.path);
+            return (
+              <Link
+                key={link.path}
+                to={link.path}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '7px 14px',
+                  borderRadius: '8px',
+                  fontSize: '0.88rem',
+                  fontWeight: active ? '600' : '500',
+                  color: active ? '#ffffff' : '#94a3b8',
+                  backgroundColor: active ? 'rgba(124, 58, 237, 0.15)' : 'transparent',
+                  border: active ? '1px solid rgba(124, 58, 237, 0.3)' : '1px solid transparent',
+                  textDecoration: 'none',
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!active) {
+                    e.currentTarget.style.color = '#ffffff';
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!active) {
+                    e.currentTarget.style.color = '#94a3b8';
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
+              >
+                <Icon size={15} style={{ color: active ? '#c084fc' : '#64748b' }} />
+                {link.name}
+              </Link>
+            );
+          })}
         </div>
 
-        <nav className="navbar-desktop-nav">
+        {/* Right Action Buttons */}
+        <div
+          style={{
+            display: 'none',
+            alignItems: 'center',
+            gap: '10px',
+          }}
+          className="desktop-actions"
+        >
+          {/* Upload Button */}
           <Link
-            to="/"
+            to="/upload"
+            className="syn-btn syn-btn-primary"
             style={{
-              color: location.pathname === '/' ? '#ffffff' : '#9494a0',
-              textDecoration: 'none',
-              fontSize: '14px',
-              fontWeight: 500,
-              transition: 'color 0.15s',
+              padding: '8px 16px',
+              fontSize: '0.85rem',
             }}
           >
-            Home
+            <Upload size={15} />
+            Publish Resource
           </Link>
+
+          {/* Admin link */}
           <Link
-            to="/checkout"
+            to="/admin"
+            className="syn-btn syn-btn-secondary"
             style={{
-              color: location.pathname === '/checkout' ? '#ffffff' : '#9494a0',
-              textDecoration: 'none',
-              fontSize: '14px',
-              fontWeight: 500,
-              transition: 'color 0.15s',
+              padding: '8px 12px',
+              fontSize: '0.82rem',
             }}
+            title="Admin Dashboard"
           >
-            Pricing
+            <ShieldCheck size={15} style={{ color: '#38bdf8' }} />
+            Admin
           </Link>
-          <Link
-            to="/trial"
-            style={{
-              color: location.pathname === '/trial' ? '#ffffff' : '#9494a0',
-              textDecoration: 'none',
-              fontSize: '14px',
-              fontWeight: 500,
-              transition: 'color 0.15s',
-            }}
-          >
-            Free Trial
-          </Link>
+
+          {/* Discord CTA */}
           <a
-            href="/#showcase"
-            style={{
-              color: '#9494a0',
-              textDecoration: 'none',
-              fontSize: '14px',
-              fontWeight: 500,
-              transition: 'color 0.15s',
-            }}
-          >
-            Showcase
-          </a>
-          <Link
-            to="/stats"
-            style={{
-              color: location.pathname === '/stats' ? '#ffffff' : '#9494a0',
-              textDecoration: 'none',
-              fontSize: '14px',
-              fontWeight: 500,
-              transition: 'color 0.15s',
-            }}
-          >
-            Stats
-          </Link>
-          <a
-            href="https://discord.gg/xx7Ns6vW8"
+            href="https://discord.gg/syndicate"
             target="_blank"
             rel="noopener noreferrer"
+            className="syn-btn syn-btn-outline"
             style={{
-              color: '#9494a0',
-              textDecoration: 'none',
-              fontSize: '14px',
-              fontWeight: 500,
-              transition: 'color 0.15s',
+              padding: '8px 14px',
+              fontSize: '0.85rem',
             }}
           >
-            Discord
+            <span>Discord</span>
+            <ExternalLink size={13} style={{ color: '#64748b' }} />
           </a>
-          {(user?.role === 'admin' || ['rookeh4@gmail.com', 'rabinzzz113@gmail.com', 'rabinjj09@gmail.com', 'adigod2014@gmail.com', 'adigod6726@gmail.com'].includes(user?.email?.toLowerCase())) && (
-            <Link
-              to="/admin"
-              style={{
-                color: '#f43f5e',
-                textDecoration: 'none',
-                fontSize: '14px',
-                fontWeight: 700,
-                transition: 'color 0.15s',
-              }}
-            >
-              Admin
-            </Link>
-          )}
-        </nav>
-
-        <div className="navbar-desktop-user">
-          {user ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Link
-                to="/dashboard"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  background: '#ffffff',
-                  border: 'none',
-                  outline: 'none',
-                  borderRadius: '9999px',
-                  padding: '7px 16px 7px 8px',
-                  textDecoration: 'none',
-                  color: '#09090b',
-                  fontWeight: 600,
-                  fontSize: '13.5px',
-                }}
-              >
-                <div
-                  style={{
-                    width: '22px',
-                    height: '22px',
-                    borderRadius: '50%',
-                    background: '#10b981',
-                    overflow: 'hidden',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  {user.avatar ? (
-                    <img
-                      src={user.avatar}
-                      alt=""
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                      }}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        width: '8px',
-                        height: '8px',
-                        background: '#fff',
-                        borderRadius: '50%',
-                      }}
-                    />
-                  )}
-                </div>
-                <span>{user.displayName || user.username || 'User'}</span>
-              </Link>
-              <button
-                onClick={handleLogout}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: 'none',
-                  outline: 'none',
-                  borderRadius: '9999px',
-                  padding: '7px 16px',
-                  color: '#9494a0',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                }}
-                title="Log Out"
-              >
-                Log out
-              </button>
-            </div>
-          ) : (
-            <Link
-              to="/login"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                background: '#ffffff',
-                border: 'none',
-                outline: 'none',
-                borderRadius: '9999px',
-                padding: '9px 24px',
-                textDecoration: 'none',
-                color: '#09090b',
-                fontWeight: 700,
-                fontSize: '13px',
-              }}
-            >
-              Sign In
-            </Link>
-          )}
         </div>
 
+        {/* Mobile Hamburger Button */}
         <button
-          className="navbar-mobile-toggle"
-          onClick={() => setMobileOpen(!mobileOpen)}
-          aria-label="Toggle Navigation Menu"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '40px',
+            height: '40px',
+            borderRadius: '8px',
+            background: 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            color: '#fff',
+            cursor: 'pointer',
+          }}
+          className="mobile-hamburger"
+          aria-label="Toggle Navigation"
         >
-          {mobileOpen ? (
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          ) : (
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="4" y1="7" x2="20" y2="7" />
-              <line x1="4" y1="12" x2="20" y2="12" />
-              <line x1="4" y1="17" x2="20" y2="17" />
-            </svg>
-          )}
+          {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
-
-        {mobileOpen && (
-          <>
-            <div
-              style={{
-                position: 'fixed',
-                inset: 0,
-                background: 'rgba(0, 0, 0, 0.6)',
-                backdropFilter: 'blur(4px)',
-                WebkitBackdropFilter: 'blur(4px)',
-                zIndex: 90,
-              }}
-              onClick={() => setMobileOpen(false)}
-            />
-            <div className="navbar-mobile-drawer">
-              {user ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    background: 'rgba(255, 255, 255, 0.04)',
-                    border: '1px solid rgba(255, 255, 255, 0.07)',
-                    borderRadius: '14px',
-                    padding: '10px 14px',
-                    marginBottom: '4px',
-                  }}
-                >
-                  <Link
-                    to="/dashboard"
-                    onClick={() => setMobileOpen(false)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      textDecoration: 'none',
-                      color: '#ffffff',
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: '28px',
-                        height: '28px',
-                        borderRadius: '50%',
-                        background: '#10b981',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {user.avatar ? (
-                        <img
-                          src={user.avatar}
-                          alt=""
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                          }}
-                        />
-                      ) : (
-                        <div
-                          style={{
-                            width: '8px',
-                            height: '8px',
-                            background: '#fff',
-                            borderRadius: '50%',
-                          }}
-                        />
-                      )}
-                    </div>
-                    <span style={{ fontWeight: 600, fontSize: '14px' }}>
-                      {user.displayName || user.username || 'User'}
-                    </span>
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '6px 12px',
-                      color: '#9494a0',
-                      fontSize: '12px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Log out
-                  </button>
-                </div>
-              ) : (
-                <Link
-                  to="/login"
-                  onClick={() => setMobileOpen(false)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    background: '#ffffff',
-                    border: 'none',
-                    borderRadius: '12px',
-                    padding: '12px',
-                    textDecoration: 'none',
-                    color: '#09090b',
-                    fontWeight: 700,
-                    fontSize: '14px',
-                    marginBottom: '8px',
-                  }}
-                >
-                  Sign In
-                </Link>
-              )}
-
-              <Link
-                to="/"
-                onClick={() => setMobileOpen(false)}
-                className="navbar-mobile-link"
-              >
-                Home
-              </Link>
-              <Link
-                to="/checkout"
-                onClick={() => setMobileOpen(false)}
-                className="navbar-mobile-link"
-              >
-                Pricing
-              </Link>
-              <Link
-                to="/trial"
-                onClick={() => setMobileOpen(false)}
-                className="navbar-mobile-link"
-              >
-                Free Trial
-              </Link>
-              <a
-                href="/#showcase"
-                onClick={() => setMobileOpen(false)}
-                className="navbar-mobile-link"
-              >
-                Showcase
-              </a>
-              <Link
-                to="/stats"
-                onClick={() => setMobileOpen(false)}
-                className="navbar-mobile-link"
-              >
-                Stats
-              </Link>
-              <Link
-                to="/changelog"
-                onClick={() => setMobileOpen(false)}
-                className="navbar-mobile-link"
-              >
-                Changelog
-              </Link>
-              <Link
-                to="/status"
-                onClick={() => setMobileOpen(false)}
-                className="navbar-mobile-link"
-              >
-                Status
-              </Link>
-              <Link
-                to="/affiliates"
-                onClick={() => setMobileOpen(false)}
-                className="navbar-mobile-link"
-              >
-                Affiliates
-              </Link>
-              <a
-                href="https://discord.gg/xx7Ns6vW8"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setMobileOpen(false)}
-                className="navbar-mobile-link"
-              >
-                Discord
-              </a>
-              {(user?.role === 'admin' || ['rookeh4@gmail.com', 'rabinzzz113@gmail.com', 'rabinjj09@gmail.com', 'adigod2014@gmail.com', 'adigod6726@gmail.com'].includes(user?.email?.toLowerCase())) && (
-                <Link
-                  to="/admin"
-                  onClick={() => setMobileOpen(false)}
-                  className="navbar-mobile-link"
-                  style={{ color: '#f43f5e', fontWeight: 700 }}
-                >
-                  Admin Panel
-                </Link>
-              )}
-            </div>
-          </>
-        )}
       </div>
-    </header>
+
+      {/* Mobile Drawer */}
+      {mobileMenuOpen && (
+        <div
+          style={{
+            backgroundColor: '#0c0e14',
+            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+            padding: '16px 24px 24px 24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}
+        >
+          {navLinks.map((link) => {
+            const Icon = link.icon;
+            const active = isActive(link.path);
+            return (
+              <Link
+                key={link.path}
+                to={link.path}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  fontSize: '0.95rem',
+                  fontWeight: active ? '600' : '500',
+                  color: active ? '#ffffff' : '#94a3b8',
+                  backgroundColor: active ? 'rgba(124, 58, 237, 0.15)' : 'rgba(255, 255, 255, 0.02)',
+                  border: active ? '1px solid rgba(124, 58, 237, 0.3)' : '1px solid rgba(255, 255, 255, 0.05)',
+                  textDecoration: 'none',
+                }}
+              >
+                <Icon size={18} style={{ color: active ? '#c084fc' : '#64748b' }} />
+                {link.name}
+              </Link>
+            );
+          })}
+
+          <div
+            style={{
+              height: '1px',
+              backgroundColor: 'rgba(255, 255, 255, 0.08)',
+              margin: '8px 0',
+            }}
+          />
+
+          <Link
+            to="/upload"
+            className="syn-btn syn-btn-primary"
+            style={{ width: '100%', padding: '12px' }}
+          >
+            <Upload size={16} />
+            Publish Resource
+          </Link>
+
+          <Link
+            to="/admin"
+            className="syn-btn syn-btn-secondary"
+            style={{ width: '100%', padding: '12px' }}
+          >
+            <ShieldCheck size={16} style={{ color: '#38bdf8' }} />
+            Admin Dashboard
+          </Link>
+        </div>
+      )}
+
+      {/* Responsive CSS for desktop vs mobile */}
+      <style>{`
+        @media (min-width: 900px) {
+          .desktop-nav { display: flex !important; }
+          .desktop-actions { display: flex !important; }
+          .mobile-hamburger { display: none !important; }
+        }
+      `}</style>
+    </nav>
   );
 }

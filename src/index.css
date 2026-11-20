@@ -2578,3 +2578,196 @@ body[data-aos-easing="ease-in-out-quart"] [data-aos] {
   text-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
 }
 
+/* ==========================================================================
+   SYNDICATE ARCHIVE STYLES
+   ========================================================================== */
+
+:root {
+  --syn-bg: #090a0f;
+  --syn-surface: #0e1017;
+  --syn-surface-hover: #131722;
+  --syn-surface-card: #11131c;
+  --syn-border: rgba(255, 255, 255, 0.08);
+  --syn-border-hover: rgba(168, 85, 247, 0.35);
+  --syn-primary: #8b5cf6;
+  --syn-primary-hover: #7c3aed;
+  --syn-accent: #3b82f6;
+  --syn-text: #ffffff;
+  --syn-text-muted: #94a3b8;
+  --syn-text-dim: #64748b;
+}
+
+.syn-glass {
+  background: rgba(14, 16, 23, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--syn-border);
+}
+
+.syn-card {
+  background: var(--syn-surface-card);
+  border: 1px solid var(--syn-border);
+  border-radius: 12px;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.syn-card:hover {
+  background: var(--syn-surface-hover);
+  border-color: var(--syn-border-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.6), 0 0 20px -5px rgba(139, 92, 246, 0.15);
+}
+
+.syn-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.syn-badge-fabric {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.syn-badge-forge {
+  background: rgba(251, 146, 60, 0.12);
+  color: #fb923c;
+  border: 1px solid rgba(251, 146, 60, 0.3);
+}
+
+.syn-badge-neoforge {
+  background: rgba(244, 63, 94, 0.12);
+  color: #f43f5e;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.syn-badge-native {
+  background: rgba(168, 85, 247, 0.12);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.syn-badge-vanilla {
+  background: rgba(52, 211, 153, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.syn-input {
+  background: rgba(14, 16, 23, 0.85);
+  border: 1px solid var(--syn-border);
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.syn-input:focus {
+  border-color: var(--syn-primary);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+}
+
+.syn-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 9px 18px;
+  border-radius: 8px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  border: none;
+  text-decoration: none;
+}
+
+.syn-btn-primary {
+  background: linear-gradient(135deg, #7c3aed, #6366f1);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
+}
+
+.syn-btn-primary:hover {
+  background: linear-gradient(135deg, #8b5cf6, #4f46e5);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.45);
+}
+
+.syn-btn-secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: #e2e8f0;
+  border: 1px solid var(--syn-border);
+}
+
+.syn-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.syn-btn-outline {
+  background: transparent;
+  color: #cbd5e1;
+  border: 1px solid var(--syn-border);
+}
+
+.syn-btn-outline:hover {
+  border-color: var(--syn-primary);
+  color: #ffffff;
+}
+
+.syn-markdown-content h1,
+.syn-markdown-content h2,
+.syn-markdown-content h3 {
+  color: #f8fafc;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  font-weight: 700;
+}
+
+.syn-markdown-content p {
+  color: #cbd5e1;
+  margin-bottom: 1rem;
+  line-height: 1.7;
+}
+
+.syn-markdown-content ul,
+.syn-markdown-content ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1rem;
+  color: #cbd5e1;
+}
+
+.syn-markdown-content li {
+  margin-bottom: 0.35rem;
+}
+
+.syn-markdown-content code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85em;
+  color: #c084fc;
+}
+
+.syn-markdown-content pre {
+  background: #08090d;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow-x: auto;
+  margin-bottom: 1.25rem;
+}
+
+

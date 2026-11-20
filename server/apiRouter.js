@@ -32,8 +32,8 @@ router.use(express.json({
   },
 }));
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://thmpaozerfhoykqxwrlz.supabase.co';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_obBunwnFtclwda77bynVZw_1jsL_pnx';
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://ooxshxykdujgxcyezofo.supabase.co';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9veHNoeHlrZHVqZ3hjeWV6b2ZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQzODQ2MjksImV4cCI6MjEwOTk2MDYyOX0.sHcd4AHqEiCKsMMMM2L8muhpZ_gwPhQJ1-qhHtcKyvo';
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '1557993745884905512';
 
 const ALLOWED_OAUTH_ORIGINS = new Set([
@@ -4352,6 +4352,521 @@ router.post('/trials/claim', rateLimitTrial, requireAuth, async (req, res) => {
     });
   } catch (err) {
     return serverError(res, 'TrialsClaim Error', err);
+  }
+});
+
+/* ========================================================================= */
+/*                          SYNDICATE ARCHIVE APIS                           */
+/* ========================================================================= */
+
+// 1. Get Community Statistics
+router.get('/syndicate/stats', async (_req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.json({
+        totalResources: 8,
+        totalDownloads: 11970,
+        totalComments: 3,
+        totalClients: 3,
+        totalSources: 2,
+        totalTools: 2,
+      });
+    }
+
+    const { data: resData, error: resErr } = await supabaseAdmin
+      .from('resources')
+      .select('id, category, downloads_count');
+
+    const { count: commentCount } = await supabaseAdmin
+      .from('comments')
+      .select('*', { count: 'exact', head: true });
+
+    if (resErr) {
+      return res.status(500).json({ error: resErr.message });
+    }
+
+    const totalResources = resData?.length || 0;
+    const totalDownloads = (resData || []).reduce((sum, r) => sum + (r.downloads_count || 0), 0);
+    const totalClients = (resData || []).filter(r => r.category === 'Clients').length;
+    const totalSources = (resData || []).filter(r => r.category === 'Source Codes').length;
+    const totalTools = (resData || []).filter(r => r.category === 'Tools' || r.category === 'Launchers').length;
+
+    return res.json({
+      totalResources,
+      totalDownloads,
+      totalComments: commentCount || 0,
+      totalClients,
+      totalSources,
+      totalTools,
+    });
+  } catch (err) {
+    return serverError(res, 'Syndicate Stats Error', err);
+  }
+});
+
+// 2. Browse & Filter Resources
+router.get('/resources', async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+
+    const {
+      category,
+      version,
+      loader,
+      type,
+      search,
+      sort = 'newest',
+      page = 1,
+      limit = 40,
+      featured,
+    } = req.query;
+
+    let query = supabaseAdmin
+      .from('resources')
+      .select('*', { count: 'exact' });
+
+    if (category && category !== 'all' && category !== 'All') {
+      query = query.eq('category', category);
+    }
+
+    if (version && version !== 'all' && version !== 'All') {
+      query = query.eq('version', version);
+    }
+
+    if (loader && loader !== 'all' && loader !== 'All') {
+      query = query.eq('loader', loader);
+    }
+
+    if (type && type !== 'all' && type !== 'All') {
+      query = query.eq('type', type);
+    }
+
+    if (featured === 'true') {
+      query = query.eq('is_featured', true);
+    }
+
+    if (search && typeof search === 'string' && search.trim().length > 0) {
+      const q = search.trim();
+      query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%,author_name.ilike.%${q}%`);
+    }
+
+    // Sort order
+    if (sort === 'downloads') {
+      query = query.order('downloads_count', { ascending: false });
+    } else if (sort === 'likes') {
+      query = query.order('likes_count', { ascending: false });
+    } else if (sort === 'views') {
+      query = query.order('views_count', { ascending: false });
+    } else if (sort === 'updated') {
+      query = query.order('updated_at', { ascending: false });
+    } else {
+      query = query.order('created_at', { ascending: false });
+    }
+
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 40));
+    const offset = (pageNum - 1) * limitNum;
+
+    query = query.range(offset, offset + limitNum - 1);
+
+    const { data, count, error } = await query;
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({
+      resources: data || [],
+      total: count || 0,
+      page: pageNum,
+      totalPages: Math.ceil((count || 0) / limitNum),
+    });
+  } catch (err) {
+    return serverError(res, 'Resources List Error', err);
+  }
+});
+
+// 3. Get Single Resource by ID or Slug
+router.get('/resources/:idOrSlug', async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+
+    const { idOrSlug } = req.params;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
+
+    let query = supabaseAdmin.from('resources').select('*');
+    if (isUuid) {
+      query = query.eq('id', idOrSlug);
+    } else {
+      query = query.eq('slug', idOrSlug);
+    }
+
+    const { data: resource, error } = await query.maybeSingle();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    if (!resource) {
+      return res.status(404).json({ error: 'Resource not found' });
+    }
+
+    // Asynchronously increment views_count
+    try {
+      await supabaseAdmin
+        .from('resources')
+        .update({ views_count: (resource.views_count || 0) + 1 })
+        .eq('id', resource.id);
+    } catch (_e) {
+      // Non-blocking
+    }
+
+    return res.json({ resource });
+  } catch (err) {
+    return serverError(res, 'Resource Detail Error', err);
+  }
+});
+
+// 4. Create New Resource (Community Upload)
+router.post('/resources', async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+
+    const {
+      title,
+      description,
+      content,
+      category = 'Clients',
+      version = '1.21.11',
+      loader = 'C++ / Native',
+      type = 'Client',
+      author_name = 'Anonymous',
+      author_avatar,
+      thumbnail_url,
+      banner_url,
+      github_url,
+      discord_url,
+      website_url,
+      client_download_url,
+      client_file_name,
+      client_file_size,
+      source_download_url,
+      source_file_name,
+      source_file_size,
+      tags = [],
+      screenshots = [],
+      changelog = [],
+    } = req.body;
+
+    if (!title || typeof title !== 'string' || title.trim().length < 3) {
+      return res.status(400).json({ error: 'A descriptive title (min 3 chars) is required' });
+    }
+
+    if (!description || typeof description !== 'string' || description.trim().length < 10) {
+      return res.status(400).json({ error: 'A summary description (min 10 chars) is required' });
+    }
+
+    // Auto-generate slug
+    const baseSlug = title
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+    const slug = `${baseSlug}-${Date.now().toString(36)}`;
+
+    const newResource = {
+      title: title.trim(),
+      slug,
+      description: description.trim(),
+      content: content ? content.trim() : description.trim(),
+      category,
+      version,
+      loader,
+      type,
+      author_id: req.user?.id || `usr_${Date.now().toString(36)}`,
+      author_name: req.user?.profile?.display_name || req.user?.profile?.username || author_name.trim() || 'Community Member',
+      author_avatar: author_avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+      thumbnail_url: thumbnail_url || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800',
+      banner_url: banner_url || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=1600',
+      github_url: github_url || '',
+      discord_url: discord_url || '',
+      website_url: website_url || '',
+      client_download_url: client_download_url || '',
+      client_file_name: client_file_name || (client_download_url ? path.basename(client_download_url) : ''),
+      client_file_size: client_file_size || '',
+      source_download_url: source_download_url || '',
+      source_file_name: source_file_name || (source_download_url ? path.basename(source_download_url) : ''),
+      source_file_size: source_file_size || '',
+      downloads_count: 0,
+      likes_count: 0,
+      views_count: 0,
+      is_featured: false,
+      is_approved: true,
+      tags: Array.isArray(tags) ? tags : [tags].filter(Boolean),
+      changelog: Array.isArray(changelog) ? changelog : [{ version: '1.0.0', date: new Date().toISOString().split('T')[0], notes: ['Initial public release'] }],
+      screenshots: Array.isArray(screenshots) ? screenshots : [screenshots].filter(Boolean),
+    };
+
+    const { data: created, error } = await supabaseAdmin
+      .from('resources')
+      .insert(newResource)
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.status(201).json({ resource: created });
+  } catch (err) {
+    return serverError(res, 'Resource Upload Error', err);
+  }
+});
+
+// 5. Update Resource
+router.put('/resources/:id', async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+
+    const { id } = req.params;
+    const updates = { ...req.body, updated_at: new Date().toISOString() };
+    delete updates.id;
+
+    const { data: updated, error } = await supabaseAdmin
+      .from('resources')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ resource: updated });
+  } catch (err) {
+    return serverError(res, 'Resource Update Error', err);
+  }
+});
+
+// 6. Delete Resource
+router.delete('/resources/:id', async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+
+    const { id } = req.params;
+
+    // Delete comments first
+    await supabaseAdmin.from('comments').delete().eq('resource_id', id);
+
+    const { error } = await supabaseAdmin.from('resources').delete().eq('id', id);
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ success: true, message: 'Resource deleted successfully' });
+  } catch (err) {
+    return serverError(res, 'Resource Delete Error', err);
+  }
+});
+
+// 7. Track Resource Download (Client or Source)
+router.post('/resources/:id/download/:type', async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+
+    const { id, type } = req.params;
+    const { data: resource, error } = await supabaseAdmin
+      .from('resources')
+      .select('id, downloads_count, client_download_url, source_download_url')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error || !resource) {
+      return res.status(404).json({ error: 'Resource not found' });
+    }
+
+    const newDownloads = (resource.downloads_count || 0) + 1;
+    await supabaseAdmin
+      .from('resources')
+      .update({ downloads_count: newDownloads })
+      .eq('id', id);
+
+    const downloadUrl = type === 'source' ? resource.source_download_url : resource.client_download_url;
+
+    return res.json({
+      success: true,
+      downloads_count: newDownloads,
+      download_url: downloadUrl || '',
+    });
+  } catch (err) {
+    return serverError(res, 'Download Track Error', err);
+  }
+});
+
+// 8. Like Resource
+router.post('/resources/:id/like', async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+
+    const { id } = req.params;
+    const { data: resource, error } = await supabaseAdmin
+      .from('resources')
+      .select('id, likes_count')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error || !resource) {
+      return res.status(404).json({ error: 'Resource not found' });
+    }
+
+    const newLikes = (resource.likes_count || 0) + 1;
+    await supabaseAdmin
+      .from('resources')
+      .update({ likes_count: newLikes })
+      .eq('id', id);
+
+    return res.json({
+      success: true,
+      likes_count: newLikes,
+    });
+  } catch (err) {
+    return serverError(res, 'Resource Like Error', err);
+  }
+});
+
+// 9. Get Comments for a Resource
+router.get('/resources/:id/comments', async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+
+    const { id } = req.params;
+    const { data: comments, error } = await supabaseAdmin
+      .from('comments')
+      .select('*')
+      .eq('resource_id', id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ comments: comments || [] });
+  } catch (err) {
+    return serverError(res, 'Comments Fetch Error', err);
+  }
+});
+
+// 10. Post a Comment
+router.post('/resources/:id/comments', async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+
+    const { id } = req.params;
+    const { content, author_name, author_avatar } = req.body;
+
+    if (!content || typeof content !== 'string' || content.trim().length < 2) {
+      return res.status(400).json({ error: 'Comment must be at least 2 characters long' });
+    }
+
+    if (content.trim().length > 1500) {
+      return res.status(400).json({ error: 'Comment cannot exceed 1500 characters' });
+    }
+
+    const newComment = {
+      resource_id: id,
+      author_id: req.user?.id || `usr_${Date.now().toString(36)}`,
+      author_name: req.user?.profile?.display_name || req.user?.profile?.username || author_name?.trim() || 'Anonymous User',
+      author_avatar: author_avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+      content: content.trim(),
+      likes_count: 0,
+    };
+
+    const { data: created, error } = await supabaseAdmin
+      .from('comments')
+      .insert(newComment)
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.status(201).json({ comment: created });
+  } catch (err) {
+    return serverError(res, 'Comment Post Error', err);
+  }
+});
+
+// 11. Like a Comment
+router.post('/comments/:id/like', async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+
+    const { id } = req.params;
+    const { data: comment, error } = await supabaseAdmin
+      .from('comments')
+      .select('id, likes_count')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error || !comment) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    const newLikes = (comment.likes_count || 0) + 1;
+    await supabaseAdmin
+      .from('comments')
+      .update({ likes_count: newLikes })
+      .eq('id', id);
+
+    return res.json({
+      success: true,
+      likes_count: newLikes,
+    });
+  } catch (err) {
+    return serverError(res, 'Comment Like Error', err);
+  }
+});
+
+// 12. Delete a Comment (Admin or Author)
+router.delete('/comments/:id', async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({ error: 'Database service unavailable' });
+    }
+
+    const { id } = req.params;
+    const { error } = await supabaseAdmin.from('comments').delete().eq('id', id);
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ success: true, message: 'Comment deleted' });
+  } catch (err) {
+    return serverError(res, 'Comment Delete Error', err);
   }
 });
 
