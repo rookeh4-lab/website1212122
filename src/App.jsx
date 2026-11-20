@@ -23,10 +23,12 @@ function AppShell() {
         display: 'flex',
         flexDirection: 'column',
         minHeight: '100vh',
-        backgroundColor: '#090a0f',
-        color: '#ffffff',
+        backgroundColor: 'transparent',
+        color: 'var(--text)',
+        position: 'relative',
       }}
     >
+      <div className="bg-veil" />
       <ScrollToTop />
       <Navbar />
       <main style={{ flex: 1 }}>

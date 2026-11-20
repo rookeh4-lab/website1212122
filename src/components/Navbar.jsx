@@ -1,16 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  Zap,
-  Code2,
-  Wrench,
-  Sparkles,
-  Box,
   Plus,
-  ShieldCheck,
   Menu,
   X,
-  ExternalLink,
   MessageSquare
 } from 'lucide-react';
 
@@ -49,7 +42,7 @@ export default function Navbar() {
     >
       <div
         style={{
-          background: 'rgba(15, 19, 28, 0.92)',
+          background: 'rgba(17, 15, 12, 0.92)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
           borderRadius: '9999px',
@@ -57,17 +50,17 @@ export default function Navbar() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          boxShadow: '0 8px 24px -4px rgba(0, 0, 0, 0.6)',
+          border: '1px solid var(--edge)',
+          boxShadow: '0 10px 30px -10px rgba(0, 0, 0, 0.8), 0 0 1px 1px rgba(255, 240, 214, 0.05)',
         }}
       >
-        {/* Brand Logo & Name (Clean & Normal) */}
+        {/* Brand Logo & Name (XenntSquad Gold Theme) */}
         <Link
           to="/"
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '9px',
+            gap: '10px',
             textDecoration: 'none',
           }}
         >
@@ -76,15 +69,15 @@ export default function Navbar() {
               width: '32px',
               height: '32px',
               borderRadius: '50%',
-              background: 'linear-gradient(135deg, #ff6a2b 0%, #ff8a3d 100%)',
+              background: 'var(--gold-foil)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#ffffff',
-              boxShadow: '0 2px 10px rgba(255, 106, 43, 0.35)',
+              color: '#07060a',
+              boxShadow: '0 2px 10px rgba(232, 196, 118, 0.35)',
             }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#07060a" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
             </svg>
           </div>
@@ -94,7 +87,7 @@ export default function Navbar() {
               fontFamily: "var(--font-sans)",
               fontWeight: '700',
               fontSize: '1.15rem',
-              color: '#ffffff',
+              color: 'var(--text)',
               letterSpacing: '-0.01em',
             }}
           >
@@ -102,7 +95,7 @@ export default function Navbar() {
           </span>
         </Link>
 
-        {/* Center Navigation Links (Clean small text matching Image 2) */}
+        {/* Center Navigation Links */}
         <nav
           style={{
             display: 'flex',
@@ -122,21 +115,22 @@ export default function Navbar() {
                   borderRadius: '9999px',
                   fontSize: '0.84rem',
                   fontWeight: active ? '600' : '400',
-                  color: active ? '#ffffff' : '#8b949e',
-                  backgroundColor: active ? 'rgba(255, 106, 43, 0.15)' : 'transparent',
-                  border: active ? '1px solid rgba(255, 106, 43, 0.35)' : '1px solid transparent',
+                  color: active ? 'var(--gold)' : 'var(--muted)',
+                  backgroundColor: active ? 'rgba(232, 196, 118, 0.12)' : 'transparent',
+                  border: active ? '1px solid var(--gold)' : '1px solid transparent',
                   textDecoration: 'none',
-                  transition: 'all 0.15s ease',
+                  transition: 'all 0.2s var(--ease-out)',
+                  boxShadow: active ? '0 0 12px rgba(232, 196, 118, 0.15)' : 'none',
                 }}
                 onMouseEnter={(e) => {
                   if (!active) {
-                    e.currentTarget.style.color = '#ffffff';
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                    e.currentTarget.style.color = 'var(--text)';
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 240, 214, 0.05)';
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!active) {
-                    e.currentTarget.style.color = '#8b949e';
+                    e.currentTarget.style.color = 'var(--muted)';
                     e.currentTarget.style.backgroundColor = 'transparent';
                   }
                 }}
@@ -157,23 +151,23 @@ export default function Navbar() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '6px 12px',
+              padding: '6px 13px',
               borderRadius: '9999px',
               fontSize: '0.82rem',
               fontWeight: '500',
-              color: '#e2e8f0',
-              backgroundColor: 'rgba(255, 255, 255, 0.06)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              color: 'var(--muted)',
+              backgroundColor: 'var(--glass)',
+              border: '1px solid var(--edge)',
               textDecoration: 'none',
-              transition: 'all 0.15s ease',
+              transition: 'all 0.2s var(--ease-out)',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(255, 106, 43, 0.4)';
-              e.currentTarget.style.color = '#ff8a3d';
+              e.currentTarget.style.borderColor = 'var(--edge-2)';
+              e.currentTarget.style.color = 'var(--gold)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-              e.currentTarget.style.color = '#e2e8f0';
+              e.currentTarget.style.borderColor = 'var(--edge)';
+              e.currentTarget.style.color = 'var(--muted)';
             }}
           >
             <MessageSquare size={13} />
@@ -182,23 +176,11 @@ export default function Navbar() {
 
           <Link
             to="/upload"
+            className="btn-gold"
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '6px 14px',
-              borderRadius: '9999px',
+              padding: '6px 15px',
               fontSize: '0.82rem',
-              fontWeight: '600',
-              color: '#ffffff',
-              background: 'linear-gradient(135deg, #ff5e2b 0%, #ff8a3d 100%)',
-              border: 'none',
-              textDecoration: 'none',
-              boxShadow: '0 2px 8px rgba(255, 94, 43, 0.3)',
-              transition: 'opacity 0.15s ease',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.9')}
-            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
           >
             <Plus size={14} />
             <span>Upload</span>
@@ -213,11 +195,12 @@ export default function Navbar() {
               borderRadius: '9999px',
               fontSize: '0.80rem',
               fontWeight: '500',
-              color: '#8b949e',
+              color: 'var(--dim)',
               textDecoration: 'none',
+              transition: 'color 0.15s ease',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#8b949e')}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--dim)')}
           >
             Admin
           </Link>
@@ -231,7 +214,7 @@ export default function Navbar() {
               display: 'none',
               background: 'none',
               border: 'none',
-              color: '#ffffff',
+              color: 'var(--text)',
               padding: '6px',
               cursor: 'pointer',
             }}
@@ -246,14 +229,14 @@ export default function Navbar() {
         <div
           style={{
             marginTop: '8px',
-            background: 'rgba(15, 19, 28, 0.98)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
+            background: 'var(--glass)',
+            border: '1px solid var(--edge)',
             borderRadius: '16px',
             padding: '12px',
             display: 'flex',
             flexDirection: 'column',
             gap: '6px',
-            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.8)',
+            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.85)',
           }}
         >
           {navLinks.map((item) => (
@@ -264,10 +247,10 @@ export default function Navbar() {
                 padding: '10px 14px',
                 borderRadius: '8px',
                 fontSize: '0.88rem',
-                color: isActive(item.path) ? '#ff8a3d' : '#d1d5db',
+                color: isActive(item.path) ? 'var(--gold)' : 'var(--muted)',
                 fontWeight: isActive(item.path) ? '600' : '400',
                 textDecoration: 'none',
-                backgroundColor: isActive(item.path) ? 'rgba(255, 106, 43, 0.1)' : 'transparent',
+                backgroundColor: isActive(item.path) ? 'rgba(232, 196, 118, 0.1)' : 'transparent',
               }}
             >
               {item.name}

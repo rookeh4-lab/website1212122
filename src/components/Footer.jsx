@@ -1,21 +1,19 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { MessageSquare } from 'lucide-react';
-import GithubIcon from './GithubIcon';
 
 export default function Footer() {
   return (
     <footer
       style={{
         marginTop: 'auto',
-        borderTop: '1px solid rgba(255, 255, 255, 0.06)',
-        backgroundColor: '#050408',
+        borderTop: '1px solid var(--edge)',
+        backgroundColor: 'var(--bg)',
         padding: '36px 20px',
       }}
     >
       <div
         style={{
-          maxWidth: '1240px',
+          maxWidth: '1180px',
           margin: '0 auto',
           display: 'flex',
           flexWrap: 'wrap',
@@ -32,46 +30,46 @@ export default function Footer() {
               width: '24px',
               height: '24px',
               borderRadius: '50%',
-              background: 'linear-gradient(135deg, #ff5e2b, #ff8a3d)',
+              background: 'var(--gold-foil)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#fff',
+              color: '#07060a',
               fontSize: '0.72rem',
               fontWeight: '700',
             }}
           >
             S
           </div>
-          <span style={{ color: '#ffffff', fontWeight: '600' }}>
+          <span style={{ color: 'var(--text)', fontWeight: '600' }}>
             Syndicate
           </span>
-          <span style={{ color: '#6b7280' }}>© 2026 • Community Client Archive</span>
+          <span style={{ color: 'var(--dim)' }}>© 2026 • Community Client & Source Archive</span>
         </div>
 
         {/* Right: Quick Links */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', color: '#9ca3af' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', color: 'var(--muted)' }}>
           <Link
             to="/"
-            style={{ color: '#9ca3af', textDecoration: 'none', transition: 'color 0.15s' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#9ca3af')}
+            style={{ color: 'var(--muted)', textDecoration: 'none', transition: 'color 0.15s' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--muted)')}
           >
-            Releases
+            Archive
           </Link>
           <Link
             to="/clients"
-            style={{ color: '#9ca3af', textDecoration: 'none', transition: 'color 0.15s' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#9ca3af')}
+            style={{ color: 'var(--muted)', textDecoration: 'none', transition: 'color 0.15s' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--muted)')}
           >
             Clients
           </Link>
           <Link
             to="/sources"
-            style={{ color: '#9ca3af', textDecoration: 'none', transition: 'color 0.15s' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#9ca3af')}
+            style={{ color: 'var(--muted)', textDecoration: 'none', transition: 'color 0.15s' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--muted)')}
           >
             Source Codes
           </Link>
@@ -79,15 +77,15 @@ export default function Footer() {
             href="https://discord.gg/syndicate"
             target="_blank"
             rel="noreferrer"
-            style={{ color: '#ff7a00', textDecoration: 'none', fontWeight: '600' }}
+            style={{ color: 'var(--gold)', textDecoration: 'none', fontWeight: '600' }}
           >
             Discord
           </a>
           <Link
             to="/admin"
-            style={{ color: '#6b7280', textDecoration: 'none' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#00f0ff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
+            style={{ color: 'var(--dim)', textDecoration: 'none' }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--gold)')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--dim)')}
           >
             Admin
           </Link>

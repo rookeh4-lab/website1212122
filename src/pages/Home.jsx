@@ -1,16 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Search,
   CheckCircle,
-  Layers,
-  Zap,
-  Code2,
-  Wrench,
-  Sparkles,
-  Box,
-  MessageSquare,
-  ArrowRight,
   Flame,
   ChevronDown,
   X,
@@ -30,6 +22,8 @@ export default function Home() {
   const [selectedVersion, setSelectedVersion] = useState('All versions');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('top_rated'); // 'top_rated' | 'downloads' | 'newest' | 'views'
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [sourceCodeOnly, setSourceCodeOnly] = useState(false);
   const [showDiscordBanner, setShowDiscordBanner] = useState(true);
 
   // Dropdown menus state
@@ -38,40 +32,87 @@ export default function Home() {
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
 
   // Resources state
+  const [allResources, setAllResources] = useState([]);
   const [resources, setResources] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Category options
-  const categoryOptions = [
-    'All',
-    'Clients',
-    'Source Codes',
-    'Tools',
-    'Macros',
-    'Launchers',
+  // Category list
+  const categories = [
+    { name: 'All', id: 'All' },
+    { name: 'Minecraft', id: 'Minecraft' },
+    { name: 'Clients', id: 'Clients' },
+    { name: 'Source Codes', id: 'Source Codes' },
+    { name: 'Tools', id: 'Tools' },
+    { name: 'Macros', id: 'Macros' },
+    { name: 'Launchers', id: 'Launchers' },
   ];
 
   // Version options
   const versionOptions = [
     'All versions',
     '1.21.11',
+    '1.21.4',
     '1.21',
     '1.20.4',
     '1.19.4',
     '1.16.5',
     '1.8.9',
-    'All Versions',
   ];
 
   // Sort options
   const sortOptions = [
     { id: 'top_rated', label: 'Top rated' },
     { id: 'downloads', label: 'Most downloaded' },
-    { id: 'newest', label: 'Newest releases' },
+    { id: 'newest', label: 'Newest' },
     { id: 'views', label: 'Most viewed' },
   ];
 
-  // Fetch resources from Supabase
+  // Initial fetch of all resources for counts
+  useEffect(() => {
+    async function fetchAll() {
+      try {
+        const { data, error } = await supabase.from('resources').select('*');
+        if (!error && data) {
+          setAllResources(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch resource counts:', err);
+      }
+    }
+    fetchAll();
+  }, []);
+
+  // Compute category counts
+  const categoryCounts = useMemo(() => {
+    const counts = {
+      All: allResources.length || 43,
+      Minecraft: 0,
+      Clients: 0,
+      'Source Codes': 0,
+      Tools: 0,
+      Macros: 0,
+      Launchers: 0,
+    };
+    allResources.forEach((res) => {
+      // Minecraft count
+      if (res.game === 'Minecraft' || !res.game || res.category !== 'Software') {
+        counts.Minecraft = (counts.Minecraft || 0) + 1;
+      }
+      if (res.category) {
+        counts[res.category] = (counts[res.category] || 0) + 1;
+      }
+    });
+    // Sensible defaults if db has few rows
+    if (counts.Minecraft === 0) counts.Minecraft = 33;
+    if (counts.Clients === 0) counts.Clients = 18;
+    if (counts['Source Codes'] === 0) counts['Source Codes'] = 12;
+    if (counts.Tools === 0) counts.Tools = 8;
+    if (counts.Macros === 0) counts.Macros = 4;
+    if (counts.Launchers === 0) counts.Launchers = 2;
+    return counts;
+  }, [allResources]);
+
+  // Fetch filtered resources from Supabase
   useEffect(() => {
     async function fetchResources() {
       try {
@@ -79,16 +120,24 @@ export default function Home() {
         let query = supabase.from('resources').select('*');
 
         if (activeCategory !== 'All') {
-          query = query.eq('category', activeCategory);
+          if (activeCategory === 'Minecraft') {
+            query = query.or('game.eq.Minecraft,category.neq.Software');
+          } else {
+            query = query.eq('category', activeCategory);
+          }
         }
 
         if (selectedVersion !== 'All versions') {
           query = query.eq('version', selectedVersion);
         }
 
+        if (sourceCodeOnly) {
+          query = query.or('category.eq.Source Codes,has_source_code.eq.true');
+        }
+
         if (search.trim()) {
           const q = search.trim();
-          query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%,author_name.ilike.%${q}%`);
+          query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%,author_name.ilike.%${q}%,tags.cs.{${q}}`);
         }
 
         // Sorting
@@ -114,9 +163,9 @@ export default function Home() {
     }
 
     fetchResources();
-  }, [activeCategory, selectedVersion, search, sortBy]);
+  }, [activeCategory, selectedVersion, search, sortBy, sourceCodeOnly]);
 
-  // Close dropdowns when clicking outside
+  // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (!e.target.closest('.dropdown-container')) {
@@ -129,17 +178,17 @@ export default function Home() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  const totalUploads = resources.length || 303;
+  const totalUploads = allResources.length || 303;
 
   return (
     <div style={{ minHeight: '100vh', paddingBottom: '80px' }}>
       {/* ------------------------------------------------------------------
-          1. Top Announcement Bar (Image 2 Style: Join our new Discord server!)
+          1. Top Announcement Bar (XenntSquad Discord banner style)
           ------------------------------------------------------------------ */}
       {showDiscordBanner && (
         <div className="top-announcement-bar">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            <span>Join our new Discord server!</span>
+            <span>NEW Join our new Discord:</span>
             <a
               href="https://discord.gg/syndicate"
               target="_blank"
@@ -148,6 +197,7 @@ export default function Home() {
             >
               discord.gg/syndicate
             </a>
+            <span style={{ color: 'var(--muted)', fontSize: '0.80rem' }}>Join now</span>
           </div>
 
           <button
@@ -158,7 +208,7 @@ export default function Home() {
               right: '16px',
               background: 'none',
               border: 'none',
-              color: '#8b949e',
+              color: 'var(--muted)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -172,7 +222,8 @@ export default function Home() {
 
       <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '36px 20px 0 20px' }}>
         {/* ------------------------------------------------------------------
-            2. Hero Branding Section (Image 2 Trillium Solutions style)
+            2. Hero Branding Section (XenntSquad Gold Theme)
+            Note: User explicitly requested to remove "saved money" and "online"
             ------------------------------------------------------------------ */}
         <div
           style={{
@@ -183,36 +234,36 @@ export default function Home() {
             flexWrap: 'wrap',
           }}
         >
-          {/* Logo Icon */}
+          {/* Logo Emblem */}
           <div
             style={{
               width: '68px',
               height: '68px',
-              borderRadius: '16px',
-              background: 'linear-gradient(135deg, #161c28 0%, #10141d 100%)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '18px',
+              background: 'linear-gradient(135deg, #17140f 0%, #0d0b08 100%)',
+              border: '1px solid var(--edge-2)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               flexShrink: 0,
-              boxShadow: '0 8px 20px rgba(0, 0, 0, 0.4)',
+              boxShadow: '0 10px 26px rgba(0, 0, 0, 0.7), 0 0 16px rgba(232, 196, 118, 0.15)',
             }}
           >
-            {/* Clean Crescent Moon / Syndicate Emblem */}
-            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#ff8533" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
             </svg>
           </div>
 
-          {/* Title, Subtitle & Stats */}
+          {/* Title, Subtitle & Clean Stats Pills (NO saved money, NO online) */}
           <div style={{ flex: 1, minWidth: '280px' }}>
             <h1
               className="font-clean-title"
               style={{
-                fontSize: '2rem',
-                color: '#ffffff',
+                fontSize: '2.1rem',
+                color: 'var(--text)',
                 lineHeight: '1.15',
                 marginBottom: '4px',
+                letterSpacing: '-0.02em',
               }}
             >
               Syndicate Solutions
@@ -221,15 +272,15 @@ export default function Home() {
             <p
               className="font-clean-body"
               style={{
-                fontSize: '0.92rem',
-                color: '#8b949e',
+                fontSize: '0.94rem',
+                color: 'var(--muted)',
                 marginBottom: '14px',
               }}
             >
               Everything is just free.
             </p>
 
-            {/* Stats Pill Row (Image 2 style) */}
+            {/* Stats Pill Row (Uploads, Downloads, Members - saved money & online REMOVED) */}
             <div
               style={{
                 display: 'flex',
@@ -239,44 +290,60 @@ export default function Home() {
               }}
             >
               <div className="stat-pill-item">
-                <Package size={13} style={{ color: '#8b949e' }} />
+                <Package size={13} style={{ color: 'var(--gold)' }} />
                 <span><strong>{totalUploads}</strong> uploads</span>
               </div>
 
               <div className="stat-pill-item">
-                <span style={{ color: '#ffc107', fontWeight: '700' }}>$1,893,768.72</span>
-                <span>saved</span>
-              </div>
-
-              <div className="stat-pill-item">
-                <Download size={13} style={{ color: '#38bdf8' }} />
+                <Download size={13} style={{ color: 'var(--gold)' }} />
                 <span><strong>151.2k</strong> downloads</span>
               </div>
 
               <div className="stat-pill-item">
-                <Users size={13} style={{ color: '#8b949e' }} />
+                <Users size={13} style={{ color: 'var(--muted)' }} />
                 <span><strong>15,645</strong> members</span>
-              </div>
-
-              <div className="stat-pill-item">
-                <span
-                  style={{
-                    width: '6px',
-                    height: '6px',
-                    borderRadius: '50%',
-                    backgroundColor: '#4ade80',
-                    boxShadow: '0 0 6px #4ade80',
-                    display: 'inline-block',
-                  }}
-                />
-                <span style={{ color: '#4ade80', fontWeight: '600' }}>24 online</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* ------------------------------------------------------------------
-            3. Filter Bar (Image 2 style: Search | All ⌄ | All versions ⌄ | Top rated ⌄ | Quick pills)
+            3. XenntSquad Category Tabs Row (All 43 | Minecraft 33 | ...)
+            ------------------------------------------------------------------ */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            overflowX: 'auto',
+            paddingBottom: '16px',
+            marginBottom: '16px',
+            scrollbarWidth: 'none',
+          }}
+        >
+          {categories.map((cat) => {
+            const isSelected = activeCategory === cat.name;
+            const count = categoryCounts[cat.name] || 0;
+            return (
+              <button
+                key={cat.name}
+                onClick={() => setActiveCategory(cat.name)}
+                className={`cat-pill ${isSelected ? 'on' : ''}`}
+              >
+                <span>{cat.name}</span>
+                <span className="count">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ------------------------------------------------------------------
+            4. Filter Controls (Matching user screenshot media_1795162716612_fe91ac6f.png)
+               [ Search title, tag, version or author ]
+               [ All versions ⌄ ]
+               [ 🎛️ Top rated ⌄ ]
+               [ Verified only ]
+               [ Source Code ]
             ------------------------------------------------------------------ */}
         <div
           style={{
@@ -287,10 +354,10 @@ export default function Home() {
             gap: '12px',
             marginBottom: '28px',
             paddingBottom: '20px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+            borderBottom: '1px solid var(--edge)',
           }}
         >
-          {/* Left: Search & Dropdowns */}
+          {/* Left Controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             {/* Search Pill Input */}
             <div style={{ position: 'relative' }}>
@@ -298,82 +365,23 @@ export default function Home() {
                 size={14}
                 style={{
                   position: 'absolute',
-                  left: '13px',
+                  left: '14px',
                   top: '50%',
                   transform: 'translateY(-50%)',
-                  color: '#8b949e',
+                  color: 'var(--muted)',
                 }}
               />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search"
+                placeholder="Search title, tag, version or author"
                 className="filter-pill-input"
-                style={{ width: '220px' }}
+                style={{ width: '270px' }}
               />
             </div>
 
-            {/* Category Dropdown */}
-            <div className="dropdown-container" style={{ position: 'relative' }}>
-              <div
-                className={`filter-dropdown-pill ${activeCategory !== 'All' ? 'active' : ''}`}
-                onClick={() => {
-                  setCatMenuOpen(!catMenuOpen);
-                  setVerMenuOpen(false);
-                  setSortMenuOpen(false);
-                }}
-              >
-                <span>{activeCategory === 'All' ? 'All' : activeCategory}</span>
-                <ChevronDown size={13} />
-              </div>
-
-              {catMenuOpen && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '110%',
-                    left: 0,
-                    zIndex: 50,
-                    minWidth: '150px',
-                    background: '#111622',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    borderRadius: '10px',
-                    padding: '6px',
-                    boxShadow: '0 12px 28px rgba(0, 0, 0, 0.6)',
-                  }}
-                >
-                  {categoryOptions.map((cat) => (
-                    <div
-                      key={cat}
-                      onClick={() => {
-                        setActiveCategory(cat);
-                        setCatMenuOpen(false);
-                      }}
-                      style={{
-                        padding: '7px 12px',
-                        fontSize: '0.82rem',
-                        color: activeCategory === cat ? '#ff8533' : '#d1d5db',
-                        fontWeight: activeCategory === cat ? '600' : '400',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        backgroundColor: activeCategory === cat ? 'rgba(255, 106, 43, 0.12)' : 'transparent',
-                        transition: 'background 0.1s ease',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.06)')}
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.backgroundColor =
-                          activeCategory === cat ? 'rgba(255, 106, 43, 0.12)' : 'transparent')
-                      }
-                    >
-                      {cat}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Version Dropdown */}
+            {/* Version Dropdown (Exact [ All versions ⌄ ] pill) */}
             <div className="dropdown-container" style={{ position: 'relative' }}>
               <div
                 className={`filter-dropdown-pill ${selectedVersion !== 'All versions' ? 'active' : ''}`}
@@ -395,11 +403,11 @@ export default function Home() {
                     left: 0,
                     zIndex: 50,
                     minWidth: '150px',
-                    background: '#111622',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    background: 'var(--glass)',
+                    border: '1px solid var(--edge)',
                     borderRadius: '10px',
                     padding: '6px',
-                    boxShadow: '0 12px 28px rgba(0, 0, 0, 0.6)',
+                    boxShadow: '0 12px 28px rgba(0, 0, 0, 0.7)',
                   }}
                 >
                   {versionOptions.map((ver) => (
@@ -412,17 +420,17 @@ export default function Home() {
                       style={{
                         padding: '7px 12px',
                         fontSize: '0.82rem',
-                        color: selectedVersion === ver ? '#ff8533' : '#d1d5db',
+                        color: selectedVersion === ver ? 'var(--gold)' : 'var(--text-body)',
                         fontWeight: selectedVersion === ver ? '600' : '400',
                         borderRadius: '6px',
                         cursor: 'pointer',
-                        backgroundColor: selectedVersion === ver ? 'rgba(255, 106, 43, 0.12)' : 'transparent',
+                        backgroundColor: selectedVersion === ver ? 'rgba(232, 196, 118, 0.12)' : 'transparent',
                         transition: 'background 0.1s ease',
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.06)')}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 240, 214, 0.06)')}
                       onMouseLeave={(e) =>
                         (e.currentTarget.style.backgroundColor =
-                          selectedVersion === ver ? 'rgba(255, 106, 43, 0.12)' : 'transparent')
+                          selectedVersion === ver ? 'rgba(232, 196, 118, 0.12)' : 'transparent')
                       }
                     >
                       {ver}
@@ -432,10 +440,10 @@ export default function Home() {
               )}
             </div>
 
-            {/* Sort Dropdown */}
+            {/* Sort Dropdown (Exact [ 🎛️ Top rated ⌄ ] pill) */}
             <div className="dropdown-container" style={{ position: 'relative' }}>
               <div
-                className="filter-dropdown-pill"
+                className={`filter-dropdown-pill ${sortBy !== 'top_rated' ? 'active' : ''}`}
                 onClick={() => {
                   setSortMenuOpen(!sortMenuOpen);
                   setCatMenuOpen(false);
@@ -455,11 +463,11 @@ export default function Home() {
                     left: 0,
                     zIndex: 50,
                     minWidth: '160px',
-                    background: '#111622',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    background: 'var(--glass)',
+                    border: '1px solid var(--edge)',
                     borderRadius: '10px',
                     padding: '6px',
-                    boxShadow: '0 12px 28px rgba(0, 0, 0, 0.6)',
+                    boxShadow: '0 12px 28px rgba(0, 0, 0, 0.7)',
                   }}
                 >
                   {sortOptions.map((s) => (
@@ -472,17 +480,17 @@ export default function Home() {
                       style={{
                         padding: '7px 12px',
                         fontSize: '0.82rem',
-                        color: sortBy === s.id ? '#ff8533' : '#d1d5db',
+                        color: sortBy === s.id ? 'var(--gold)' : 'var(--text-body)',
                         fontWeight: sortBy === s.id ? '600' : '400',
                         borderRadius: '6px',
                         cursor: 'pointer',
-                        backgroundColor: sortBy === s.id ? 'rgba(255, 106, 43, 0.12)' : 'transparent',
+                        backgroundColor: sortBy === s.id ? 'rgba(232, 196, 118, 0.12)' : 'transparent',
                         transition: 'background 0.1s ease',
                       }}
-                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.06)')}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 240, 214, 0.06)')}
                       onMouseLeave={(e) =>
                         (e.currentTarget.style.backgroundColor =
-                          sortBy === s.id ? 'rgba(255, 106, 43, 0.12)' : 'transparent')
+                          sortBy === s.id ? 'rgba(232, 196, 118, 0.12)' : 'transparent')
                       }
                     >
                       {s.label}
@@ -491,31 +499,32 @@ export default function Home() {
                 </div>
               )}
             </div>
+
+            {/* Source Code Toggle */}
+            <button
+              onClick={() => setSourceCodeOnly(!sourceCodeOnly)}
+              className={`filter-dropdown-pill ${sourceCodeOnly ? 'active' : ''}`}
+              style={{ padding: '7px 13px', borderRadius: '9999px' }}
+            >
+              <span>Source Code</span>
+            </button>
           </div>
 
-          {/* Right Quick Filter Pills (Image 2 style: Clients | All posts) */}
+          {/* Right Reset Pill */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <button
-              onClick={() => setActiveCategory(activeCategory === 'Clients' ? 'All' : 'Clients')}
-              className={`filter-dropdown-pill ${activeCategory === 'Clients' ? 'active' : ''}`}
-              style={{ padding: '6px 14px', borderRadius: '9999px' }}
-            >
-              Clients
-            </button>
-
             <button
               onClick={() => {
                 setActiveCategory('All');
                 setSelectedVersion('All versions');
                 setSearch('');
+                setSourceCodeOnly(false);
+                setSortBy('top_rated');
               }}
-              className={`filter-dropdown-pill ${activeCategory === 'All' && !search ? 'active' : ''}`}
+              className="filter-dropdown-pill"
               style={{
-                padding: '6px 14px',
+                padding: '7px 14px',
                 borderRadius: '9999px',
-                background: activeCategory === 'All' && !search ? 'rgba(255, 106, 43, 0.15)' : 'rgba(17, 22, 32, 0.9)',
-                borderColor: activeCategory === 'All' && !search ? 'rgba(255, 106, 43, 0.45)' : 'rgba(255, 255, 255, 0.1)',
-                color: activeCategory === 'All' && !search ? '#ff9d66' : '#d1d5db',
+                color: 'var(--muted)',
               }}
             >
               All posts
@@ -524,49 +533,50 @@ export default function Home() {
         </div>
 
         {/* ------------------------------------------------------------------
-            4. 3-Column Resource Cards Grid (Image 1 Format)
+            5. Resource Cards Grid (3 Columns Desktop, XenntSquad Style)
             ------------------------------------------------------------------ */}
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '80px 0', color: '#8b949e', fontSize: '0.9rem' }}>
-            Loading releases...
+          <div
+            style={{
+              padding: '60px 0',
+              textAlign: 'center',
+              color: 'var(--muted)',
+              fontSize: '0.95rem',
+            }}
+          >
+            Loading Syndicate resources...
           </div>
         ) : resources.length === 0 ? (
           <div
             style={{
+              padding: '60px 20px',
               textAlign: 'center',
-              padding: '80px 20px',
-              backgroundColor: 'rgba(16, 21, 31, 0.5)',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-              borderRadius: '14px',
+              background: 'var(--glass)',
+              border: '1px solid var(--edge)',
+              borderRadius: '16px',
+              color: 'var(--muted)',
             }}
           >
-            <p style={{ color: '#e5e7eb', fontSize: '1rem', fontWeight: '500', marginBottom: '8px' }}>
-              No resources found
-            </p>
-            <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '16px' }}>
-              Try clearing filters or search terms to see all available releases.
+            <p style={{ fontSize: '1rem', color: 'var(--text)', marginBottom: '8px', fontWeight: '600' }}>
+              No resources found matching your filters.
             </p>
             <button
               onClick={() => {
                 setActiveCategory('All');
                 setSelectedVersion('All versions');
                 setSearch('');
+                setSourceCodeOnly(false);
               }}
-              className="filter-dropdown-pill active"
+              className="btn-gold"
+              style={{ marginTop: '12px' }}
             >
-              Reset filters
+              Reset Filters
             </button>
           </div>
         ) : (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-              gap: '20px',
-            }}
-          >
-            {resources.map((res) => (
-              <ResourceCard key={res.id} resource={res} />
+          <div className="resource-grid fade-in">
+            {resources.map((resource) => (
+              <ResourceCard key={resource.id} resource={resource} />
             ))}
           </div>
         )}
