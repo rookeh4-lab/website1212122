@@ -111,6 +111,8 @@ export default function ResourceDetail() {
     if (isSource) setDownloadingSource(true);
     else setDownloadingClient(true);
 
+    const targetUrl = isSource ? resource.source_download_url : resource.client_download_url;
+
     try {
       const res = await fetch(`/api/resources/${resource.id}/download/${type}`, {
         method: 'POST',
@@ -121,22 +123,22 @@ export default function ResourceDetail() {
           ...prev,
           downloads_count: data.downloads_count || (prev.downloads_count + 1),
         }));
-
-        const targetUrl = data.download_url || (isSource ? resource.source_download_url : resource.client_download_url);
-        if (targetUrl) {
-          window.open(targetUrl, '_blank');
-        }
       } else {
-        const fallbackUrl = isSource ? resource.source_download_url : resource.client_download_url;
-        if (fallbackUrl) window.open(fallbackUrl, '_blank');
+        throw new Error('API download track fallback');
       }
-    } catch (err) {
-      console.error('Download error:', err);
-      const fallbackUrl = isSource ? resource.source_download_url : resource.client_download_url;
-      if (fallbackUrl) window.open(fallbackUrl, '_blank');
+    } catch (_err) {
+      try {
+        const newDownloads = (resource.downloads_count || 0) + 1;
+        await supabase.from('resources').update({ downloads_count: newDownloads }).eq('id', resource.id);
+        setResource((prev) => ({ ...prev, downloads_count: newDownloads }));
+      } catch (_e) {}
     } finally {
       if (isSource) setDownloadingSource(false);
       else setDownloadingClient(false);
+    }
+
+    if (targetUrl) {
+      window.open(targetUrl, '_blank');
     }
   };
 
@@ -149,10 +151,16 @@ export default function ResourceDetail() {
         const data = await res.json();
         setResource((prev) => ({ ...prev, likes_count: data.likes_count }));
         setHasLiked(true);
+        return;
       }
-    } catch (err) {
-      console.error('Like error:', err);
-    }
+    } catch (_err) {}
+
+    try {
+      const newLikes = (resource.likes_count || 0) + 1;
+      await supabase.from('resources').update({ likes_count: newLikes }).eq('id', resource.id);
+      setResource((prev) => ({ ...prev, likes_count: newLikes }));
+      setHasLiked(true);
+    } catch (_e) {}
   };
 
   // Handle Comment Like
@@ -164,10 +172,18 @@ export default function ResourceDetail() {
         setComments((prev) =>
           prev.map((c) => (c.id === commentId ? { ...c, likes_count: data.likes_count } : c))
         );
+        return;
       }
-    } catch (err) {
-      console.error('Comment like error:', err);
-    }
+    } catch (_err) {}
+
+    try {
+      const targetComment = comments.find((c) => c.id === commentId);
+      const newCount = (targetComment?.likes_count || 0) + 1;
+      await supabase.from('comments').update({ likes_count: newCount }).eq('id', commentId);
+      setComments((prev) =>
+        prev.map((c) => (c.id === commentId ? { ...c, likes_count: newCount } : c))
+      );
+    } catch (_e) {}
   };
 
   // Handle Submit Comment
@@ -183,25 +199,51 @@ export default function ResourceDetail() {
       setSubmittingComment(true);
       setCommentError('');
 
-      const res = await fetch(`/api/resources/${resource.id}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          author_name: commentName.trim() || 'Anonymous User',
-          content: commentText.trim(),
-        }),
-      });
+      let createdComment = null;
 
-      if (res.ok) {
-        const data = await res.json();
-        setComments((prev) => [data.comment, ...prev]);
+      try {
+        const res = await fetch(`/api/resources/${resource.id}/comments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            author_name: commentName.trim() || 'Anonymous User',
+            content: commentText.trim(),
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          createdComment = data.comment;
+        }
+      } catch (_e) {
+        // Fall back to direct Supabase client
+      }
+
+      if (!createdComment) {
+        const { data: dbData, error: dbErr } = await supabase
+          .from('comments')
+          .insert({
+            resource_id: resource.id,
+            author_id: `usr_${Date.now().toString(36)}`,
+            author_name: commentName.trim() || 'Anonymous User',
+            author_avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150',
+            content: commentText.trim(),
+            likes_count: 0,
+          })
+          .select()
+          .single();
+
+        if (dbErr) throw dbErr;
+        createdComment = dbData;
+      }
+
+      if (createdComment) {
+        setComments((prev) => [createdComment, ...prev]);
         setCommentText('');
-      } else {
-        const errData = await res.json();
-        setCommentError(errData.error || 'Failed to post comment.');
       }
     } catch (err) {
-      setCommentError('Network error while posting comment.');
+      console.error('Comment error:', err);
+      setCommentError(err.message || 'Error posting comment.');
     } finally {
       setSubmittingComment(false);
     }
