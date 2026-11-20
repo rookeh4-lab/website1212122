@@ -15,7 +15,7 @@ import { useAuth } from '../context/AuthContext';
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
-  const { user, isAdmin, signOut } = useAuth();
+  const { user, profile, isAdmin, signOut } = useAuth();
 
   useEffect(() => {
     setMobileOpen(false);
@@ -161,26 +161,29 @@ export default function Navbar() {
 
           {/* User Sign In / Account Button */}
           {user ? (
-            <button
-              onClick={signOut}
+            <Link
+              to="/login"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '5px',
-                padding: '6px 10px',
+                gap: '6px',
+                padding: '4px 10px',
                 borderRadius: '9999px',
                 background: '#131e36',
                 border: '1px solid #1e2f4a',
                 color: '#cbd5e1',
                 fontSize: '0.78rem',
-                cursor: 'pointer',
+                textDecoration: 'none',
               }}
-              title="Sign Out"
+              title="Edit Profile &amp; Settings"
             >
-              <User size={12} style={{ color: '#38bdf8' }} />
-              <span>{user.email?.split('@')[0]}</span>
-              <LogOut size={12} style={{ color: '#ef4444', marginLeft: '4px' }} />
-            </button>
+              <img
+                src={profile?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}
+                alt={profile?.username || 'User'}
+                style={{ width: '18px', height: '18px', borderRadius: '50%', objectFit: 'cover' }}
+              />
+              <span>{profile?.username || user.email?.split('@')[0]}</span>
+            </Link>
           ) : (
             <Link
               to="/login"

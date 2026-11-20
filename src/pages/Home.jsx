@@ -130,7 +130,7 @@ export default function Home() {
   }, []);
 
   const totalUploads = allResources.length || 8;
-  const { user, isAdmin, signOut } = useAuth();
+  const { user, profile, isAdmin, signOut } = useAuth();
 
   return (
     <div style={{ minHeight: '100vh', paddingBottom: '80px' }}>
@@ -258,8 +258,8 @@ export default function Home() {
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    padding: '6px 12px',
+                    gap: '7px',
+                    padding: '5px 12px',
                     borderRadius: '9999px',
                     background: '#131e36',
                     border: '1px solid #1e2f4a',
@@ -268,10 +268,14 @@ export default function Home() {
                     fontWeight: '600',
                     textDecoration: 'none',
                   }}
-                  title="View Account"
+                  title="Edit Profile &amp; Settings"
                 >
-                  <User size={12} style={{ color: '#38bdf8' }} />
-                  <span>{user.email?.split('@')[0]}</span>
+                  <img
+                    src={profile?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}
+                    alt={profile?.username || 'User'}
+                    style={{ width: '20px', height: '20px', borderRadius: '50%', objectFit: 'cover' }}
+                  />
+                  <span>{profile?.username || user.email?.split('@')[0]}</span>
                 </Link>
 
                 <button
@@ -421,7 +425,6 @@ export default function Home() {
                 className={`cat-pill ${isSelected ? 'on' : ''}`}
               >
                 <span>{cat.name}</span>
-                <span className="count">{count}</span>
               </button>
             );
           })}

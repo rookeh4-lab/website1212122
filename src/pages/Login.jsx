@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   LogIn,
@@ -11,32 +11,116 @@ import {
   ArrowLeft,
   ShieldCheck,
   Eye,
-  EyeOff
+  EyeOff,
+  Camera,
+  Upload,
+  Sparkles,
+  Save,
+  LogOut
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabaseClient';
+
+const PRESET_AVATARS = [
+  { name: 'Syndicate Pixel', url: '/logo.png' },
+  { name: 'Reverse Engineer', url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150' },
+  { name: 'Cyber Phantom', url: 'https://images.unsplash.com/photo-1566492031773-4f4e44671857?w=150' },
+  { name: 'Neon Hacker', url: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150' },
+];
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, signIn, signUp, signOut, isAdmin } = useAuth();
+  const { user, profile, updateProfile, signIn, signUp, signOut, isAdmin } = useAuth();
 
   // Mode: 'login' | 'register'
   const [mode, setMode] = useState('login');
 
-  // Form Fields
+  // Form Fields for Login/Register
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  // Profile Editor State (when logged in)
+  const [editName, setEditName] = useState(profile?.username || 'Rookeh');
+  const [editAvatar, setEditAvatar] = useState(profile?.avatar_url || PRESET_AVATARS[1].url);
+  const [customAvatarUrl, setCustomAvatarUrl] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMsg, setProfileMsg] = useState('');
+  const [profileError, setProfileError] = useState('');
 
   // States
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Destination after login
-  const from = location.state?.from || (email.toLowerCase().trim() === 'rookeh4@gmail.com' ? '/admin' : '/');
+  // Sync edit states when profile changes
+  useEffect(() => {
+    if (profile) {
+      setEditName(profile.username || 'Rookeh');
+      setEditAvatar(profile.avatar_url || PRESET_AVATARS[1].url);
+    }
+  }, [profile]);
 
+  // Handle Profile Picture file selection
+  const handlePfpFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const objectUrl = URL.createObjectURL(file);
+      setEditAvatar(objectUrl);
+      setCustomAvatarUrl('');
+
+      // Try uploading to Supabase Storage client-images bucket
+      try {
+        const fileExt = file.name.split('.').pop();
+        const filePath = `avatars/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const { error: uploadErr } = await supabase.storage
+          .from('client-images')
+          .upload(filePath, file, { cacheControl: '3600', upsert: true });
+
+        if (!uploadErr) {
+          const { data: publicData } = supabase.storage
+            .from('client-images')
+            .getPublicUrl(filePath);
+          if (publicData?.publicUrl) {
+            setEditAvatar(publicData.publicUrl);
+          }
+        }
+      } catch (err) {
+        console.warn('Avatar upload fallback to local preview:', err.message);
+      }
+    }
+  };
+
+  // Save Profile Changes (Display Name & PFP)
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setProfileMsg('');
+    setProfileError('');
+
+    if (!editName.trim()) {
+      setProfileError('Display Name cannot be empty.');
+      return;
+    }
+
+    try {
+      setSavingProfile(true);
+      const finalAvatar = customAvatarUrl.trim() || editAvatar || PRESET_AVATARS[1].url;
+      await updateProfile({
+        username: editName.trim(),
+        avatar_url: finalAvatar,
+      });
+      setProfileMsg('Profile updated! Your new name and avatar will be shown on all your posts.');
+      setTimeout(() => setProfileMsg(''), 4000);
+    } catch (err) {
+      setProfileError(err.message || 'Failed to update profile.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  // Handle Sign In / Register
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -62,7 +146,7 @@ export default function LoginPage() {
           if (email.toLowerCase().trim() === 'rookeh4@gmail.com') {
             navigate('/admin', { replace: true });
           } else {
-            navigate(from, { replace: true });
+            navigate('/', { replace: true });
           }
         }, 500);
       } else {
@@ -83,128 +167,377 @@ export default function LoginPage() {
     }
   };
 
-  // If already logged in, show current profile card with quick switch/logout
+  // ------------------------------------------------------------------
+  // LOGGED IN: USER DASHBOARD & PROFILE NAME/PFP EDITOR
+  // ------------------------------------------------------------------
   if (user) {
     return (
-      <div style={{ minHeight: '85vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 20px' }}>
+      <div style={{ minHeight: '85vh', padding: '30px 20px 80px 20px', display: 'flex', justifyContent: 'center' }}>
         <div
           style={{
-            maxWidth: '440px',
+            maxWidth: '560px',
             width: '100%',
             background: '#0d1527',
-            border: '1px solid #1e293b',
-            borderRadius: '16px',
+            border: '1px solid #1a2744',
+            borderRadius: '18px',
             padding: '32px 28px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
-            textAlign: 'center',
+            boxShadow: '0 12px 40px rgba(0, 0, 0, 0.5)',
           }}
         >
-          <img
-            src="/logo.png"
-            alt="Client Syndicate"
-            style={{
-              width: '56px',
-              height: '56px',
-              borderRadius: '14px',
-              objectFit: 'cover',
-              margin: '0 auto 16px auto',
-              border: '1px solid rgba(56, 189, 248, 0.4)',
-              boxShadow: '0 0 20px rgba(56, 189, 248, 0.25)',
-            }}
-          />
-
-          <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ffffff', marginBottom: '6px' }}>
-            Currently Signed In
-          </h2>
-
-          <p style={{ color: '#94a3b8', fontSize: '0.88rem', marginBottom: '20px' }}>
-            Logged in as <strong style={{ color: '#38bdf8' }}>{user.email}</strong>
-          </p>
-
-          {isAdmin ? (
-            <div
+          {/* Breadcrumb back */}
+          <div style={{ marginBottom: '20px' }}>
+            <Link
+              to="/"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
-                padding: '4px 12px',
-                borderRadius: '999px',
-                background: 'rgba(16, 185, 129, 0.15)',
-                border: '1px solid rgba(16, 185, 129, 0.4)',
-                color: '#10b981',
-                fontSize: '0.80rem',
-                fontWeight: '700',
-                marginBottom: '24px',
+                color: '#94a3b8',
+                fontSize: '0.84rem',
+                textDecoration: 'none',
               }}
             >
-              <ShieldCheck size={14} />
-              <span>ADMINISTRATOR VERIFIED</span>
-            </div>
-          ) : (
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '4px 12px',
-                borderRadius: '999px',
-                background: 'rgba(56, 189, 248, 0.1)',
-                border: '1px solid rgba(56, 189, 248, 0.25)',
-                color: '#38bdf8',
-                fontSize: '0.80rem',
-                fontWeight: '600',
-                marginBottom: '24px',
-              }}
-            >
-              <User size={13} />
-              <span>Member Account</span>
-            </div>
-          )}
+              <ArrowLeft size={14} />
+              <span>Back to Client Syndicate</span>
+            </Link>
+          </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {/* User Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <span
+                  style={{
+                    fontSize: '0.74rem',
+                    fontWeight: '700',
+                    padding: '2px 9px',
+                    borderRadius: '999px',
+                    background: isAdmin ? 'rgba(16, 185, 129, 0.15)' : 'rgba(56, 189, 248, 0.1)',
+                    color: isAdmin ? '#10b981' : '#38bdf8',
+                    border: isAdmin ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(56, 189, 248, 0.3)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                  }}
+                >
+                  {isAdmin ? <ShieldCheck size={12} /> : <User size={12} />}
+                  <span>{isAdmin ? 'ADMINISTRATOR' : 'MEMBER'}</span>
+                </span>
+              </div>
+              <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#ffffff', margin: 0 }}>
+                User Profile Settings
+              </h1>
+              <p style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '2px' }}>
+                {user.email}
+              </p>
+            </div>
+
             {isAdmin && (
               <button
                 onClick={() => navigate('/admin')}
                 className="btn-gold"
-                style={{ width: '100%', padding: '10px', fontSize: '0.90rem' }}
+                style={{ padding: '8px 16px', fontSize: '0.82rem' }}
               >
                 Go to Admin Panel
               </button>
             )}
+          </div>
 
+          {/* Feedback Messages */}
+          {profileMsg && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                background: 'rgba(16, 185, 129, 0.12)',
+                border: '1px solid rgba(16, 185, 129, 0.35)',
+                color: '#10b981',
+                fontSize: '0.84rem',
+                marginBottom: '18px',
+              }}
+            >
+              <CheckCircle2 size={16} style={{ flexShrink: 0 }} />
+              <span>{profileMsg}</span>
+            </div>
+          )}
+
+          {profileError && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                color: '#f87171',
+                fontSize: '0.84rem',
+                marginBottom: '18px',
+              }}
+            >
+              <AlertCircle size={16} style={{ flexShrink: 0 }} />
+              <span>{profileError}</span>
+            </div>
+          )}
+
+          {/* PROFILE EDITOR FORM */}
+          <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+            
+            {/* 1. Avatar (PFP) Editor */}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', color: '#cbd5e1', marginBottom: '10px' }}>
+                Profile Picture (PFP)
+              </label>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '18px', marginBottom: '14px' }}>
+                {/* Avatar Preview Circle */}
+                <div
+                  style={{
+                    position: 'relative',
+                    width: '74px',
+                    height: '74px',
+                    borderRadius: '50%',
+                    overflow: 'hidden',
+                    border: '2px solid #38bdf8',
+                    boxShadow: '0 0 16px rgba(56, 189, 248, 0.3)',
+                    flexShrink: 0,
+                    background: '#090e1a',
+                  }}
+                >
+                  <img
+                    src={editAvatar}
+                    alt={editName}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    onError={(e) => {
+                      e.currentTarget.src = PRESET_AVATARS[1].url;
+                    }}
+                  />
+                </div>
+
+                <div style={{ flex: 1 }}>
+                  {/* Upload PFP Button */}
+                  <label
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '7px',
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      background: '#131e36',
+                      border: '1px solid #1e2f4a',
+                      color: '#ffffff',
+                      fontSize: '0.82rem',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      marginBottom: '6px',
+                    }}
+                  >
+                    <Camera size={14} style={{ color: '#38bdf8' }} />
+                    <span>Upload PFP from Computer</span>
+                    <input
+                      type="file"
+                      onChange={handlePfpFileChange}
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                    />
+                  </label>
+                  <div style={{ fontSize: '0.74rem', color: '#64748b' }}>
+                    Upload any .PNG, .JPG image from your PC
+                  </div>
+                </div>
+              </div>
+
+              {/* Preset Avatars Selector */}
+              <div>
+                <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block', marginBottom: '6px' }}>
+                  Or select preset avatar:
+                </span>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {PRESET_AVATARS.map((p) => (
+                    <button
+                      key={p.name}
+                      type="button"
+                      onClick={() => {
+                        setEditAvatar(p.url);
+                        setCustomAvatarUrl('');
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        background: editAvatar === p.url ? '#162442' : '#090e1a',
+                        border: editAvatar === p.url ? '1px solid #38bdf8' : '1px solid #1a2744',
+                        color: editAvatar === p.url ? '#38bdf8' : '#94a3b8',
+                        fontSize: '0.76rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <img src={p.url} alt={p.name} style={{ width: '18px', height: '18px', borderRadius: '50%', objectFit: 'cover' }} />
+                      <span>{p.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Display Name / Username Editor */}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
+                Profile Name / Display Name
+              </label>
+              <div style={{ position: 'relative' }}>
+                <User size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="e.g. Rookeh"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px 10px 36px',
+                    borderRadius: '8px',
+                    background: '#090e1a',
+                    border: '1px solid #1a2744',
+                    color: '#ffffff',
+                    fontSize: '0.90rem',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '6px' }}>
+                This name and PFP will be shown as the author when you publish or post clients, source codes, or tools.
+              </div>
+            </div>
+
+            {/* 3. Live Author Badge Preview */}
+            <div
+              style={{
+                padding: '14px 18px',
+                borderRadius: '10px',
+                background: '#090e1a',
+                border: '1px solid #162238',
+              }}
+            >
+              <div style={{ fontSize: '0.74rem', color: '#64748b', marginBottom: '8px' }}>
+                Live Author Badge Preview (How your posts look):
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+                <img
+                  src={editAvatar}
+                  alt={editName}
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    border: '1px solid #1e2f4a',
+                  }}
+                  onError={(e) => {
+                    e.currentTarget.src = PRESET_AVATARS[1].url;
+                  }}
+                />
+                <span style={{ fontWeight: '600', color: '#ffffff', fontSize: '0.92rem' }}>
+                  {editName || 'Rookeh'}
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.70rem',
+                    fontWeight: '600',
+                    padding: '1px 7px',
+                    borderRadius: '999px',
+                    background: 'rgba(56, 189, 248, 0.1)',
+                    color: '#38bdf8',
+                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                  }}
+                >
+                  Reverse Engineer
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.70rem',
+                    fontWeight: '700',
+                    padding: '1px 7px',
+                    borderRadius: '999px',
+                    background: 'rgba(16, 185, 129, 0.12)',
+                    color: '#10b981',
+                    border: '1px solid rgba(16, 185, 129, 0.35)',
+                  }}
+                >
+                  CLEAN
+                </span>
+              </div>
+            </div>
+
+            {/* Save Button */}
+            <button
+              type="submit"
+              disabled={savingProfile}
+              className="btn-gold"
+              style={{
+                width: '100%',
+                padding: '11px',
+                fontSize: '0.90rem',
+                gap: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Save size={15} />
+              <span>{savingProfile ? 'Saving Profile...' : 'Save Profile Changes'}</span>
+            </button>
+          </form>
+
+          {/* Footer Actions */}
+          <div
+            style={{
+              marginTop: '24px',
+              paddingTop: '18px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
             <button
               onClick={() => navigate('/')}
               style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '10px',
-                background: '#131e36',
-                border: '1px solid #1e2f4a',
-                color: '#ffffff',
-                fontWeight: '600',
-                fontSize: '0.88rem',
+                background: 'none',
+                border: 'none',
+                color: '#94a3b8',
+                fontSize: '0.84rem',
                 cursor: 'pointer',
               }}
             >
-              Return to Archive
+              ← Return to Archive
             </button>
 
             <button
-              onClick={signOut}
+              onClick={() => {
+                signOut();
+                navigate('/');
+              }}
               style={{
-                width: '100%',
-                padding: '9px',
-                borderRadius: '10px',
-                background: 'transparent',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'none',
+                border: 'none',
                 color: '#ef4444',
+                fontSize: '0.82rem',
                 fontWeight: '600',
-                fontSize: '0.84rem',
                 cursor: 'pointer',
-                marginTop: '6px',
               }}
             >
-              Sign Out
+              <LogOut size={13} />
+              <span>Sign Out</span>
             </button>
           </div>
         </div>
@@ -212,6 +545,9 @@ export default function LoginPage() {
     );
   }
 
+  // ------------------------------------------------------------------
+  // NOT LOGGED IN: SIGN IN & REGISTER TABS
+  // ------------------------------------------------------------------
   return (
     <div style={{ minHeight: '85vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '30px 20px 60px 20px' }}>
       <div
@@ -380,7 +716,7 @@ export default function LoginPage() {
           {mode === 'register' && (
             <div>
               <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '600', color: '#94a3b8', marginBottom: '6px' }}>
-                Username
+                Display Name / Username
               </label>
               <div style={{ position: 'relative' }}>
                 <User size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
@@ -388,7 +724,7 @@ export default function LoginPage() {
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. Dexter"
+                  placeholder="e.g. Rookeh"
                   style={{
                     width: '100%',
                     padding: '10px 12px 10px 36px',

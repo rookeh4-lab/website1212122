@@ -37,7 +37,7 @@ const PRESET_IMAGES = [
 
 export default function AdminPage() {
   const navigate = useNavigate();
-  const { user, isAdmin, signIn, signOut } = useAuth();
+  const { user, profile, isAdmin, signIn, signOut } = useAuth();
 
   // Admin Dashboard State
   const [resources, setResources] = useState([]);
@@ -238,6 +238,8 @@ export default function AdminPage() {
 
       // 3. Prepare Payload
       const generatedSlug = uploadForm.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now().toString(36);
+      const authorName = profile?.username || uploadForm.author_name || 'Rookeh';
+      const authorAvatar = profile?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150';
 
       const newResource = {
         title: uploadForm.title.trim(),
@@ -247,7 +249,8 @@ export default function AdminPage() {
         loader: uploadForm.loader,
         type: uploadForm.category === 'Clients' ? 'Client' : uploadForm.category === 'Source Codes' ? 'Source Code' : 'Tool',
         description: uploadForm.description.trim() || `${uploadForm.title} verified release with right shift GUI bind.`,
-        author_name: uploadForm.author_name || 'sub5larp',
+        author_name: authorName,
+        author_avatar: authorAvatar,
         client_file_name: clientFileName,
         client_file_size: clientFileSize,
         client_download_url: directDownloadUrl,
@@ -281,7 +284,8 @@ export default function AdminPage() {
           loader: newResource.loader,
           type: newResource.type,
           description: newResource.description,
-          author_name: newResource.author_name,
+          author_name: authorName,
+          author_avatar: authorAvatar,
           client_file_name: newResource.client_file_name,
           client_file_size: newResource.client_file_size,
           client_download_url: newResource.client_download_url,
@@ -627,6 +631,74 @@ export default function AdminPage() {
             <p style={{ fontSize: '0.86rem', color: '#94a3b8', marginBottom: '24px' }}>
               Direct file upload from your PC (.jar, .dll, .zip) plus client GUI screenshot image preview.
             </p>
+
+            {/* Author Profile Identity Banner */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 18px',
+                borderRadius: '10px',
+                background: '#090e1a',
+                border: '1px solid #1e2f4a',
+                marginBottom: '22px',
+                flexWrap: 'wrap',
+                gap: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <img
+                  src={profile?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}
+                  alt={profile?.username || 'Rookeh'}
+                  style={{
+                    width: '38px',
+                    height: '38px',
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    border: '2px solid #38bdf8',
+                    boxShadow: '0 0 10px rgba(56, 189, 248, 0.3)',
+                  }}
+                />
+                <div>
+                  <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
+                    Publishing as Author (Shown on cards &amp; detail page):
+                  </div>
+                  <div style={{ fontSize: '0.96rem', fontWeight: '800', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>{profile?.username || 'Rookeh'}</span>
+                    <span
+                      style={{
+                        fontSize: '0.70rem',
+                        fontWeight: '600',
+                        padding: '1px 7px',
+                        borderRadius: '999px',
+                        background: 'rgba(56, 189, 248, 0.1)',
+                        color: '#38bdf8',
+                        border: '1px solid rgba(56, 189, 248, 0.3)',
+                      }}
+                    >
+                      Reverse Engineer
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <Link
+                to="/login"
+                style={{
+                  fontSize: '0.80rem',
+                  color: '#38bdf8',
+                  textDecoration: 'none',
+                  fontWeight: '600',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  background: '#131e36',
+                  border: '1px solid #1e2f4a',
+                }}
+              >
+                Edit Name &amp; PFP →
+              </Link>
+            </div>
 
             <form onSubmit={handleDirectUploadSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
               
