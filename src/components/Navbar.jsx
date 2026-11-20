@@ -1,44 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  Compass,
+  Zap,
   Code2,
   Wrench,
-  Zap,
+  Sparkles,
   Box,
-  Upload,
+  Plus,
+  ShieldCheck,
   Menu,
   X,
-  ExternalLink,
-  ShieldCheck,
-  Search,
-  Sparkles
+  ExternalLink
 } from 'lucide-react';
 
 export default function Navbar() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 20);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  useEffect(() => {
-    setMobileMenuOpen(false);
+    setMobileOpen(false);
   }, [location.pathname]);
 
   const navLinks = [
-    { name: 'Archive', path: '/', icon: Compass },
-    { name: 'Clients', path: '/clients', icon: Zap },
-    { name: 'Source Codes', path: '/sources', icon: Code2 },
-    { name: 'Tools', path: '/tools', icon: Wrench },
-    { name: 'Macros', path: '/macros', icon: Sparkles },
-    { name: 'Launchers', path: '/launchers', icon: Box },
+    { name: 'Archive', path: '/' },
+    { name: 'Clients', path: '/clients' },
+    { name: 'Source Codes', path: '/sources' },
+    { name: 'Tools', path: '/tools' },
+    { name: 'Macros', path: '/macros' },
+    { name: 'Launchers', path: '/launchers' },
   ];
 
   const isActive = (path) => {
@@ -47,125 +36,109 @@ export default function Navbar() {
   };
 
   return (
-    <nav
+    <header
       style={{
         position: 'sticky',
-        top: 0,
+        top: '16px',
         zIndex: 100,
-        backgroundColor: scrolled ? 'rgba(9, 10, 15, 0.94)' : 'rgba(9, 10, 15, 0.8)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-        transition: 'all 0.25s ease',
+        maxWidth: '1240px',
+        margin: '0 auto',
+        padding: '0 20px',
       }}
     >
       <div
+        className="gta-glass-panel"
         style={{
-          maxWidth: '1240px',
-          margin: '0 auto',
-          padding: '0 24px',
-          height: '70px',
+          borderRadius: '9999px',
+          padding: '8px 16px 8px 20px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          boxShadow: '0 12px 32px -8px rgba(0, 0, 0, 0.8), 0 0 20px -5px rgba(255, 42, 133, 0.15)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
         }}
       >
-        {/* Brand / Logo */}
+        {/* Brand Logo & Name */}
         <Link
           to="/"
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
+            gap: '10px',
             textDecoration: 'none',
           }}
         >
+          {/* GTA 6 Style Emblem */}
           <div
             style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, #7c3aed, #3b82f6)',
+              width: '36px',
+              height: '36px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #ff2a85 0%, #ff7a00 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 0 20px rgba(124, 58, 237, 0.4)',
-              color: '#fff',
-              fontWeight: '800',
-              fontSize: '1.2rem',
+              boxShadow: '0 0 16px rgba(255, 42, 133, 0.5)',
+              color: '#ffffff',
+              fontWeight: '900',
+              fontSize: '1rem',
               letterSpacing: '-0.02em',
             }}
           >
-            S
+            VI
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span
-                style={{
-                  fontSize: '1.15rem',
-                  fontWeight: '800',
-                  letterSpacing: '0.04em',
-                  color: '#ffffff',
-                }}
-              >
-                SYNDICATE
-              </span>
-              <span
-                style={{
-                  fontSize: '0.65rem',
-                  fontWeight: '700',
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                  background: 'rgba(124, 58, 237, 0.2)',
-                  color: '#c084fc',
-                  border: '1px solid rgba(124, 58, 237, 0.35)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                }}
-              >
-                ARCHIVE
-              </span>
-            </div>
+
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
             <span
               style={{
-                fontSize: '0.7rem',
-                color: '#64748b',
-                fontWeight: '500',
-                letterSpacing: '0.02em',
+                fontFamily: "'Outfit', sans-serif",
+                fontWeight: '900',
+                fontSize: '1.25rem',
+                color: '#ffffff',
+                letterSpacing: '-0.01em',
               }}
             >
-              Minecraft Client & Source Repository
+              Syndicate
+            </span>
+            <span
+              style={{
+                fontFamily: "'Outfit', sans-serif",
+                fontWeight: '900',
+                fontSize: '0.85rem',
+                background: 'linear-gradient(135deg, #ff2a85, #ff7a00)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                letterSpacing: '0.04em',
+              }}
+            >
+              VI
             </span>
           </div>
         </Link>
 
-        {/* Desktop Nav Items */}
-        <div
+        {/* Center Desktop Navigation Links */}
+        <nav
           style={{
             display: 'none',
             alignItems: 'center',
             gap: '4px',
           }}
-          className="desktop-nav"
+          className="desktop-nav-menu"
         >
-          {navLinks.map((link) => {
-            const Icon = link.icon;
-            const active = isActive(link.path);
+          {navLinks.map((item) => {
+            const active = isActive(item.path);
             return (
               <Link
-                key={link.path}
-                to={link.path}
+                key={item.path}
+                to={item.path}
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '7px 14px',
-                  borderRadius: '8px',
-                  fontSize: '0.88rem',
-                  fontWeight: active ? '600' : '500',
-                  color: active ? '#ffffff' : '#94a3b8',
-                  backgroundColor: active ? 'rgba(124, 58, 237, 0.15)' : 'transparent',
-                  border: active ? '1px solid rgba(124, 58, 237, 0.3)' : '1px solid transparent',
+                  padding: '7px 16px',
+                  borderRadius: '9999px',
+                  fontSize: '0.86rem',
+                  fontWeight: active ? '700' : '500',
+                  color: active ? '#ffffff' : '#9ca3af',
+                  backgroundColor: active ? 'rgba(255, 42, 133, 0.15)' : 'transparent',
+                  border: active ? '1px solid rgba(255, 42, 133, 0.35)' : '1px solid transparent',
                   textDecoration: 'none',
                   transition: 'all 0.2s ease',
                 }}
@@ -177,17 +150,16 @@ export default function Navbar() {
                 }}
                 onMouseLeave={(e) => {
                   if (!active) {
-                    e.currentTarget.style.color = '#94a3b8';
+                    e.currentTarget.style.color = '#9ca3af';
                     e.currentTarget.style.backgroundColor = 'transparent';
                   }
                 }}
               >
-                <Icon size={15} style={{ color: active ? '#c084fc' : '#64748b' }} />
-                {link.name}
+                {item.name}
               </Link>
             );
           })}
-        </div>
+        </nav>
 
         {/* Right Action Buttons */}
         <div
@@ -196,148 +168,111 @@ export default function Navbar() {
             alignItems: 'center',
             gap: '10px',
           }}
-          className="desktop-actions"
+          className="desktop-nav-actions"
         >
-          {/* Upload Button */}
+          {/* Publish Button */}
           <Link
             to="/upload"
-            className="syn-btn syn-btn-primary"
-            style={{
-              padding: '8px 16px',
-              fontSize: '0.85rem',
-            }}
+            className="gta-pill-btn gta-pill-btn-primary"
+            style={{ padding: '7px 16px', fontSize: '0.82rem' }}
           >
-            <Upload size={15} />
-            Publish Resource
+            <Plus size={15} />
+            <span>Publish</span>
           </Link>
 
           {/* Admin link */}
           <Link
             to="/admin"
-            className="syn-btn syn-btn-secondary"
-            style={{
-              padding: '8px 12px',
-              fontSize: '0.82rem',
-            }}
+            className="gta-pill-btn gta-pill-btn-secondary"
+            style={{ padding: '7px 14px', fontSize: '0.82rem' }}
             title="Admin Dashboard"
           >
-            <ShieldCheck size={15} style={{ color: '#38bdf8' }} />
-            Admin
+            <ShieldCheck size={14} style={{ color: '#00f0ff' }} />
+            <span>Admin</span>
           </Link>
 
-          {/* Discord CTA */}
+          {/* Discord Pill */}
           <a
             href="https://discord.gg/syndicate"
             target="_blank"
             rel="noopener noreferrer"
-            className="syn-btn syn-btn-outline"
-            style={{
-              padding: '8px 14px',
-              fontSize: '0.85rem',
-            }}
+            className="gta-pill-btn gta-pill-btn-secondary"
+            style={{ padding: '7px 14px', fontSize: '0.82rem' }}
           >
             <span>Discord</span>
-            <ExternalLink size={13} style={{ color: '#64748b' }} />
+            <ExternalLink size={12} style={{ color: '#9ca3af' }} />
           </a>
         </div>
 
-        {/* Mobile Hamburger Button */}
+        {/* Mobile Hamburger */}
         <button
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          onClick={() => setMobileOpen(!mobileOpen)}
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '40px',
-            height: '40px',
-            borderRadius: '8px',
-            background: 'rgba(255, 255, 255, 0.05)',
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%',
+            background: 'rgba(255, 255, 255, 0.06)',
             border: '1px solid rgba(255, 255, 255, 0.1)',
             color: '#fff',
             cursor: 'pointer',
           }}
-          className="mobile-hamburger"
+          className="mobile-nav-toggle"
           aria-label="Toggle Navigation"
         >
-          {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          {mobileOpen ? <X size={18} /> : <Menu size={18} />}
         </button>
       </div>
 
       {/* Mobile Drawer */}
-      {mobileMenuOpen && (
+      {mobileOpen && (
         <div
+          className="gta-glass-panel"
           style={{
-            backgroundColor: '#0c0e14',
-            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-            padding: '16px 24px 24px 24px',
+            marginTop: '10px',
+            borderRadius: '20px',
+            padding: '16px 20px',
             display: 'flex',
             flexDirection: 'column',
             gap: '8px',
           }}
         >
-          {navLinks.map((link) => {
-            const Icon = link.icon;
-            const active = isActive(link.path);
-            return (
-              <Link
-                key={link.path}
-                to={link.path}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  fontSize: '0.95rem',
-                  fontWeight: active ? '600' : '500',
-                  color: active ? '#ffffff' : '#94a3b8',
-                  backgroundColor: active ? 'rgba(124, 58, 237, 0.15)' : 'rgba(255, 255, 255, 0.02)',
-                  border: active ? '1px solid rgba(124, 58, 237, 0.3)' : '1px solid rgba(255, 255, 255, 0.05)',
-                  textDecoration: 'none',
-                }}
-              >
-                <Icon size={18} style={{ color: active ? '#c084fc' : '#64748b' }} />
-                {link.name}
-              </Link>
-            );
-          })}
-
-          <div
-            style={{
-              height: '1px',
-              backgroundColor: 'rgba(255, 255, 255, 0.08)',
-              margin: '8px 0',
-            }}
-          />
-
-          <Link
-            to="/upload"
-            className="syn-btn syn-btn-primary"
-            style={{ width: '100%', padding: '12px' }}
-          >
-            <Upload size={16} />
-            Publish Resource
+          {navLinks.map((item) => (
+            <Link
+              key={item.path}
+              to={item.path}
+              style={{
+                padding: '10px 16px',
+                borderRadius: '12px',
+                color: isActive(item.path) ? '#fff' : '#9ca3af',
+                backgroundColor: isActive(item.path) ? 'rgba(255, 42, 133, 0.18)' : 'transparent',
+                textDecoration: 'none',
+                fontWeight: '600',
+                fontSize: '0.9rem',
+              }}
+            >
+              {item.name}
+            </Link>
+          ))}
+          <div style={{ height: '1px', backgroundColor: 'rgba(255, 255, 255, 0.08)', margin: '6px 0' }} />
+          <Link to="/upload" className="gta-pill-btn gta-pill-btn-primary" style={{ justifyContent: 'center' }}>
+            <Plus size={16} /> Publish Resource
           </Link>
-
-          <Link
-            to="/admin"
-            className="syn-btn syn-btn-secondary"
-            style={{ width: '100%', padding: '12px' }}
-          >
-            <ShieldCheck size={16} style={{ color: '#38bdf8' }} />
-            Admin Dashboard
+          <Link to="/admin" className="gta-pill-btn gta-pill-btn-secondary" style={{ justifyContent: 'center' }}>
+            <ShieldCheck size={16} style={{ color: '#00f0ff' }} /> Admin Dashboard
           </Link>
         </div>
       )}
 
-      {/* Responsive CSS for desktop vs mobile */}
       <style>{`
         @media (min-width: 900px) {
-          .desktop-nav { display: flex !important; }
-          .desktop-actions { display: flex !important; }
-          .mobile-hamburger { display: none !important; }
+          .desktop-nav-menu { display: flex !important; }
+          .desktop-nav-actions { display: flex !important; }
+          .mobile-nav-toggle { display: none !important; }
         }
       `}</style>
-    </nav>
+    </header>
   );
 }

@@ -210,13 +210,14 @@ export default function UploadPage() {
         <form
           onSubmit={handleSubmit}
           style={{
-            backgroundColor: '#0c0e15',
+            backgroundColor: 'rgba(18, 15, 27, 0.85)',
             border: '1px solid rgba(255, 255, 255, 0.08)',
-            borderRadius: '16px',
+            borderRadius: '20px',
             padding: '32px',
             display: 'flex',
             flexDirection: 'column',
             gap: '24px',
+            boxShadow: '0 12px 30px -10px rgba(0, 0, 0, 0.6)',
           }}
         >
           {/* Title */}
@@ -508,8 +509,8 @@ export default function UploadPage() {
             <button
               type="submit"
               disabled={loading}
-              className="syn-btn syn-btn-primary"
-              style={{ padding: '12px 32px', fontSize: '1rem' }}
+              className="gta-pill-btn gta-pill-btn-primary"
+              style={{ padding: '12px 36px', fontSize: '1rem' }}
             >
               <Upload size={18} />
               <span>{loading ? 'Publishing...' : 'Publish to Syndicate'}</span>

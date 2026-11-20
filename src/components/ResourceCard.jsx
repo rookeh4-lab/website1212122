@@ -1,41 +1,27 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Download, Eye, Heart, Sparkles, Code2, Box, Cpu } from 'lucide-react';
+import { Download, Eye, MessageSquare, Flame, CheckCircle, ChevronUp } from 'lucide-react';
 
 export default function ResourceCard({ resource }) {
   if (!resource) return null;
 
-  const getLoaderBadgeClass = (loader) => {
-    const l = (loader || '').toLowerCase();
-    if (l.includes('fabric')) return 'syn-badge syn-badge-fabric';
-    if (l.includes('neoforge')) return 'syn-badge syn-badge-neoforge';
-    if (l.includes('forge')) return 'syn-badge syn-badge-forge';
-    if (l.includes('c++') || l.includes('native') || l.includes('dll')) return 'syn-badge syn-badge-native';
-    return 'syn-badge syn-badge-vanilla';
-  };
-
+  const isHot = resource.is_featured || (resource.downloads_count && resource.downloads_count > 1000);
   const formattedDownloads = Number(resource.downloads_count || 0).toLocaleString();
   const formattedViews = Number(resource.views_count || 0).toLocaleString();
-  const formattedLikes = Number(resource.likes_count || 0).toLocaleString();
+  const upvotes = resource.likes_count || 0;
 
   return (
-    <div
-      className="syn-card"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        position: 'relative',
-      }}
-    >
-      {/* Thumbnail & Badges */}
-      <div
+    <div className={`gta-crack-card ${isHot ? 'is-hot' : ''}`}>
+      {/* 16:9 Thumbnail Area */}
+      <Link
+        to={`/resource/${resource.slug || resource.id}`}
         style={{
           position: 'relative',
-          height: '160px',
+          aspectRatio: '16/9',
           width: '100%',
           overflow: 'hidden',
-          backgroundColor: '#161924',
+          display: 'block',
+          backgroundColor: '#12101b',
         }}
       >
         <img
@@ -45,118 +31,122 @@ export default function ResourceCard({ resource }) {
             width: '100%',
             height: '100%',
             objectFit: 'cover',
-            transition: 'transform 0.3s ease',
+            transition: 'transform 0.35s ease',
           }}
+          onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.05)')}
+          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
           onError={(e) => {
             e.currentTarget.src = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800';
           }}
         />
 
-        {/* Gradient Overlay */}
+        {/* Ambient Card Vignette */}
         <div
           style={{
             position: 'absolute',
             inset: 0,
-            background: 'linear-gradient(to top, rgba(17, 19, 28, 0.95) 0%, rgba(17, 19, 28, 0.2) 60%, transparent 100%)',
+            background: 'linear-gradient(to top, rgba(16, 14, 24, 0.95) 0%, rgba(16, 14, 24, 0.25) 55%, transparent 100%)',
           }}
         />
 
-        {/* Badges Overlay */}
+        {/* Overlaid Badges: Top Row */}
         <div
           style={{
             position: 'absolute',
             top: '12px',
             left: '12px',
+            right: '12px',
             display: 'flex',
-            flexWrap: 'wrap',
-            gap: '6px',
+            alignItems: 'center',
+            justifyContent: 'space-between',
             zIndex: 2,
           }}
         >
-          <span className={getLoaderBadgeClass(resource.loader)}>
-            {resource.loader || 'Fabric'}
-          </span>
-          <span
-            style={{
-              background: 'rgba(0, 0, 0, 0.65)',
-              backdropFilter: 'blur(8px)',
-              color: '#f8fafc',
-              fontSize: '0.72rem',
-              fontWeight: '700',
-              padding: '3px 8px',
-              borderRadius: '6px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              letterSpacing: '0.02em',
-            }}
-          >
-            {resource.version || '1.21.11'}
-          </span>
+          {/* Hot Badge */}
+          {isHot ? (
+            <div className="badge-hot">
+              <Flame size={12} />
+              <span>Hot</span>
+            </div>
+          ) : (
+            <div
+              style={{
+                fontSize: '0.7rem',
+                fontWeight: '700',
+                padding: '3px 8px',
+                borderRadius: '999px',
+                backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                backdropFilter: 'blur(8px)',
+                color: '#9ca3af',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+              }}
+            >
+              {resource.type || 'Release'}
+            </div>
+          )}
+
+          {/* Verified Badge */}
+          <div className="badge-verified">
+            <CheckCircle size={12} />
+            <span>Verified</span>
+          </div>
         </div>
 
-        {/* Category Pill Right */}
+        {/* Overlaid Bottom-Left Tag (XenntSquad Dual Pill) */}
         <div
           style={{
             position: 'absolute',
-            top: '12px',
-            right: '12px',
+            bottom: '12px',
+            left: '12px',
             zIndex: 2,
           }}
         >
-          <span
-            style={{
-              background: 'rgba(124, 58, 237, 0.25)',
-              backdropFilter: 'blur(8px)',
-              color: '#d8b4fe',
-              fontSize: '0.7rem',
-              fontWeight: '700',
-              padding: '3px 8px',
-              borderRadius: '6px',
-              border: '1px solid rgba(124, 58, 237, 0.4)',
-              textTransform: 'uppercase',
-            }}
-          >
-            {resource.category || 'Client'}
-          </span>
+          <div className="badge-tag-dark">
+            <span className="dot-indicator" />
+            <span style={{ color: '#fff', fontWeight: '700' }}>Minecraft</span>
+            <span style={{ color: '#9ca3af' }}>{resource.category || 'Client'}</span>
+          </div>
         </div>
-      </div>
+      </Link>
 
-      {/* Body Content */}
+      {/* Card Content Body */}
       <div
         style={{
-          padding: '18px 20px',
+          padding: '18px 20px 20px 20px',
           display: 'flex',
           flexDirection: 'column',
           flex: 1,
         }}
       >
-        {/* Author / Provider */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: '10px',
-          }}
-        >
-          <img
-            src={resource.author_avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}
-            alt={resource.author_name}
-            style={{
-              width: '22px',
-              height: '22px',
-              borderRadius: '50%',
-              objectFit: 'cover',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-            }}
-          />
+        {/* Version & Loader Sub-tags */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
           <span
             style={{
-              fontSize: '0.8rem',
-              color: '#94a3b8',
-              fontWeight: '500',
+              fontSize: '0.72rem',
+              fontWeight: '700',
+              padding: '2px 8px',
+              borderRadius: '6px',
+              backgroundColor: 'rgba(0, 240, 255, 0.1)',
+              color: '#00f0ff',
+              border: '1px solid rgba(0, 240, 255, 0.25)',
+              fontFamily: "'JetBrains Mono', monospace",
             }}
           >
-            {resource.author_name || 'Community Provider'}
+            {resource.version || '1.21.11'}
+          </span>
+
+          <span
+            style={{
+              fontSize: '0.72rem',
+              fontWeight: '600',
+              padding: '2px 8px',
+              borderRadius: '6px',
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+              color: '#cbd5e1',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+            }}
+          >
+            {resource.loader || 'Fabric'}
           </span>
         </div>
 
@@ -164,25 +154,25 @@ export default function ResourceCard({ resource }) {
         <Link
           to={`/resource/${resource.slug || resource.id}`}
           style={{
-            color: '#f8fafc',
+            color: '#ffffff',
             textDecoration: 'none',
-            fontSize: '1.05rem',
+            fontSize: '1.12rem',
             fontWeight: '700',
             lineHeight: '1.35',
             marginBottom: '8px',
             transition: 'color 0.18s ease',
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#c084fc')}
-          onMouseLeave={(e) => (e.currentTarget.style.color = '#f8fafc')}
+          onMouseEnter={(e) => (e.currentTarget.style.color = '#ff2a85')}
+          onMouseLeave={(e) => (e.currentTarget.style.color = '#ffffff')}
         >
           {resource.title}
         </Link>
 
-        {/* Short Description */}
+        {/* Description Excerpt */}
         <p
           style={{
-            fontSize: '0.84rem',
-            color: '#94a3b8',
+            fontSize: '0.85rem',
+            color: '#9ca3af',
             lineHeight: '1.5',
             marginBottom: '16px',
             display: '-webkit-box',
@@ -194,103 +184,83 @@ export default function ResourceCard({ resource }) {
           {resource.description}
         </p>
 
-        {/* Tags */}
-        {resource.tags && resource.tags.length > 0 && (
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '6px',
-              marginBottom: '16px',
-            }}
-          >
-            {resource.tags.slice(0, 3).map((tag, idx) => (
-              <span
-                key={idx}
-                style={{
-                  fontSize: '0.72rem',
-                  padding: '2px 7px',
-                  borderRadius: '4px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                  color: '#94a3b8',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
-                }}
-              >
-                #{tag}
-              </span>
-            ))}
-            {resource.tags.length > 3 && (
-              <span
-                style={{
-                  fontSize: '0.72rem',
-                  padding: '2px 5px',
-                  color: '#64748b',
-                }}
-              >
-                +{resource.tags.length - 3}
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* Bottom Metrics Bar */}
+        {/* Card Footer (Author + Metrics) */}
         <div
           style={{
             marginTop: 'auto',
-            paddingTop: '12px',
+            paddingTop: '14px',
             borderTop: '1px solid rgba(255, 255, 255, 0.06)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            gap: '12px',
           }}
         >
+          {/* Author */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+            <img
+              src={resource.author_avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150'}
+              alt={resource.author_name}
+              style={{
+                width: '24px',
+                height: '24px',
+                borderRadius: '50%',
+                objectFit: 'cover',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                flexShrink: 0,
+              }}
+            />
+            <span
+              style={{
+                fontSize: '0.82rem',
+                color: '#e5e7eb',
+                fontWeight: '600',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {resource.author_name || 'Syndicate'}
+            </span>
+          </div>
+
+          {/* Right Metrics (Upvotes, Comments, Views, Downloads) */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '12px',
+              gap: '10px',
               fontSize: '0.78rem',
-              color: '#94a3b8',
+              color: '#9ca3af',
+              flexShrink: 0,
             }}
           >
+            {/* Upvote Count */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '2px',
+                color: upvotes > 0 ? '#ff7a00' : '#9ca3af',
+                fontWeight: '600',
+              }}
+            >
+              <ChevronUp size={14} />
+              <span>{upvotes}</span>
+            </div>
+
+            {/* Downloads */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Download size={13} style={{ color: '#8b5cf6' }} />
+              <Download size={13} style={{ color: '#00f0ff' }} />
               <span>{formattedDownloads}</span>
             </div>
+
+            {/* Views */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Eye size={13} style={{ color: '#38bdf8' }} />
+              <Eye size={13} style={{ color: '#ff2a85' }} />
               <span>{formattedViews}</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Heart size={13} style={{ color: '#f43f5e' }} />
-              <span>{formattedLikes}</span>
-            </div>
           </div>
-
-          <Link
-            to={`/resource/${resource.slug || resource.id}`}
-            style={{
-              fontSize: '0.8rem',
-              fontWeight: '600',
-              color: '#c084fc',
-              textDecoration: 'none',
-              padding: '4px 10px',
-              borderRadius: '6px',
-              backgroundColor: 'rgba(124, 58, 237, 0.12)',
-              border: '1px solid rgba(124, 58, 237, 0.25)',
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(124, 58, 237, 0.25)';
-              e.currentTarget.style.color = '#ffffff';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'rgba(124, 58, 237, 0.12)';
-              e.currentTarget.style.color = '#c084fc';
-            }}
-          >
-            Get Resource →
-          </Link>
         </div>
       </div>
     </div>

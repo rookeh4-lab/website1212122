@@ -154,7 +154,7 @@ export default function AdminPage() {
           <div style={{ display: 'flex', gap: '10px' }}>
             <button
               onClick={loadAdminData}
-              className="syn-btn syn-btn-secondary"
+              className="gta-pill-btn gta-pill-btn-secondary"
               style={{ padding: '8px 16px', fontSize: '0.85rem' }}
             >
               <RefreshCw size={14} />
@@ -162,7 +162,7 @@ export default function AdminPage() {
             </button>
             <Link
               to="/upload"
-              className="syn-btn syn-btn-primary"
+              className="gta-pill-btn gta-pill-btn-primary"
               style={{ padding: '8px 16px', fontSize: '0.85rem' }}
             >
               <Plus size={14} />
