@@ -1,7 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export default function Footer() {
+  const { isAdmin } = useAuth();
   return (
     <footer
       style={{
@@ -54,14 +56,16 @@ export default function Footer() {
           >
             Discord
           </a>
-          <Link
-            to="/admin"
-            style={{ color: '#64748b', textDecoration: 'none' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#cbd5e1')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#64748b')}
-          >
-            Admin
-          </Link>
+          {isAdmin && (
+            <Link
+              to="/admin"
+              style={{ color: '#64748b', textDecoration: 'none' }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = '#cbd5e1')}
+              onMouseLeave={(e) => (e.currentTarget.style.color = '#64748b')}
+            >
+              Admin
+            </Link>
+          )}
         </div>
       </div>
     </footer>

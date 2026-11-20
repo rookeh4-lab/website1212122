@@ -1,607 +1,509 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { auth, API_BASE } from '../utils/api';
+import React, { useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import {
+  LogIn,
+  UserPlus,
+  Mail,
+  Lock,
+  User,
+  AlertCircle,
+  CheckCircle2,
+  ArrowLeft,
+  ShieldCheck,
+  Eye,
+  EyeOff
+} from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
-export default function Login() {
-  const [searchParams] = useSearchParams();
+export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user, signIn, signUp, signOut, isAdmin } = useAuth();
 
-  // Mode: 'login' | 'register' | 'forgot' | 'key'
+  // Mode: 'login' | 'register'
   const [mode, setMode] = useState('login');
 
-  // Form states
+  // Form Fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [username, setUsername] = useState('');
-  const [licenseKey, setLicenseKey] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
+  // States
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState({ text: '', type: '' });
-  const [showOAuthHelp, setShowOAuthHelp] = useState(false); // kept for potential future use
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  // 1. Check OAuth Authorization Code callback or existing session on mount
-  useEffect(() => {
-    let active = true;
+  // Destination after login
+  const from = location.state?.from || (email.toLowerCase().trim() === 'rookeh4@gmail.com' ? '/admin' : '/');
 
-    const initAuth = async () => {
-      // Check password reset redirect
-      if (searchParams.get('reset') === 'true') {
-        setStatus({ text: 'Please enter your new password below.', type: 'info' });
-      }
-
-      // Check for any auth errors in URL params
-      const oauthError = searchParams.get('oauth_error');
-      if (oauthError) {
-        window.history.replaceState({}, document.title, window.location.pathname);
-        setStatus({
-          text: 'Authentication failed. Please try again.',
-          type: 'danger',
-        });
-        return;
-      }
-
-      // Strip any unexpected hash fragments from /login URL immediately
-      if (window.location.hash && window.location.hash.length > 1) {
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
-      }
-
-
-      // Check existing authenticated session
-      const existing = await auth.getProfile();
-      if (active && existing?.user) {
-        navigate('/dashboard', { replace: true });
-      }
-    };
-
-    initAuth();
-    return () => { active = false; };
-  }, [searchParams, navigate]);
-
-  // Handle Email + Password Sign In
-  const handleSignIn = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email || !password) {
-      setStatus({ text: 'Please fill in both email and password.', type: 'danger' });
+    setError('');
+    setSuccess('');
+
+    if (!email.trim() || !password) {
+      setError('Please provide both email and password.');
       return;
     }
 
-    setLoading(true);
-    setStatus({ text: '', type: '' });
-
-    try {
-      const data = await auth.signIn(email.trim(), password);
-      if (data?.user) {
-        setStatus({ text: 'Login successful! Redirecting...', type: 'success' });
-        setTimeout(() => navigate('/dashboard'), 400);
-      }
-    } catch (err) {
-      setStatus({
-        text: err.message || 'Login failed. Please verify your credentials.',
-        type: 'danger',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Handle User Registration
-  const handleSignUp = async (e) => {
-    e.preventDefault();
-    if (!email || !password) {
-      setStatus({ text: 'Please provide email and password.', type: 'danger' });
-      return;
-    }
     if (password.length < 6) {
-      setStatus({ text: 'Password must be at least 6 characters.', type: 'danger' });
+      setError('Password must be at least 6 characters long.');
       return;
     }
-    if (password !== confirmPassword) {
-      setStatus({ text: 'Passwords do not match.', type: 'danger' });
-      return;
-    }
-
-    setLoading(true);
-    setStatus({ text: '', type: '' });
 
     try {
-      const data = await auth.signUp(email.trim(), password, username.trim());
-      if (data?.session) {
-        setStatus({ text: 'Account created! Redirecting to dashboard...', type: 'success' });
-        setTimeout(() => navigate('/dashboard'), 500);
+      setLoading(true);
+
+      if (mode === 'login') {
+        await signIn(email, password);
+        setSuccess('Logged in successfully! Redirecting...');
+        setTimeout(() => {
+          if (email.toLowerCase().trim() === 'rookeh4@gmail.com') {
+            navigate('/admin', { replace: true });
+          } else {
+            navigate(from, { replace: true });
+          }
+        }, 500);
       } else {
-        setStatus({
-          text: 'Registration successful! Please check your email inbox to confirm your account.',
-          type: 'success',
-        });
+        await signUp(email, password, username);
+        setSuccess('Account created successfully! Redirecting...');
+        setTimeout(() => {
+          if (email.toLowerCase().trim() === 'rookeh4@gmail.com') {
+            navigate('/admin', { replace: true });
+          } else {
+            navigate('/', { replace: true });
+          }
+        }, 800);
       }
     } catch (err) {
-      setStatus({
-        text: err.message || 'Registration failed. Please try a different email.',
-        type: 'danger',
-      });
+      setError(err.message || 'Authentication failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle Password Reset Request
-  const handlePasswordReset = async (e) => {
-    e.preventDefault();
-    if (!email) {
-      setStatus({ text: 'Please enter your account email address.', type: 'danger' });
-      return;
-    }
-
-    setLoading(true);
-    setStatus({ text: '', type: '' });
-
-    try {
-      await auth.resetPassword(email.trim());
-      setStatus({
-        text: 'Password recovery email sent! Check your inbox for reset instructions.',
-        type: 'success',
-      });
-    } catch (err) {
-      setStatus({
-        text: err.message || 'Error sending password reset email.',
-        type: 'danger',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Handle License Key Quick Lookup / Login
-  const handleKeyLogin = async (e) => {
-    e.preventDefault();
-    const clean = licenseKey.trim().toUpperCase();
-    if (!clean) return;
-
-    setLoading(true);
-    setStatus({ text: '', type: '' });
-
-    try {
-      const res = await fetch(`${API_BASE}/auth/key-login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ license_key: clean }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success && data.token) {
-        auth.setToken(data.token);
-        if (data.user) {
-          localStorage.setItem('plutora_user', JSON.stringify(data.user));
-        }
-        navigate('/dashboard', { replace: true });
-      } else {
-        setStatus({ text: data.error || 'Invalid or inactive license key.', type: 'danger' });
-      }
-    } catch {
-      setStatus({ text: 'Could not connect to license validation server.', type: 'danger' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        minHeight: 'calc(100vh - 160px)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '40px 20px',
-      }}
-    >
-      <div
-        className="card login-card-responsive"
-        style={{
-          maxWidth: '460px',
-          width: '100%',
-          textAlign: 'center',
-          borderRadius: 'var(--radius-lg)',
-          padding: '36px',
-          background: 'var(--bg-card)',
-          border: '1px solid var(--border)',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)',
-        }}
-      >
-        <Link
-          to="/"
+  // If already logged in, show current profile card with quick switch/logout
+  if (user) {
+    return (
+      <div style={{ minHeight: '85vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 20px' }}>
+        <div
           style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '12px',
-            marginBottom: '20px',
-            textDecoration: 'none',
+            maxWidth: '440px',
+            width: '100%',
+            background: '#0d1527',
+            border: '1px solid #1e293b',
+            borderRadius: '16px',
+            padding: '32px 28px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+            textAlign: 'center',
           }}
         >
           <img
             src="/logo.png"
-            alt="5.55 Logo"
-            style={{ height: '40px', width: 'auto', borderRadius: '8px' }}
+            alt="Client Syndicate"
+            style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '14px',
+              objectFit: 'cover',
+              margin: '0 auto 16px auto',
+              border: '1px solid rgba(56, 189, 248, 0.4)',
+              boxShadow: '0 0 20px rgba(56, 189, 248, 0.25)',
+            }}
           />
-          <span style={{ fontSize: '24px', color: '#fff', fontWeight: 800 }}>5.55 Client</span>
-        </Link>
 
-        {/* Tab Selector */}
+          <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ffffff', marginBottom: '6px' }}>
+            Currently Signed In
+          </h2>
+
+          <p style={{ color: '#94a3b8', fontSize: '0.88rem', marginBottom: '20px' }}>
+            Logged in as <strong style={{ color: '#38bdf8' }}>{user.email}</strong>
+          </p>
+
+          {isAdmin ? (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '4px 12px',
+                borderRadius: '999px',
+                background: 'rgba(16, 185, 129, 0.15)',
+                border: '1px solid rgba(16, 185, 129, 0.4)',
+                color: '#10b981',
+                fontSize: '0.80rem',
+                fontWeight: '700',
+                marginBottom: '24px',
+              }}
+            >
+              <ShieldCheck size={14} />
+              <span>ADMINISTRATOR VERIFIED</span>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '4px 12px',
+                borderRadius: '999px',
+                background: 'rgba(56, 189, 248, 0.1)',
+                border: '1px solid rgba(56, 189, 248, 0.25)',
+                color: '#38bdf8',
+                fontSize: '0.80rem',
+                fontWeight: '600',
+                marginBottom: '24px',
+              }}
+            >
+              <User size={13} />
+              <span>Member Account</span>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {isAdmin && (
+              <button
+                onClick={() => navigate('/admin')}
+                className="btn-gold"
+                style={{ width: '100%', padding: '10px', fontSize: '0.90rem' }}
+              >
+                Go to Admin Panel
+              </button>
+            )}
+
+            <button
+              onClick={() => navigate('/')}
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '10px',
+                background: '#131e36',
+                border: '1px solid #1e2f4a',
+                color: '#ffffff',
+                fontWeight: '600',
+                fontSize: '0.88rem',
+                cursor: 'pointer',
+              }}
+            >
+              Return to Archive
+            </button>
+
+            <button
+              onClick={signOut}
+              style={{
+                width: '100%',
+                padding: '9px',
+                borderRadius: '10px',
+                background: 'transparent',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#ef4444',
+                fontWeight: '600',
+                fontSize: '0.84rem',
+                cursor: 'pointer',
+                marginTop: '6px',
+              }}
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ minHeight: '85vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '30px 20px 60px 20px' }}>
+      <div
+        style={{
+          maxWidth: '440px',
+          width: '100%',
+          background: '#0d1527',
+          border: '1px solid #1a2744',
+          borderRadius: '18px',
+          padding: '32px 30px',
+          boxShadow: '0 12px 40px rgba(0, 0, 0, 0.5)',
+        }}
+      >
+        {/* Back Link */}
+        <div style={{ marginBottom: '18px' }}>
+          <Link
+            to="/"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              color: '#94a3b8',
+              fontSize: '0.82rem',
+              textDecoration: 'none',
+            }}
+          >
+            <ArrowLeft size={13} />
+            <span>Back to Client Syndicate</span>
+          </Link>
+        </div>
+
+        {/* Brand Header */}
+        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+          <img
+            src="/logo.png"
+            alt="Client Syndicate"
+            style={{
+              width: '52px',
+              height: '52px',
+              borderRadius: '14px',
+              objectFit: 'cover',
+              margin: '0 auto 12px auto',
+              border: '1px solid rgba(56, 189, 248, 0.35)',
+              boxShadow: '0 0 18px rgba(56, 189, 248, 0.25)',
+            }}
+          />
+          <h1 style={{ fontSize: '1.45rem', fontWeight: '800', color: '#ffffff', letterSpacing: '-0.02em', marginBottom: '4px' }}>
+            Client Syndicate
+          </h1>
+          <p style={{ fontSize: '0.86rem', color: '#94a3b8' }}>
+            {mode === 'login' ? 'Sign in with your email account' : 'Create a new Syndicate member account'}
+          </p>
+        </div>
+
+        {/* Tab Switcher (Sign In / Register) */}
         <div
           style={{
             display: 'flex',
-            background: 'rgba(255, 255, 255, 0.04)',
-            padding: '4px',
             borderRadius: '10px',
-            marginBottom: '24px',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            background: '#090e1a',
+            border: '1px solid #1a2744',
+            padding: '4px',
+            marginBottom: '22px',
           }}
         >
           <button
             type="button"
             onClick={() => {
               setMode('login');
-              setStatus({ text: '', type: '' });
+              setError('');
+              setSuccess('');
             }}
             style={{
               flex: 1,
-              padding: '9px',
-              fontSize: '13px',
-              fontWeight: 700,
-              border: 'none',
+              padding: '8px 12px',
               borderRadius: '7px',
+              border: 'none',
+              background: mode === 'login' ? '#162238' : 'transparent',
+              color: mode === 'login' ? '#ffffff' : '#94a3b8',
+              fontSize: '0.86rem',
+              fontWeight: '600',
               cursor: 'pointer',
-              background: mode === 'login' ? 'var(--primary)' : 'transparent',
-              color: mode === 'login' ? '#fff' : 'var(--text-muted)',
-              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              transition: 'all 0.15s ease',
             }}
           >
-            Sign In
+            <LogIn size={14} />
+            <span>Sign In</span>
           </button>
+
           <button
             type="button"
             onClick={() => {
               setMode('register');
-              setStatus({ text: '', type: '' });
+              setError('');
+              setSuccess('');
             }}
             style={{
               flex: 1,
-              padding: '9px',
-              fontSize: '13px',
-              fontWeight: 700,
-              border: 'none',
+              padding: '8px 12px',
               borderRadius: '7px',
+              border: 'none',
+              background: mode === 'register' ? '#162238' : 'transparent',
+              color: mode === 'register' ? '#ffffff' : '#94a3b8',
+              fontSize: '0.86rem',
+              fontWeight: '600',
               cursor: 'pointer',
-              background: mode === 'register' ? 'var(--primary)' : 'transparent',
-              color: mode === 'register' ? '#fff' : 'var(--text-muted)',
-              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              transition: 'all 0.15s ease',
             }}
           >
-            Register
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode('key');
-              setStatus({ text: '', type: '' });
-            }}
-            style={{
-              flex: 1,
-              padding: '9px',
-              fontSize: '13px',
-              fontWeight: 700,
-              border: 'none',
-              borderRadius: '7px',
-              cursor: 'pointer',
-              background: mode === 'key' ? 'var(--primary)' : 'transparent',
-              color: mode === 'key' ? '#fff' : 'var(--text-muted)',
-              transition: 'all 0.2s',
-            }}
-          >
-            License Key
+            <UserPlus size={14} />
+            <span>Register</span>
           </button>
         </div>
 
-        {/* 1. SIGN IN FORM */}
-        {mode === 'login' && (
-          <form onSubmit={handleSignIn}>
-            <h2 style={{ fontSize: '22px', marginBottom: '6px', color: '#fff', fontWeight: 800 }}>
-              Welcome Back
-            </h2>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '22px' }}>
-              Sign in to manage your Java and C++ client entitlements.
-            </p>
-
-            <div className="form-group" style={{ textAlign: 'left', marginBottom: '14px' }}>
-              <label className="form-label" style={{ fontSize: '11.5px', textTransform: 'uppercase' }}>
-                Email Address
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="form-control"
-                placeholder="name@example.com"
-                required
-                style={{ fontSize: '14px', padding: '11px 14px' }}
-              />
-            </div>
-
-            <div className="form-group" style={{ textAlign: 'left', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <label className="form-label" style={{ fontSize: '11.5px', textTransform: 'uppercase' }}>
-                  Password
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMode('forgot');
-                    setStatus({ text: '', type: '' });
-                  }}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#818cf8',
-                    fontSize: '11.5px',
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
-                >
-                  Forgot password?
-                </button>
-              </div>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="form-control"
-                placeholder="••••••••"
-                required
-                style={{ fontSize: '14px', padding: '11px 14px' }}
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn btn-primary"
-              style={{
-                width: '100%',
-                padding: '12px',
-                fontSize: '14px',
-                borderRadius: '10px',
-                marginTop: '16px',
-                fontWeight: 700,
-              }}
-            >
-              {loading ? 'Authenticating...' : 'Sign In →'}
-            </button>
-          </form>
-        )}
-
-        {/* 2. REGISTER FORM */}
-        {mode === 'register' && (
-          <form onSubmit={handleSignUp}>
-            <h2 style={{ fontSize: '22px', marginBottom: '6px', color: '#fff', fontWeight: 800 }}>
-              Create Account
-            </h2>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '22px' }}>
-              Create your permanent 5.55 Client account.
-            </p>
-
-            <div className="form-group" style={{ textAlign: 'left', marginBottom: '14px' }}>
-              <label className="form-label" style={{ fontSize: '11.5px', textTransform: 'uppercase' }}>
-                Username
-              </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="form-control"
-                placeholder="Choose username"
-                required
-                style={{ fontSize: '14px', padding: '11px 14px' }}
-              />
-            </div>
-
-            <div className="form-group" style={{ textAlign: 'left', marginBottom: '14px' }}>
-              <label className="form-label" style={{ fontSize: '11.5px', textTransform: 'uppercase' }}>
-                Email Address
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="form-control"
-                placeholder="name@example.com"
-                required
-                style={{ fontSize: '14px', padding: '11px 14px' }}
-              />
-            </div>
-
-            <div className="form-group" style={{ textAlign: 'left', marginBottom: '14px' }}>
-              <label className="form-label" style={{ fontSize: '11.5px', textTransform: 'uppercase' }}>
-                Password (min 6 chars)
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="form-control"
-                placeholder="••••••••"
-                required
-                style={{ fontSize: '14px', padding: '11px 14px' }}
-              />
-            </div>
-
-            <div className="form-group" style={{ textAlign: 'left', marginBottom: '16px' }}>
-              <label className="form-label" style={{ fontSize: '11.5px', textTransform: 'uppercase' }}>
-                Confirm Password
-              </label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="form-control"
-                placeholder="••••••••"
-                required
-                style={{ fontSize: '14px', padding: '11px 14px' }}
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn btn-primary"
-              style={{
-                width: '100%',
-                padding: '12px',
-                fontSize: '14px',
-                borderRadius: '10px',
-                fontWeight: 700,
-              }}
-            >
-              {loading ? 'Creating Account...' : 'Register Now →'}
-            </button>
-          </form>
-        )}
-
-        {/* 3. FORGOT PASSWORD FORM */}
-        {mode === 'forgot' && (
-          <form onSubmit={handlePasswordReset}>
-            <h2 style={{ fontSize: '22px', marginBottom: '6px', color: '#fff', fontWeight: 800 }}>
-              Reset Password
-            </h2>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '22px' }}>
-              Enter your email and we'll send you a password recovery link.
-            </p>
-
-            <div className="form-group" style={{ textAlign: 'left', marginBottom: '16px' }}>
-              <label className="form-label" style={{ fontSize: '11.5px', textTransform: 'uppercase' }}>
-                Account Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="form-control"
-                placeholder="name@example.com"
-                required
-                style={{ fontSize: '14px', padding: '11px 14px' }}
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn btn-primary"
-              style={{
-                width: '100%',
-                padding: '12px',
-                fontSize: '14px',
-                borderRadius: '10px',
-                fontWeight: 700,
-                marginBottom: '10px',
-              }}
-            >
-              {loading ? 'Sending link...' : 'Send Recovery Link →'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setMode('login');
-                setStatus({ text: '', type: '' });
-              }}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#818cf8',
-                fontSize: '13px',
-                cursor: 'pointer',
-              }}
-            >
-              ← Back to Sign In
-            </button>
-          </form>
-        )}
-
-        {/* 4. LICENSE KEY DIRECT FORM */}
-        {mode === 'key' && (
-          <form onSubmit={handleKeyLogin}>
-            <h2 style={{ fontSize: '22px', marginBottom: '6px', color: '#fff', fontWeight: 800 }}>
-              License Key
-            </h2>
-              <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '22px' }}>
-              Enter your product license key for instant dashboard access.
-            </p>
-
-            <div className="form-group" style={{ textAlign: 'left', marginBottom: '16px' }}>
-              <label className="form-label" style={{ fontSize: '11.5px', textTransform: 'uppercase' }}>
-                Product License Key
-              </label>
-              <input
-                type="text"
-                value={licenseKey}
-                onChange={(e) => setLicenseKey(e.target.value)}
-                className="form-control"
-                placeholder="555C-XXXX-XXXX-XXXX"
-                required
-                style={{ fontSize: '14px', padding: '11px 14px', letterSpacing: '0.05em' }}
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn btn-primary"
-              style={{
-                width: '100%',
-                padding: '12px',
-                fontSize: '14px',
-                borderRadius: '10px',
-                fontWeight: 700,
-              }}
-            >
-              {loading ? 'Verifying...' : 'Authorize Session →'}
-            </button>
-          </form>
-        )}
-
-
-        {/* Status display */}
-        {status.text && (
+        {/* Feedback Messages */}
+        {error && (
           <div
             style={{
-              marginTop: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
               padding: '10px 14px',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: 500,
-              background:
-                status.type === 'danger'
-                  ? 'rgba(239, 68, 68, 0.12)'
-                  : status.type === 'info'
-                  ? 'rgba(56, 189, 248, 0.12)'
-                  : 'rgba(34, 197, 94, 0.12)',
-              border: `1px solid ${
-                status.type === 'danger'
-                  ? 'rgba(239, 68, 68, 0.3)'
-                  : status.type === 'info'
-                  ? 'rgba(56, 189, 248, 0.3)'
-                  : 'rgba(34, 197, 94, 0.3)'
-              }`,
-              color:
-                status.type === 'danger'
-                  ? '#f87171'
-                  : status.type === 'info'
-                  ? '#38bdf8'
-                  : '#4ade80',
+              borderRadius: '10px',
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              color: '#f87171',
+              fontSize: '0.84rem',
+              marginBottom: '16px',
             }}
           >
-            {status.text}
+            <AlertCircle size={15} style={{ flexShrink: 0 }} />
+            <span>{error}</span>
           </div>
         )}
+
+        {success && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 14px',
+              borderRadius: '10px',
+              background: 'rgba(16, 185, 129, 0.1)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              color: '#34d399',
+              fontSize: '0.84rem',
+              marginBottom: '16px',
+            }}
+          >
+            <CheckCircle2 size={15} style={{ flexShrink: 0 }} />
+            <span>{success}</span>
+          </div>
+        )}
+
+        {/* Auth Form */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {mode === 'register' && (
+            <div>
+              <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '600', color: '#94a3b8', marginBottom: '6px' }}>
+                Username
+              </label>
+              <div style={{ position: 'relative' }}>
+                <User size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="e.g. Dexter"
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px 10px 36px',
+                    borderRadius: '8px',
+                    background: '#090e1a',
+                    border: '1px solid #1a2744',
+                    color: '#ffffff',
+                    fontSize: '0.88rem',
+                    outline: 'none',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '600', color: '#94a3b8', marginBottom: '6px' }}>
+              Email Address
+            </label>
+            <div style={{ position: 'relative' }}>
+              <Mail size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@example.com"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px 10px 36px',
+                  borderRadius: '8px',
+                  background: '#090e1a',
+                  border: '1px solid #1a2744',
+                  color: '#ffffff',
+                  fontSize: '0.88rem',
+                  outline: 'none',
+                }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: '600', color: '#94a3b8', marginBottom: '6px' }}>
+              Password
+            </label>
+            <div style={{ position: 'relative' }}>
+              <Lock size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                style={{
+                  width: '100%',
+                  padding: '10px 38px 10px 36px',
+                  borderRadius: '8px',
+                  background: '#090e1a',
+                  border: '1px solid #1a2744',
+                  color: '#ffffff',
+                  fontSize: '0.88rem',
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: '#64748b',
+                  cursor: 'pointer',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn-gold"
+            style={{
+              width: '100%',
+              padding: '11px',
+              fontSize: '0.92rem',
+              fontWeight: '700',
+              marginTop: '8px',
+            }}
+          >
+            {loading ? 'Please wait...' : mode === 'login' ? 'Sign In to Syndicate' : 'Create Account'}
+          </button>
+        </form>
+
+        {/* Admin Note */}
+        <div
+          style={{
+            marginTop: '20px',
+            paddingTop: '16px',
+            borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+            fontSize: '0.78rem',
+            color: '#64748b',
+            textAlign: 'center',
+          }}
+        >
+          Administrator access is restricted to <strong>rookeh4@gmail.com</strong>
+        </div>
       </div>
     </div>
   );

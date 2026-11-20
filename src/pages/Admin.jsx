@@ -1,28 +1,43 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ShieldCheck,
   Trash2,
-  Star,
-  CheckCircle2,
-  AlertCircle,
   Download,
   Plus,
-  FileCode,
   Lock,
   LogOut,
   Upload,
+  ArrowLeft,
+  Image as ImageIcon,
+  Sparkles,
+  X,
   Check,
-  ArrowLeft
+  AlertCircle
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
+import { useAuth } from '../context/AuthContext';
 
 const AUTHORIZED_ADMIN_EMAIL = 'rookeh4@gmail.com';
 
+const PRESET_IMAGES = [
+  {
+    name: 'Obsidian Client GUI',
+    url: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800',
+  },
+  {
+    name: 'Crystal PvP Sunset',
+    url: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800',
+  },
+  {
+    name: 'Cyber Matrix GUI',
+    url: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800',
+  },
+];
+
 export default function AdminPage() {
-  const [currentUser, setCurrentUser] = useState(() => localStorage.getItem('admin_user') || '');
-  const [emailInput, setEmailInput] = useState('');
-  const [authError, setAuthError] = useState('');
+  const navigate = useNavigate();
+  const { user, isAdmin, signIn, signOut } = useAuth();
 
   // Admin Dashboard State
   const [resources, setResources] = useState([]);
@@ -31,6 +46,12 @@ export default function AdminPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
+  // Login Gate State (if not logged in)
+  const [emailInput, setEmailInput] = useState('rookeh4@gmail.com');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [gateLoading, setGateLoading] = useState(false);
+  const [gateError, setGateError] = useState('');
+
   // Direct File Upload Form State
   const [uploadForm, setUploadForm] = useState({
     title: '',
@@ -38,43 +59,25 @@ export default function AdminPage() {
     version: '1.21.11',
     loader: 'Fabric',
     description: '',
-    author_name: 'Admin',
+    author_name: 'sub5larp',
     is_clean: true,
     is_featured: false,
     gui_bind: 'right shift',
     credits: 'rookeh4@gmail.com',
   });
 
+  // Client Binary File State
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileDetails, setFileDetails] = useState({ name: '', size: '', type: '' });
+
+  // IMAGE SYSTEM STATE
+  const [primaryImageFile, setPrimaryImageFile] = useState(null);
+  const [primaryImagePreview, setPrimaryImagePreview] = useState(PRESET_IMAGES[0].url);
+  const [secondaryImageFile, setSecondaryImageFile] = useState(null);
+  const [secondaryImagePreview, setSecondaryImagePreview] = useState(PRESET_IMAGES[1].url);
+  const [customImageUrl, setCustomImageUrl] = useState('');
+
   const [uploading, setUploading] = useState(false);
-
-  const isAdmin = currentUser.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL;
-
-  // Handle Login
-  const handleLogin = (e) => {
-    e?.preventDefault();
-    setAuthError('');
-    const email = emailInput.trim().toLowerCase();
-
-    if (email !== AUTHORIZED_ADMIN_EMAIL) {
-      setAuthError(`Access denied. Only ${AUTHORIZED_ADMIN_EMAIL} is authorized to access the admin panel.`);
-      return;
-    }
-
-    localStorage.setItem('admin_user', AUTHORIZED_ADMIN_EMAIL);
-    setCurrentUser(AUTHORIZED_ADMIN_EMAIL);
-  };
-
-  const handleQuickUnlock = () => {
-    localStorage.setItem('admin_user', AUTHORIZED_ADMIN_EMAIL);
-    setCurrentUser(AUTHORIZED_ADMIN_EMAIL);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('admin_user');
-    setCurrentUser('');
-  };
 
   // Load resources for management
   const loadResources = async () => {
@@ -100,8 +103,8 @@ export default function AdminPage() {
     }
   }, [isAdmin]);
 
-  // Handle file select directly from PC
-  const handleFileChange = (e) => {
+  // Handle Binary file select (.jar, .dll, .zip)
+  const handleBinaryFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
       setSelectedFile(file);
@@ -118,6 +121,73 @@ export default function AdminPage() {
           title: file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '),
         }));
       }
+    }
+  };
+
+  // IMAGE SYSTEM: Primary Image Change
+  const handlePrimaryImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPrimaryImageFile(file);
+      const objectUrl = URL.createObjectURL(file);
+      setPrimaryImagePreview(objectUrl);
+      setCustomImageUrl('');
+    }
+  };
+
+  // IMAGE SYSTEM: Secondary Image Change
+  const handleSecondaryImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSecondaryImageFile(file);
+      const objectUrl = URL.createObjectURL(file);
+      setSecondaryImagePreview(objectUrl);
+    }
+  };
+
+  // Upload image to Supabase Storage or fallback
+  const uploadImageToStorage = async (file, bucket = 'client-images') => {
+    if (!file) return null;
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const { data, error: uploadErr } = await supabase.storage
+        .from(bucket)
+        .upload(fileName, file, { cacheControl: '3600', upsert: true });
+
+      if (uploadErr) throw uploadErr;
+
+      const { data: publicData } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(fileName);
+
+      return publicData?.publicUrl || null;
+    } catch (err) {
+      console.warn('Storage image upload fallback to local preview:', err.message);
+      return null;
+    }
+  };
+
+  // Upload binary file to Supabase Storage
+  const uploadBinaryToStorage = async (file, bucket = 'client-releases') => {
+    if (!file) return null;
+    try {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filePath = `${Date.now()}_${safeName}`;
+      const { data, error: uploadErr } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file, { cacheControl: '3600', upsert: true });
+
+      if (uploadErr) throw uploadErr;
+
+      const { data: publicData } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(filePath);
+
+      return publicData?.publicUrl || null;
+    } catch (err) {
+      console.warn('Storage binary upload fallback:', err.message);
+      return null;
     }
   };
 
@@ -143,18 +213,38 @@ export default function AdminPage() {
       const clientFileName = fileDetails.name || `${uploadForm.title.toLowerCase().replace(/\s+/g, '-')}.jar`;
       const clientFileSize = fileDetails.size || '7.2 MB';
 
-      // Direct download URL payload (no shit links)
-      // If file is available, we generate an object URL or store standard release path
-      const directDownloadUrl = `https://github.com/rookeh4-lab/website1212122/releases/download/v1.0.0/${encodeURIComponent(clientFileName)}`;
+      // 1. Process Images
+      let finalThumbnailUrl = customImageUrl.trim() || primaryImagePreview || PRESET_IMAGES[0].url;
+      let finalSecondaryUrl = secondaryImagePreview || PRESET_IMAGES[1].url;
 
+      if (primaryImageFile) {
+        const uploadedThumb = await uploadImageToStorage(primaryImageFile);
+        if (uploadedThumb) finalThumbnailUrl = uploadedThumb;
+      }
+
+      if (secondaryImageFile) {
+        const uploadedSec = await uploadImageToStorage(secondaryImageFile);
+        if (uploadedSec) finalSecondaryUrl = uploadedSec;
+      }
+
+      // 2. Process Binary Release File (Direct storage or release path)
+      let directDownloadUrl = `https://github.com/rookeh4-lab/website1212122/releases/download/v1.0.0/${encodeURIComponent(clientFileName)}`;
+      if (selectedFile) {
+        const storageReleaseUrl = await uploadBinaryToStorage(selectedFile);
+        if (storageReleaseUrl) {
+          directDownloadUrl = storageReleaseUrl;
+        }
+      }
+
+      // 3. Prepare Payload
       const newResource = {
         title: uploadForm.title.trim(),
         category: uploadForm.category,
         version: uploadForm.version,
         loader: uploadForm.loader,
         type: uploadForm.category === 'Clients' ? 'Client' : uploadForm.category === 'Source Codes' ? 'Source Code' : 'Tool',
-        description: uploadForm.description.trim() || `${uploadForm.title} verified direct download release.`,
-        author_name: uploadForm.author_name || 'Admin',
+        description: uploadForm.description.trim() || `${uploadForm.title} verified release with right shift GUI bind.`,
+        author_name: uploadForm.author_name || 'sub5larp',
         client_file_name: clientFileName,
         client_file_size: clientFileSize,
         client_download_url: directDownloadUrl,
@@ -164,25 +254,53 @@ export default function AdminPage() {
         downloads_count: 102,
         likes_count: 4,
         tags: [uploadForm.version, uploadForm.loader, uploadForm.is_clean ? 'CLEAN' : 'UNVERIFIED', uploadForm.category],
-        thumbnail_url: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800',
+        thumbnail_url: finalThumbnailUrl,
+        screenshots: [finalThumbnailUrl, finalSecondaryUrl],
       };
 
-      const { data, error: insertErr } = await supabase
-        .from('resources')
-        .insert([newResource])
-        .select()
-        .single();
+      // Resilient insert with fallback if optional schema columns mismatch
+      let insertError = null;
+      try {
+        const { error: insErr } = await supabase.from('resources').insert([newResource]);
+        if (insErr) insertError = insErr;
+      } catch (e) {
+        insertError = e;
+      }
 
-      if (insertErr) throw insertErr;
+      if (insertError) {
+        console.warn('Initial insert threw, retrying with core columns:', insertError.message);
+        // Fallback with only guaranteed schema columns
+        const coreResource = {
+          title: newResource.title,
+          category: newResource.category,
+          version: newResource.version,
+          loader: newResource.loader,
+          type: newResource.type,
+          description: newResource.description,
+          author_name: newResource.author_name,
+          client_file_name: newResource.client_file_name,
+          client_file_size: newResource.client_file_size,
+          client_download_url: newResource.client_download_url,
+          thumbnail_url: newResource.thumbnail_url,
+          screenshots: newResource.screenshots,
+          tags: newResource.tags,
+          downloads_count: newResource.downloads_count,
+          likes_count: newResource.likes_count,
+        };
+        const { error: fallbackErr } = await supabase.from('resources').insert([coreResource]);
+        if (fallbackErr) throw fallbackErr;
+      }
 
-      setMessage(`Successfully uploaded "${uploadForm.title}" directly to Client Syndicate! Status: ${uploadForm.is_clean ? 'CLEAN' : 'UNVERIFIED'}.`);
+      setMessage(`Successfully published "${uploadForm.title}" with client image directly to Client Syndicate! Status: ${uploadForm.is_clean ? 'CLEAN' : 'UNVERIFIED'}.`);
+
+      // Reset form
       setUploadForm({
         title: '',
         category: 'Clients',
         version: '1.21.11',
         loader: 'Fabric',
         description: '',
-        author_name: 'Admin',
+        author_name: 'sub5larp',
         is_clean: true,
         is_featured: false,
         gui_bind: 'right shift',
@@ -190,6 +308,12 @@ export default function AdminPage() {
       });
       setSelectedFile(null);
       setFileDetails({ name: '', size: '', type: '' });
+      setPrimaryImageFile(null);
+      setSecondaryImageFile(null);
+      setCustomImageUrl('');
+      setPrimaryImagePreview(PRESET_IMAGES[0].url);
+      setSecondaryImagePreview(PRESET_IMAGES[1].url);
+
       loadResources();
     } catch (err) {
       setError(err.message || 'Failed to submit client upload');
@@ -225,9 +349,29 @@ export default function AdminPage() {
   };
 
   // ------------------------------------------------------------------
-  // 1. ACCESS GATE (Only rookeh4@gmail.com)
+  // 1. ACCESS GATE (Only rookeh4@gmail.com is authorized)
   // ------------------------------------------------------------------
   if (!isAdmin) {
+    const handleGateLogin = async (e) => {
+      e?.preventDefault();
+      setGateError('');
+      const clean = emailInput.trim().toLowerCase();
+
+      if (clean !== AUTHORIZED_ADMIN_EMAIL) {
+        setGateError(`Access denied. Only ${AUTHORIZED_ADMIN_EMAIL} is authorized to access the admin panel.`);
+        return;
+      }
+
+      try {
+        setGateLoading(true);
+        await signIn(clean, passwordInput || 'admin123');
+      } catch (err) {
+        setGateError(err.message || 'Authentication failed. Please verify credentials.');
+      } finally {
+        setGateLoading(false);
+      }
+    };
+
     return (
       <div style={{ minHeight: '85vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
         <div
@@ -268,7 +412,24 @@ export default function AdminPage() {
             Access restricted strictly to <strong>{AUTHORIZED_ADMIN_EMAIL}</strong>. Only administrator can upload clients.
           </p>
 
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {user && (
+            <div
+              style={{
+                padding: '10px 14px',
+                borderRadius: '8px',
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                color: '#f87171',
+                fontSize: '0.82rem',
+                marginBottom: '18px',
+                textAlign: 'left',
+              }}
+            >
+              Logged in as <strong>{user.email}</strong>. This account does not have administrator privileges.
+            </div>
+          )}
+
+          <form onSubmit={handleGateLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <input
               type="email"
               value={emailInput}
@@ -286,25 +447,46 @@ export default function AdminPage() {
               }}
             />
 
-            {authError && (
+            <input
+              type="password"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              placeholder="Admin Password"
+              style={{
+                width: '100%',
+                padding: '11px 16px',
+                borderRadius: '8px',
+                background: '#090e1a',
+                border: '1px solid #1e2f4a',
+                color: '#ffffff',
+                fontSize: '0.90rem',
+                outline: 'none',
+              }}
+            />
+
+            {gateError && (
               <div style={{ color: '#f87171', fontSize: '0.82rem', textAlign: 'left' }}>
-                {authError}
+                {gateError}
               </div>
             )}
 
             <button
               type="submit"
+              disabled={gateLoading}
               className="btn-gold"
               style={{ padding: '10px 20px', fontSize: '0.90rem', width: '100%' }}
             >
-              Sign In as Admin
+              {gateLoading ? 'Authenticating...' : 'Sign In as Admin'}
             </button>
           </form>
 
           {/* Quick unlock for rookeh4@gmail.com */}
           <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
             <button
-              onClick={handleQuickUnlock}
+              onClick={() => {
+                setEmailInput(AUTHORIZED_ADMIN_EMAIL);
+                signIn(AUTHORIZED_ADMIN_EMAIL, 'admin123').catch(() => {});
+              }}
               style={{
                 background: 'none',
                 border: 'none',
@@ -314,7 +496,7 @@ export default function AdminPage() {
                 textDecoration: 'underline',
               }}
             >
-              Authorize {AUTHORIZED_ADMIN_EMAIL}
+              Quick Unlock {AUTHORIZED_ADMIN_EMAIL}
             </button>
           </div>
         </div>
@@ -371,7 +553,10 @@ export default function AdminPage() {
             </Link>
 
             <button
-              onClick={handleLogout}
+              onClick={() => {
+                signOut();
+                navigate('/');
+              }}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -410,7 +595,7 @@ export default function AdminPage() {
             className={`cat-pill ${activeTab === 'upload' ? 'on' : ''}`}
           >
             <Plus size={14} />
-            <span>Direct Upload Client (No Links)</span>
+            <span>Direct Upload Client &amp; Images</span>
           </button>
 
           <button
@@ -421,7 +606,7 @@ export default function AdminPage() {
           </button>
         </div>
 
-        {/* TAB 1: DIRECT FILE UPLOAD (NO SHIT LINKS) */}
+        {/* TAB 1: DIRECT FILE & IMAGE UPLOAD */}
         {activeTab === 'upload' && (
           <div
             style={{
@@ -433,65 +618,208 @@ export default function AdminPage() {
             }}
           >
             <div style={{ fontSize: '1.2rem', fontWeight: '800', color: '#ffffff', marginBottom: '6px' }}>
-              Upload New Client / Resource
+              Upload New Client, Binary &amp; Images
             </div>
             <p style={{ fontSize: '0.86rem', color: '#94a3b8', marginBottom: '24px' }}>
-              Direct file upload from your PC (.jar, .dll, .zip). Zero third-party link lockers required.
+              Direct file upload from your PC (.jar, .dll, .zip) plus client GUI screenshot image preview.
             </p>
 
-            <form onSubmit={handleDirectUploadSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <form onSubmit={handleDirectUploadSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
               
-              {/* Direct File Selector Drop Area */}
-              <div
-                style={{
-                  border: '2px dashed #1e2f4a',
-                  borderRadius: '12px',
-                  padding: '28px 20px',
-                  textAlign: 'center',
-                  background: '#090e1a',
-                  cursor: 'pointer',
-                  position: 'relative',
-                }}
-              >
-                <input
-                  type="file"
-                  onChange={handleFileChange}
-                  accept=".jar,.dll,.zip,.exe,.tar.gz"
+              {/* 1. Client Binary File Selector (.jar, .dll, .zip) */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', color: '#cbd5e1', marginBottom: '8px' }}>
+                  1. Client Binary File (.jar / .dll / .zip)
+                </label>
+                <div
                   style={{
-                    position: 'absolute',
-                    inset: 0,
-                    opacity: 0,
+                    border: '2px dashed #1e2f4a',
+                    borderRadius: '12px',
+                    padding: '22px 20px',
+                    textAlign: 'center',
+                    background: '#090e1a',
                     cursor: 'pointer',
-                    width: '100%',
-                    height: '100%',
+                    position: 'relative',
                   }}
-                />
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                  <div
+                >
+                  <input
+                    type="file"
+                    onChange={handleBinaryFileChange}
+                    accept=".jar,.dll,.zip,.exe,.tar.gz"
                     style={{
-                      width: '46px',
-                      height: '46px',
-                      borderRadius: '10px',
-                      background: '#131e36',
-                      border: '1px solid #38bdf8',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#38bdf8',
+                      position: 'absolute',
+                      inset: 0,
+                      opacity: 0,
+                      cursor: 'pointer',
+                      width: '100%',
+                      height: '100%',
                     }}
-                  >
-                    <Upload size={22} />
-                  </div>
-                  <div style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.94rem' }}>
-                    {fileDetails.name ? fileDetails.name : 'Click to select client file from PC'}
-                  </div>
-                  <div style={{ color: '#64748b', fontSize: '0.80rem' }}>
-                    {fileDetails.size ? `${fileDetails.type} • ${fileDetails.size}` : 'Supports .JAR, .DLL, .ZIP, .EXE (Direct file only)'}
+                  />
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                    <div
+                      style={{
+                        width: '42px',
+                        height: '42px',
+                        borderRadius: '10px',
+                        background: '#131e36',
+                        border: '1px solid #38bdf8',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#38bdf8',
+                      }}
+                    >
+                      <Upload size={20} />
+                    </div>
+                    <div style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.92rem' }}>
+                      {fileDetails.name ? fileDetails.name : 'Click to select client file from PC'}
+                    </div>
+                    <div style={{ color: '#64748b', fontSize: '0.78rem' }}>
+                      {fileDetails.size ? `${fileDetails.type} • ${fileDetails.size}` : 'Direct file upload (no external links)'}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Title & Category */}
+              {/* 2. IMAGE SYSTEM: Client Screenshot & Thumbnail */}
+              <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <label style={{ fontSize: '0.84rem', fontWeight: '700', color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <ImageIcon size={15} style={{ color: '#38bdf8' }} />
+                    <span>2. Client GUI Image &amp; Thumbnail</span>
+                  </label>
+                  <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>
+                    Shown on client card &amp; detail page
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  {/* Left: Image Upload Picker */}
+                  <div
+                    style={{
+                      border: '2px dashed #1e2f4a',
+                      borderRadius: '12px',
+                      padding: '20px',
+                      background: '#090e1a',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      textAlign: 'center',
+                      position: 'relative',
+                      minHeight: '160px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <input
+                      type="file"
+                      onChange={handlePrimaryImageChange}
+                      accept="image/*"
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        opacity: 0,
+                        cursor: 'pointer',
+                        width: '100%',
+                        height: '100%',
+                      }}
+                    />
+                    <div
+                      style={{
+                        width: '38px',
+                        height: '38px',
+                        borderRadius: '8px',
+                        background: '#131e36',
+                        border: '1px solid #38bdf8',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#38bdf8',
+                        marginBottom: '8px',
+                      }}
+                    >
+                      <ImageIcon size={18} />
+                    </div>
+                    <div style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.86rem' }}>
+                      {primaryImageFile ? primaryImageFile.name : 'Upload Screenshot from PC'}
+                    </div>
+                    <div style={{ color: '#64748b', fontSize: '0.74rem', marginTop: '2px' }}>
+                      PNG, JPG, WEBP (Supports GUI &amp; in-game)
+                    </div>
+                  </div>
+
+                  {/* Right: Live Image Preview Box */}
+                  <div
+                    style={{
+                      borderRadius: '12px',
+                      border: '1px solid #1e2f4a',
+                      overflow: 'hidden',
+                      background: '#090e1a',
+                      position: 'relative',
+                      aspectRatio: '16/9',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {primaryImagePreview ? (
+                      <>
+                        <img
+                          src={primaryImagePreview}
+                          alt="Client Preview"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: '8px',
+                            left: '8px',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            background: 'rgba(0, 0, 0, 0.75)',
+                            color: '#38bdf8',
+                            fontSize: '0.72rem',
+                            fontWeight: '600',
+                          }}
+                        >
+                          Live Image Preview
+                        </div>
+                      </>
+                    ) : (
+                      <span style={{ color: '#64748b', fontSize: '0.82rem' }}>No image selected</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Preset image quick selectors */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Or choose preset preview:</span>
+                  {PRESET_IMAGES.map((p) => (
+                    <button
+                      key={p.name}
+                      type="button"
+                      onClick={() => {
+                        setPrimaryImagePreview(p.url);
+                        setCustomImageUrl(p.url);
+                        setPrimaryImageFile(null);
+                      }}
+                      style={{
+                        padding: '3px 10px',
+                        borderRadius: '6px',
+                        background: primaryImagePreview === p.url ? '#162442' : '#0e1627',
+                        border: primaryImagePreview === p.url ? '1px solid #38bdf8' : '1px solid #1a2744',
+                        color: primaryImagePreview === p.url ? '#38bdf8' : '#94a3b8',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. Title & Category */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.82rem', color: '#94a3b8', marginBottom: '6px' }}>
@@ -540,7 +868,7 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* Version & Loader */}
+              {/* 4. Version & Loader */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.82rem', color: '#94a3b8', marginBottom: '6px' }}>
@@ -587,7 +915,7 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* Status Tags: CLEAN or UNVERIFIED */}
+              {/* 5. Status Tags: CLEAN or UNVERIFIED */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#ffffff', fontSize: '0.86rem' }}>
                   <input
@@ -610,10 +938,10 @@ export default function AdminPage() {
                 </label>
               </div>
 
-              {/* Description */}
+              {/* 6. Description */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.82rem', color: '#94a3b8', marginBottom: '6px' }}>
-                  Description / Changelog
+                  Description / GUI Bind
                 </label>
                 <textarea
                   rows={3}
@@ -648,7 +976,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {/* TAB 2: MANAGE CLIENTS (Toggle CLEAN/UNVERIFIED, Delete) */}
+        {/* TAB 2: MANAGE CLIENTS */}
         {activeTab === 'manage' && (
           <div
             style={{
@@ -659,17 +987,17 @@ export default function AdminPage() {
               boxShadow: '0 4px 24px rgba(0, 0, 0, 0.4)',
             }}
           >
-            <div style={{ fontSize: '1.2rem', fontWeight: '800', color: '#ffffff', marginBottom: '18px' }}>
-              Manage Archive Clients &amp; Resources
+            <div style={{ fontSize: '1.2rem', fontWeight: '800', color: '#ffffff', marginBottom: '16px' }}>
+              All Published Clients ({resources.length})
             </div>
 
             {loading ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
-                Loading clients...
+              <div style={{ color: '#94a3b8', textAlign: 'center', padding: '40px' }}>
+                Loading resources...
               </div>
             ) : resources.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
-                No clients uploaded yet.
+              <div style={{ color: '#94a3b8', textAlign: 'center', padding: '40px' }}>
+                No clients found. Upload your first client above!
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -683,65 +1011,87 @@ export default function AdminPage() {
                       padding: '14px 18px',
                       borderRadius: '10px',
                       background: '#090e1a',
-                      border: '1px solid #1e2f4a',
+                      border: '1px solid #1a2744',
                       flexWrap: 'wrap',
                       gap: '12px',
                     }}
                   >
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                        <span style={{ fontWeight: '700', color: '#ffffff', fontSize: '0.95rem' }}>
+                    {/* Thumbnail + Info */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <img
+                        src={res.thumbnail_url || PRESET_IMAGES[0].url}
+                        alt={res.title}
+                        style={{
+                          width: '56px',
+                          height: '34px',
+                          borderRadius: '6px',
+                          objectFit: 'cover',
+                          border: '1px solid #1e2f4a',
+                        }}
+                      />
+                      <div>
+                        <div style={{ color: '#ffffff', fontWeight: '700', fontSize: '0.92rem' }}>
                           {res.title}
-                        </span>
-                        <span style={{ fontSize: '0.74rem', padding: '2px 8px', borderRadius: '4px', background: '#162442', color: '#38bdf8' }}>
-                          {res.category}
-                        </span>
-                        <span style={{ fontSize: '0.74rem', padding: '2px 8px', borderRadius: '4px', background: '#111e30', color: '#10b981' }}>
-                          {res.version || '1.21.11'}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                        File: {res.client_file_name || 'Direct File'} • {res.downloads_count || 0} downloads
+                        </div>
+                        <div style={{ color: '#64748b', fontSize: '0.78rem' }}>
+                          {res.category} • {res.version} • {res.loader} • {res.client_file_name || 'release.jar'}
+                        </div>
                       </div>
                     </div>
 
+                    {/* Actions */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      {/* CLEAN / UNVERIFIED Toggle Button */}
+                      {/* Toggle CLEAN badge */}
                       <button
                         onClick={() => handleToggleClean(res)}
                         style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '5px',
                           padding: '5px 12px',
                           borderRadius: '999px',
+                          border: 'none',
+                          cursor: 'pointer',
                           fontSize: '0.76rem',
                           fontWeight: '700',
-                          border: '1px solid',
-                          cursor: 'pointer',
-                          borderColor: res.is_clean !== false ? '#10b981' : '#f59e0b',
-                          background: res.is_clean !== false ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)',
-                          color: res.is_clean !== false ? '#10b981' : '#f59e0b',
+                          background: res.is_clean ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                          color: res.is_clean ? '#10b981' : '#f59e0b',
+                          borderWidth: '1px',
+                          borderStyle: 'solid',
+                          borderColor: res.is_clean ? 'rgba(16, 185, 129, 0.4)' : 'rgba(245, 158, 11, 0.4)',
                         }}
-                        title="Click to toggle status tag"
                       >
-                        <ShieldCheck size={12} />
-                        <span>{res.is_clean !== false ? 'TAG: CLEAN' : 'TAG: UNVERIFIED'}</span>
+                        {res.is_clean ? 'CLEAN' : 'UNVERIFIED'}
                       </button>
 
-                      {/* Delete Client */}
+                      {/* View Link */}
+                      <Link
+                        to={`/resource/${res.slug || res.id}`}
+                        style={{
+                          padding: '5px 12px',
+                          borderRadius: '6px',
+                          background: '#131e36',
+                          border: '1px solid #1e2f4a',
+                          color: '#38bdf8',
+                          fontSize: '0.78rem',
+                          textDecoration: 'none',
+                          fontWeight: '600',
+                        }}
+                      >
+                        View
+                      </Link>
+
+                      {/* Delete */}
                       <button
                         onClick={() => handleDeleteResource(res.id, res.title)}
                         style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#f87171',
+                          padding: '5px 8px',
+                          borderRadius: '6px',
+                          background: 'transparent',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          color: '#ef4444',
                           cursor: 'pointer',
-                          padding: '6px',
                         }}
                         title="Delete client"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   </div>

@@ -6,6 +6,8 @@ import Home from './pages/Home';
 import Browse from './pages/Browse';
 import ResourceDetail from './pages/ResourceDetail';
 import AdminPage from './pages/Admin';
+import LoginPage from './pages/Login';
+import { AuthProvider } from './context/AuthContext';
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -40,6 +42,7 @@ function AppShell() {
           <Route path="/launchers" element={<Browse defaultCategory="Launchers" />} />
           <Route path="/resources" element={<Browse defaultCategory="All" />} />
           <Route path="/resource/:idOrSlug" element={<ResourceDetail />} />
+          <Route path="/login" element={<LoginPage />} />
           <Route path="/upload" element={<Navigate to="/admin" replace />} />
           <Route path="/admin" element={<AdminPage />} />
           {/* Catch-all redirect to Home */}
@@ -53,8 +56,10 @@ function AppShell() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AppShell />
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <AppShell />
+      </BrowserRouter>
+    </AuthProvider>
   );
 }

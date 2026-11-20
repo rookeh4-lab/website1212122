@@ -492,7 +492,7 @@ export default function ResourceDetail() {
             }}
           >
             <img
-              src="https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800"
+              src={resource.screenshots?.[1] || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800'}
               alt="Gameplay Screenshot"
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />

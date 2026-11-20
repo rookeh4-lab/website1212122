@@ -9,10 +9,14 @@ import {
   ShieldAlert,
   MessageSquare,
   ShieldCheck,
-  Plus
+  Plus,
+  LogIn,
+  LogOut,
+  User
 } from 'lucide-react';
 import ResourceCard from '../components/ResourceCard';
 import { supabase } from '../lib/supabaseClient';
+import { useAuth } from '../context/AuthContext';
 
 export default function Home() {
   const searchInputRef = useRef(null);
@@ -126,7 +130,7 @@ export default function Home() {
   }, []);
 
   const totalUploads = allResources.length || 8;
-  const isAdmin = localStorage.getItem('admin_user') === 'rookeh4@gmail.com';
+  const { user, isAdmin, signOut } = useAuth();
 
   return (
     <div style={{ minHeight: '100vh', paddingBottom: '80px' }}>
@@ -230,28 +234,79 @@ export default function Home() {
               </span>
             </a>
 
-            {/* Admin Upload / Portal button (Restricted to rookeh4@gmail.com) */}
-            <Link
-              to="/admin"
-              className="btn-gold"
-              style={{
-                padding: '7px 18px',
-                fontSize: '0.82rem',
-                gap: '6px',
-              }}
-            >
-              {isAdmin ? (
-                <>
-                  <Plus size={14} />
-                  <span>Upload Client</span>
-                </>
-              ) : (
-                <>
-                  <ShieldCheck size={14} />
-                  <span>Admin Panel</span>
-                </>
-              )}
-            </Link>
+            {/* Admin Panel button - ONLY visible to rookeh4@gmail.com */}
+            {isAdmin && (
+              <Link
+                to="/admin"
+                className="btn-gold"
+                style={{
+                  padding: '7px 18px',
+                  fontSize: '0.82rem',
+                  gap: '6px',
+                }}
+              >
+                <Plus size={14} />
+                <span>Admin Panel</span>
+              </Link>
+            )}
+
+            {/* Auth State: User Account or Sign In */}
+            {user ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Link
+                  to="/login"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    borderRadius: '9999px',
+                    background: '#131e36',
+                    border: '1px solid #1e2f4a',
+                    color: '#cbd5e1',
+                    fontSize: '0.80rem',
+                    fontWeight: '600',
+                    textDecoration: 'none',
+                  }}
+                  title="View Account"
+                >
+                  <User size={12} style={{ color: '#38bdf8' }} />
+                  <span>{user.email?.split('@')[0]}</span>
+                </Link>
+
+                <button
+                  onClick={signOut}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#64748b',
+                    cursor: 'pointer',
+                    padding: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    transition: 'color 0.15s ease',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = '#64748b')}
+                  title="Sign Out"
+                >
+                  <LogOut size={14} />
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/login"
+                className="btn-gold"
+                style={{
+                  padding: '7px 16px',
+                  fontSize: '0.82rem',
+                  gap: '6px',
+                }}
+              >
+                <LogIn size={14} />
+                <span>Sign In</span>
+              </Link>
+            )}
           </div>
         </header>
 

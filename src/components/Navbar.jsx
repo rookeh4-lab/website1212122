@@ -5,12 +5,17 @@ import {
   Menu,
   X,
   MessageSquare,
-  ShieldCheck
+  ShieldCheck,
+  LogIn,
+  LogOut,
+  User
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const { user, isAdmin, signOut } = useAuth();
 
   useEffect(() => {
     setMobileOpen(false);
@@ -138,17 +143,58 @@ export default function Navbar() {
             <span>Discord</span>
           </a>
 
-          <Link
-            to="/admin"
-            className="btn-gold"
-            style={{
-              padding: '6px 16px',
-              fontSize: '0.82rem',
-            }}
-          >
-            <ShieldCheck size={14} />
-            <span>Admin</span>
-          </Link>
+          {/* Admin Panel Button - ONLY shown to rookeh4@gmail.com */}
+          {isAdmin && (
+            <Link
+              to="/admin"
+              className="btn-gold"
+              style={{
+                padding: '6px 14px',
+                fontSize: '0.80rem',
+                gap: '5px',
+              }}
+            >
+              <ShieldCheck size={13} />
+              <span>Admin</span>
+            </Link>
+          )}
+
+          {/* User Sign In / Account Button */}
+          {user ? (
+            <button
+              onClick={signOut}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '6px 10px',
+                borderRadius: '9999px',
+                background: '#131e36',
+                border: '1px solid #1e2f4a',
+                color: '#cbd5e1',
+                fontSize: '0.78rem',
+                cursor: 'pointer',
+              }}
+              title="Sign Out"
+            >
+              <User size={12} style={{ color: '#38bdf8' }} />
+              <span>{user.email?.split('@')[0]}</span>
+              <LogOut size={12} style={{ color: '#ef4444', marginLeft: '4px' }} />
+            </button>
+          ) : (
+            <Link
+              to="/login"
+              className="btn-gold"
+              style={{
+                padding: '6px 14px',
+                fontSize: '0.80rem',
+                gap: '5px',
+              }}
+            >
+              <LogIn size={13} />
+              <span>Sign In</span>
+            </Link>
+          )}
         </div>
       </div>
     </header>
