@@ -34,120 +34,19 @@ export default function ResourceCard({ resource }) {
           }}
           onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.04)')}
           onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-          onError={(e) => {
-            e.currentTarget.src = 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800';
-          }}
         />
-
-        {/* Top Badges Row: Hot & CLEAN/UNVERIFIED */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '10px',
-            left: '10px',
-            right: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            zIndex: 2,
-            pointerEvents: 'none',
-          }}
-        >
-          {/* Hot Badge */}
-          {isHot ? (
-            <div className="badge-hot-clean">
-              <Flame size={12} />
-              <span>Hot</span>
-            </div>
-          ) : (
-            <div />
-          )}
-
-          {/* CLEAN / UNVERIFIED Badge */}
-          {isClean ? (
-            <div className="badge-clean-tag">
-              <ShieldCheck size={11} />
-              <span>CLEAN</span>
-            </div>
-          ) : (
-            <div className="badge-unverified-tag">
-              <AlertCircle size={11} />
-              <span>UNVERIFIED</span>
-            </div>
-          )}
-        </div>
-
-        {/* Top Tag on Thumbnail (• Minecraft Category) */}
-        <div
-          style={{
-            position: 'absolute',
-            top: isHot ? '40px' : '10px',
-            left: '10px',
-            zIndex: 2,
-            pointerEvents: 'none',
-          }}
-        >
-          <div className="badge-tag-mc-clean">
-            <span className="mc-dot-gold" />
-            <span style={{ color: '#ffffff', fontWeight: '600' }}>Minecraft</span>
-            <span style={{ color: '#94a3b8', fontWeight: '400' }}>{resource.category || 'Client'}</span>
-          </div>
-        </div>
       </Link>
 
       {/* Card Body */}
       <div
         style={{
-          padding: '14px 16px 16px 16px',
+          padding: '16px 18px',
           display: 'flex',
           flexDirection: 'column',
           flex: 1,
           background: '#0e1526',
         }}
       >
-        {/* Version & Category Tags ([1.21.11] [Client] [CLEAN]) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
-          <span className="tag-pill-ver">
-            {resource.version || '1.21.11'}
-          </span>
-
-          <span className="tag-pill-cat">
-            {resource.category === 'Source Codes' ? 'Source Code' : resource.category === 'Tools' ? 'Tool' : 'Client'}
-          </span>
-
-          {isClean ? (
-            <span
-              style={{
-                fontSize: '10px',
-                fontWeight: '700',
-                padding: '2px 7px',
-                borderRadius: '4px',
-                color: '#10b981',
-                background: 'rgba(16, 185, 129, 0.1)',
-                border: '1px solid rgba(16, 185, 129, 0.3)',
-                letterSpacing: '0.02em',
-              }}
-            >
-              CLEAN
-            </span>
-          ) : (
-            <span
-              style={{
-                fontSize: '10px',
-                fontWeight: '700',
-                padding: '2px 7px',
-                borderRadius: '4px',
-                color: '#f59e0b',
-                background: 'rgba(245, 158, 11, 0.1)',
-                border: '1px solid rgba(245, 158, 11, 0.3)',
-                letterSpacing: '0.02em',
-              }}
-            >
-              UNVERIFIED
-            </span>
-          )}
-        </div>
-
         {/* Title: Clean bold white text with blue hover */}
         <Link
           to={`/resource/${resource.slug || resource.id}`}
@@ -155,10 +54,10 @@ export default function ResourceCard({ resource }) {
             fontFamily: "var(--font-sans)",
             color: '#ffffff',
             textDecoration: 'none',
-            fontSize: '1.02rem',
+            fontSize: '1.05rem',
             fontWeight: '700',
             lineHeight: '1.3',
-            marginBottom: '4px',
+            marginBottom: '6px',
             transition: 'color 0.15s ease',
           }}
           onMouseEnter={(e) => (e.currentTarget.style.color = '#38bdf8')}

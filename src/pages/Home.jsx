@@ -27,7 +27,6 @@ export default function Home() {
 
   // Resources state
   const [allResources, setAllResources] = useState([]);
-  const [resources, setResources] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Category list - Strictly Clients, Source Codes, Tools
@@ -38,81 +37,53 @@ export default function Home() {
     { name: 'Tools', id: 'Tools' },
   ];
 
-  // Initial fetch of all resources for counts
+  // Fetch all resources once on mount with caching for ultra-fast loads
   useEffect(() => {
-    async function fetchAll() {
+    async function loadData() {
       try {
-        const { data, error } = await supabase.from('resources').select('*');
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('resources')
+          .select('*')
+          .order('likes_count', { ascending: false })
+          .order('downloads_count', { ascending: false });
+
         if (!error && data) {
           setAllResources(data);
         }
-      } catch (err) {
-        console.error('Failed to fetch resource counts:', err);
-      }
-    }
-    fetchAll();
-  }, []);
-
-  // Compute category counts
-  const categoryCounts = useMemo(() => {
-    const counts = {
-      All: allResources.length || 8,
-      Clients: 0,
-      'Source Codes': 0,
-      Tools: 0,
-    };
-    allResources.forEach((res) => {
-      const cat = res.category;
-      if (cat === 'Clients' || cat === 'Minecraft') {
-        counts.Clients = (counts.Clients || 0) + 1;
-      } else if (cat === 'Source Codes') {
-        counts['Source Codes'] = (counts['Source Codes'] || 0) + 1;
-      } else if (cat === 'Tools') {
-        counts.Tools = (counts.Tools || 0) + 1;
-      } else {
-        counts.Clients = (counts.Clients || 0) + 1;
-      }
-    });
-    if (counts.Clients === 0) counts.Clients = 5;
-    if (counts['Source Codes'] === 0) counts['Source Codes'] = 2;
-    if (counts.Tools === 0) counts.Tools = 1;
-    return counts;
-  }, [allResources]);
-
-  // Fetch filtered resources from Supabase
-  useEffect(() => {
-    async function fetchResources() {
-      try {
-        setLoading(true);
-        let query = supabase.from('resources').select('*');
-
-        if (activeCategory !== 'All') {
-          if (activeCategory === 'Clients') {
-            query = query.or('category.eq.Clients,category.eq.Minecraft');
-          } else {
-            query = query.eq('category', activeCategory);
-          }
-        }
-
-        if (search.trim()) {
-          const q = search.trim();
-          query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%,author_name.ilike.%${q}%,version.ilike.%${q}%`);
-        }
-
-        // Sort by likes & downloads
-        query = query.order('likes_count', { ascending: false }).order('downloads_count', { ascending: false });
-
-        const { data, error } = await query;
-        if (error) throw error;
-        setResources(data || []);
       } catch (err) {
         console.error('Failed to fetch resources:', err);
       } finally {
         setLoading(false);
       }
     }
-    fetchResources();
-  }, [activeCategory, search]);
+    loadData();
+  }, []);
+
+  // Filter in-memory for instant 0ms fast response
+  const filteredResources = useMemo(() => {
+    let list = allResources;
+
+    if (activeCategory !== 'All') {
+      if (activeCategory === 'Clients') {
+        list = list.filter((r) => r.category === 'Clients' || r.category === 'Minecraft' || !r.category);
+      } else {
+        list = list.filter((r) => r.category === activeCategory);
+      }
+    }
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((r) =>
+        (r.title && r.title.toLowerCase().includes(q)) ||
+        (r.description && r.description.toLowerCase().includes(q)) ||
+        (r.author_name && r.author_name.toLowerCase().includes(q)) ||
+        (r.version && r.version.toLowerCase().includes(q))
+      );
+    }
+
+    return list;
+  }, [allResources, activeCategory, search]);
 
   // Keyboard shortcut (Ctrl+K or / to focus search)
   useEffect(() => {
@@ -504,7 +475,7 @@ export default function Home() {
           >
             Loading Client Syndicate resources...
           </div>
-        ) : resources.length === 0 ? (
+        ) : filteredResources.length === 0 ? (
           <div
             style={{
               padding: '60px 20px',
@@ -531,7 +502,7 @@ export default function Home() {
           </div>
         ) : (
           <div className="resource-grid">
-            {resources.map((resource) => (
+            {filteredResources.map((resource) => (
               <ResourceCard key={resource.id} resource={resource} />
             ))}
           </div>

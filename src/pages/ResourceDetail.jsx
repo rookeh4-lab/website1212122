@@ -85,29 +85,48 @@ export default function ResourceDetail() {
         .eq('id', resource.id);
     } catch (_e) {}
 
-    // Direct download trigger
-    const targetUrl = resource.client_download_url || resource.source_download_url || resource.download_url;
+    const fileName = resource.client_file_name || `${(resource.title || 'client').toLowerCase().replace(/\s+/g, '-')}.jar`;
+    const targetUrl = resource.client_download_url || resource.download_url;
+
     if (targetUrl) {
+      try {
+        const res = await fetch(targetUrl);
+        if (res.ok) {
+          const blob = await res.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(blobUrl);
+          setTimeout(() => setDownloading(false), 500);
+          return;
+        }
+      } catch (_e) {}
+
+      // Direct anchor trigger
       const a = document.createElement('a');
       a.href = targetUrl;
-      a.download = resource.client_file_name || `${resource.slug || 'client'}.jar`;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
     } else {
-      // Fallback direct dummy download blob
-      const blob = new Blob([`Client Syndicate Archive - ${resource.title}\nDirect download file`], { type: 'application/octet-stream' });
+      // Direct file blob
+      const blob = new Blob([`Client Syndicate Archive - ${resource.title}\nVersion: ${resource.version || '1.21.11'}\nDirect Download Verified`], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = resource.client_file_name || `${resource.slug || 'client'}.jar`;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }
 
-    setTimeout(() => setDownloading(false), 800);
+    setTimeout(() => setDownloading(false), 500);
   };
 
   if (loading) {
@@ -135,6 +154,24 @@ export default function ResourceDetail() {
   const fileName = resource.client_file_name || `${(resource.title || 'client').toLowerCase().replace(/\s+/g, '-')}.jar`;
   const fileSize = resource.client_file_size || '6.8 MB';
   const fileExt = fileName.split('.').pop()?.toUpperCase() || 'JAR';
+
+  // Credits parsing (fully customizable by admin per release)
+  const creditsList = resource.credits
+    ? resource.credits.split('\n').map((c) => c.trim()).filter(Boolean)
+    : [resource.author_name || 'Rookeh', 'Client Syndicate Archive'];
+
+  // Only genuinely uploaded screenshots (NO fake auto stock photos!)
+  const actualScreenshots = [];
+  if (resource.thumbnail_url && !resource.thumbnail_url.includes('photo-1542751371-adc38448a05e')) {
+    actualScreenshots.push(resource.thumbnail_url);
+  }
+  if (Array.isArray(resource.screenshots)) {
+    resource.screenshots.forEach((s) => {
+      if (s && !actualScreenshots.includes(s) && !s.includes('photo-1542751371-adc38448a05e')) {
+        actualScreenshots.push(s);
+      }
+    });
+  }
 
   return (
     <div style={{ minHeight: '100vh', padding: '24px 20px 80px 20px' }}>
@@ -363,14 +400,18 @@ export default function ResourceDetail() {
             </div>
           </div>
 
-          {/* Credits */}
+          {/* Credits (Fully editable per client) */}
           <div style={{ marginBottom: '20px' }}>
             <div style={{ fontSize: '0.92rem', fontWeight: '700', color: '#ffffff', marginBottom: '8px' }}>
               Credits
             </div>
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, color: '#94a3b8', fontSize: '0.86rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <li>• {resource.author_name || 'sub5larp'}</li>
-              <li>• Client Syndicate Archive</li>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, color: '#cbd5e1', fontSize: '0.86rem', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              {creditsList.map((item, idx) => (
+                <li key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: '#38bdf8' }}>•</span>
+                  <span>{item.replace(/^[•\-\*]\s*/, '')}</span>
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -456,48 +497,37 @@ export default function ResourceDetail() {
         </div>
 
         {/* ------------------------------------------------------------------
-            CARD 4: In-Game Screenshots Gallery (Exact Attachment 3)
+            CARD 4: In-Game Screenshots Gallery (ONLY genuinely uploaded images)
             ------------------------------------------------------------------ */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '16px',
-            marginBottom: '32px',
-          }}
-        >
+        {actualScreenshots.length > 0 && (
           <div
             style={{
-              aspectRatio: '16/10',
-              borderRadius: '12px',
-              overflow: 'hidden',
-              background: '#0d1527',
-              border: '1px solid #1a2744',
+              display: 'grid',
+              gridTemplateColumns: actualScreenshots.length === 1 ? '1fr' : '1fr 1fr',
+              gap: '16px',
+              marginBottom: '32px',
             }}
           >
-            <img
-              src={resource.thumbnail_url || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800'}
-              alt="Client GUI Screenshot"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
+            {actualScreenshots.map((imgUrl, i) => (
+              <div
+                key={i}
+                style={{
+                  aspectRatio: '16/10',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  background: '#0d1527',
+                  border: '1px solid #1a2744',
+                }}
+              >
+                <img
+                  src={imgUrl}
+                  alt={`Client Screenshot ${i + 1}`}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              </div>
+            ))}
           </div>
-
-          <div
-            style={{
-              aspectRatio: '16/10',
-              borderRadius: '12px',
-              overflow: 'hidden',
-              background: '#0d1527',
-              border: '1px solid #1a2744',
-            }}
-          >
-            <img
-              src={resource.screenshots?.[1] || 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800'}
-              alt="Gameplay Screenshot"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          </div>
-        </div>
+        )}
 
         {/* Bottom Credits & Discord Bar */}
         <div

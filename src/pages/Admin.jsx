@@ -59,22 +59,20 @@ export default function AdminPage() {
     version: '1.21.11',
     loader: 'Fabric',
     description: '',
-    author_name: 'sub5larp',
+    author_name: 'Rookeh',
     is_clean: true,
     is_featured: false,
     gui_bind: 'right shift',
-    credits: 'rookeh4@gmail.com',
+    credits: '• Rookeh\n• Client Syndicate Archive',
   });
 
   // Client Binary File State
   const [selectedFile, setSelectedFile] = useState(null);
   const [fileDetails, setFileDetails] = useState({ name: '', size: '', type: '' });
 
-  // IMAGE SYSTEM STATE
+  // IMAGE SYSTEM STATE (Only post image if user actually uploads an image!)
   const [primaryImageFile, setPrimaryImageFile] = useState(null);
-  const [primaryImagePreview, setPrimaryImagePreview] = useState(PRESET_IMAGES[0].url);
-  const [secondaryImageFile, setSecondaryImageFile] = useState(null);
-  const [secondaryImagePreview, setSecondaryImagePreview] = useState(PRESET_IMAGES[1].url);
+  const [primaryImagePreview, setPrimaryImagePreview] = useState('');
   const [customImageUrl, setCustomImageUrl] = useState('');
 
   const [uploading, setUploading] = useState(false);
@@ -213,19 +211,18 @@ export default function AdminPage() {
       const clientFileName = fileDetails.name || `${uploadForm.title.toLowerCase().replace(/\s+/g, '-')}.jar`;
       const clientFileSize = fileDetails.size || '7.2 MB';
 
-      // 1. Process Images
-      let finalThumbnailUrl = customImageUrl.trim() || primaryImagePreview || PRESET_IMAGES[0].url;
-      let finalSecondaryUrl = secondaryImagePreview || PRESET_IMAGES[1].url;
-
+      // 1. Process Images (ONLY attach if user uploaded or chose an image - NO auto fake photos!)
+      let finalThumbnailUrl = customImageUrl.trim() || '';
       if (primaryImageFile) {
         const uploadedThumb = await uploadImageToStorage(primaryImageFile);
         if (uploadedThumb) finalThumbnailUrl = uploadedThumb;
+        else if (primaryImagePreview) finalThumbnailUrl = primaryImagePreview;
+      } else if (primaryImagePreview) {
+        finalThumbnailUrl = primaryImagePreview;
       }
 
-      if (secondaryImageFile) {
-        const uploadedSec = await uploadImageToStorage(secondaryImageFile);
-        if (uploadedSec) finalSecondaryUrl = uploadedSec;
-      }
+      // ONLY attach the image the user uploaded. Never auto-attach a second image!
+      const finalScreenshots = finalThumbnailUrl ? [finalThumbnailUrl] : [];
 
       // 2. Process Binary Release File (Direct storage or release path)
       let directDownloadUrl = `https://github.com/rookeh4-lab/website1212122/releases/download/v1.0.0/${encodeURIComponent(clientFileName)}`;
@@ -240,6 +237,7 @@ export default function AdminPage() {
       const generatedSlug = uploadForm.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now().toString(36);
       const authorName = profile?.username || uploadForm.author_name || 'Rookeh';
       const authorAvatar = profile?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150';
+      const customCredits = uploadForm.credits?.trim() || `• ${authorName}\n• Client Syndicate Archive`;
 
       const newResource = {
         title: uploadForm.title.trim(),
@@ -248,7 +246,8 @@ export default function AdminPage() {
         version: uploadForm.version,
         loader: uploadForm.loader,
         type: uploadForm.category === 'Clients' ? 'Client' : uploadForm.category === 'Source Codes' ? 'Source Code' : 'Tool',
-        description: uploadForm.description.trim() || `${uploadForm.title} verified release with right shift GUI bind.`,
+        description: uploadForm.description.trim() || `${uploadForm.title} verified direct download release.`,
+        credits: customCredits,
         author_name: authorName,
         author_avatar: authorAvatar,
         client_file_name: clientFileName,
@@ -259,9 +258,9 @@ export default function AdminPage() {
         is_featured: uploadForm.is_featured,
         downloads_count: 102,
         likes_count: 4,
-        tags: [uploadForm.version, uploadForm.loader, uploadForm.is_clean ? 'CLEAN' : 'UNVERIFIED', uploadForm.category],
-        thumbnail_url: finalThumbnailUrl,
-        screenshots: [finalThumbnailUrl, finalSecondaryUrl],
+        tags: [uploadForm.category],
+        thumbnail_url: finalThumbnailUrl || null,
+        screenshots: finalScreenshots,
       };
 
       // Resilient insert with fallback if optional schema columns mismatch
@@ -284,6 +283,7 @@ export default function AdminPage() {
           loader: newResource.loader,
           type: newResource.type,
           description: newResource.description,
+          credits: customCredits,
           author_name: authorName,
           author_avatar: authorAvatar,
           client_file_name: newResource.client_file_name,
@@ -299,7 +299,7 @@ export default function AdminPage() {
         if (fallbackErr) throw fallbackErr;
       }
 
-      setMessage(`Successfully published "${uploadForm.title}" with client image directly to Client Syndicate! Status: ${uploadForm.is_clean ? 'CLEAN' : 'UNVERIFIED'}.`);
+      setMessage(`Successfully published "${uploadForm.title}" directly to Client Syndicate!`);
 
       // Reset form
       setUploadForm({
@@ -308,19 +308,17 @@ export default function AdminPage() {
         version: '1.21.11',
         loader: 'Fabric',
         description: '',
-        author_name: 'sub5larp',
+        author_name: authorName,
         is_clean: true,
         is_featured: false,
         gui_bind: 'right shift',
-        credits: 'rookeh4@gmail.com',
+        credits: `• ${authorName}\n• Client Syndicate Archive`,
       });
       setSelectedFile(null);
       setFileDetails({ name: '', size: '', type: '' });
       setPrimaryImageFile(null);
-      setSecondaryImageFile(null);
       setCustomImageUrl('');
-      setPrimaryImagePreview(PRESET_IMAGES[0].url);
-      setSecondaryImagePreview(PRESET_IMAGES[1].url);
+      setPrimaryImagePreview('');
 
       loadResources();
     } catch (err) {
@@ -867,9 +865,9 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Preset image quick selectors */}
+                {/* Preset image quick selectors & Clear button */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Or choose preset preview:</span>
+                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Optional Presets:</span>
                   {PRESET_IMAGES.map((p) => (
                     <button
                       key={p.name}
@@ -892,6 +890,27 @@ export default function AdminPage() {
                       {p.name}
                     </button>
                   ))}
+                  {primaryImagePreview && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPrimaryImagePreview('');
+                        setCustomImageUrl('');
+                        setPrimaryImageFile(null);
+                      }}
+                      style={{
+                        padding: '3px 10px',
+                        borderRadius: '6px',
+                        background: 'transparent',
+                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                        color: '#ef4444',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Clear Image
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1036,6 +1055,33 @@ export default function AdminPage() {
                     resize: 'vertical',
                   }}
                 />
+              </div>
+
+              {/* 7. Credits System (Fully Editable) */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', color: '#cbd5e1', marginBottom: '6px' }}>
+                  Credits (Fully Editable - each line will be shown as a credit bullet)
+                </label>
+                <textarea
+                  rows={3}
+                  value={uploadForm.credits}
+                  onChange={(e) => setUploadForm({ ...uploadForm, credits: e.target.value })}
+                  placeholder="e.g.&#10;Plutora Development Team&#10;Cracked by JP&#10;Client Syndicate"
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    background: '#090e1a',
+                    border: '1px solid #1e2f4a',
+                    color: '#ffffff',
+                    fontSize: '0.88rem',
+                    outline: 'none',
+                    resize: 'vertical',
+                  }}
+                />
+                <div style={{ fontSize: '0.74rem', color: '#64748b', marginTop: '4px' }}>
+                  Type all credits for this client here. You can customize this freely for every release.
+                </div>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
