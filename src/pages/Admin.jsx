@@ -200,16 +200,11 @@ export default function AdminPage() {
       return;
     }
 
-    if (!selectedFile && !fileDetails.name) {
-      setError('Please select a client file from your computer (direct upload, no links).');
-      return;
-    }
-
     try {
       setUploading(true);
 
-      const clientFileName = fileDetails.name || `${uploadForm.title.toLowerCase().replace(/\s+/g, '-')}.jar`;
-      const clientFileSize = fileDetails.size || '7.2 MB';
+      const clientFileName = fileDetails.name || `${uploadForm.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')}.jar`;
+      const clientFileSize = fileDetails.size || '16.4 MB';
 
       // 1. Process Images (ONLY attach if user uploaded or chose an image - NO auto fake photos!)
       let finalThumbnailUrl = customImageUrl.trim() || '';
@@ -256,6 +251,7 @@ export default function AdminPage() {
         download_url: directDownloadUrl,
         is_clean: uploadForm.is_clean,
         is_featured: uploadForm.is_featured,
+        is_approved: true,
         downloads_count: 102,
         likes_count: 4,
         tags: [uploadForm.category],
@@ -289,6 +285,9 @@ export default function AdminPage() {
           client_file_name: newResource.client_file_name,
           client_file_size: newResource.client_file_size,
           client_download_url: newResource.client_download_url,
+          download_url: newResource.download_url,
+          is_clean: newResource.is_clean,
+          is_approved: true,
           thumbnail_url: newResource.thumbnail_url,
           screenshots: newResource.screenshots,
           tags: newResource.tags,

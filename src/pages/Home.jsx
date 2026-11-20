@@ -37,7 +37,7 @@ export default function Home() {
     { name: 'Tools', id: 'Tools' },
   ];
 
-  // Fetch all resources once on mount with caching for ultra-fast loads
+  // Fetch all resources with real-time updates and ultra-fast caching
   useEffect(() => {
     async function loadData() {
       try {
@@ -45,8 +45,7 @@ export default function Home() {
         const { data, error } = await supabase
           .from('resources')
           .select('*')
-          .order('likes_count', { ascending: false })
-          .order('downloads_count', { ascending: false });
+          .order('created_at', { ascending: false });
 
         if (!error && data) {
           setAllResources(data);
@@ -58,6 +57,35 @@ export default function Home() {
       }
     }
     loadData();
+
+    // Realtime subscription: new clients published from admin appear instantly for everyone!
+    const channel = supabase
+      .channel('realtime:resources')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'resources' },
+        (payload) => {
+          if (payload.eventType === 'INSERT' && payload.new) {
+            setAllResources((prev) => [payload.new, ...prev.filter((r) => r.id !== payload.new.id)]);
+          } else if (payload.eventType === 'UPDATE' && payload.new) {
+            setAllResources((prev) => prev.map((r) => (r.id === payload.new.id ? payload.new : r)));
+          } else if (payload.eventType === 'DELETE' && payload.old) {
+            setAllResources((prev) => prev.filter((r) => r.id !== payload.old.id));
+          } else {
+            loadData();
+          }
+        }
+      )
+      .subscribe();
+
+    // Tab focus revalidation so visitors always see fresh posts
+    const handleFocus = () => loadData();
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   // Filter in-memory for instant 0ms fast response
@@ -65,10 +93,24 @@ export default function Home() {
     let list = allResources;
 
     if (activeCategory !== 'All') {
-      if (activeCategory === 'Clients') {
-        list = list.filter((r) => r.category === 'Clients' || r.category === 'Minecraft' || !r.category);
+      const activeLower = activeCategory.toLowerCase();
+      if (activeLower === 'clients') {
+        list = list.filter((r) => {
+          const cat = (r.category || '').toLowerCase();
+          return cat === 'clients' || cat === 'client' || cat === 'minecraft' || !cat;
+        });
+      } else if (activeLower === 'source codes') {
+        list = list.filter((r) => {
+          const cat = (r.category || '').toLowerCase();
+          return cat === 'source codes' || cat === 'source code' || cat === 'sources';
+        });
+      } else if (activeLower === 'tools') {
+        list = list.filter((r) => {
+          const cat = (r.category || '').toLowerCase();
+          return cat === 'tools' || cat === 'tool';
+        });
       } else {
-        list = list.filter((r) => r.category === activeCategory);
+        list = list.filter((r) => (r.category || '').toLowerCase() === activeLower);
       }
     }
 
