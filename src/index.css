@@ -1,29 +1,31 @@
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;800;900&family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,600;0,700;0,800;0,900;1,700&family=JetBrains+Mono:wght@400;500;700&display=swap');
-
 :root {
-  --gta-pink: #ff2a85;
-  --gta-pink-glow: rgba(255, 42, 133, 0.45);
-  --gta-orange: #ff7a00;
-  --gta-orange-glow: rgba(255, 122, 0, 0.4);
-  --gta-cyan: #00f0ff;
-  --gta-cyan-glow: rgba(0, 240, 255, 0.35);
-  --gta-purple: #9d4edd;
-  --gta-gold: #f59e0b;
+  --gta-pink: #ff1b7e;
+  --gta-pink-bright: #ff3393;
+  --gta-orange: #ff6a00;
+  --gta-orange-bright: #ff851a;
+  --gta-yellow: #ffb703;
+  --gta-cyan: #00f2fe;
+  --gta-purple: #9b5de5;
 
-  --gta-bg: #08070d;
-  --gta-bg-surface: #0e0c16;
-  --gta-card: rgba(18, 16, 26, 0.82);
-  --gta-card-hover: rgba(25, 22, 36, 0.92);
-  --gta-border: rgba(255, 255, 255, 0.08);
-  --gta-border-active: rgba(255, 42, 133, 0.5);
+  --gta-bg: #06050a;
+  --gta-bg-surface: #0c0a14;
+  --gta-card: rgba(15, 13, 23, 0.88);
+  --gta-card-hover: rgba(22, 19, 34, 0.95);
+  --gta-border: rgba(255, 255, 255, 0.09);
+  --gta-border-hover: rgba(255, 27, 126, 0.45);
 
-  --gta-gradient: linear-gradient(135deg, #ff2a85 0%, #ff7a00 100%);
-  --gta-gradient-vice: linear-gradient(135deg, #ff2a85 0%, #9d4edd 50%, #00f0ff 100%);
-  --gta-gradient-amber: linear-gradient(135deg, #ff7a00 0%, #f59e0b 100%);
+  --gta-gradient-sunset: linear-gradient(135deg, #ff1b7e 0%, #ff6a00 50%, #ffb703 100%);
+  --gta-gradient-vice: linear-gradient(135deg, #ff1b7e 0%, #9b5de5 50%, #00f2fe 100%);
+  --gta-gradient-btn: linear-gradient(135deg, #ff1b7e 0%, #ff6a00 100%);
+  --gta-gradient-gold: linear-gradient(135deg, #ff851a 0%, #ffb703 100%);
+
+  --font-display: 'Syne', -apple-system, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', 'Outfit', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 
   --text-main: #ffffff;
-  --text-muted: #9ca3af;
-  --text-dim: #6b7280;
+  --text-muted: #a1a1aa;
+  --text-dim: #71717a;
 }
 
 * {
@@ -35,19 +37,20 @@
 html {
   background-color: var(--gta-bg);
   color: var(--text-main);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: var(--font-sans);
   scroll-behavior: smooth;
   overflow-x: hidden;
+  letter-spacing: -0.01em;
 }
 
 body {
   min-height: 100vh;
-  background-color: #07060b;
-  background-image: 
-    radial-gradient(circle at 50% 0%, rgba(255, 42, 133, 0.12) 0%, transparent 45%),
-    radial-gradient(circle at 85% 25%, rgba(0, 240, 255, 0.08) 0%, transparent 40%),
-    radial-gradient(circle at 15% 75%, rgba(255, 122, 0, 0.08) 0%, transparent 40%),
-    linear-gradient(to bottom, transparent 0%, rgba(7, 6, 11, 0.95) 100%);
+  background-color: #06050a;
+  background-image:
+    radial-gradient(ellipse 90% 45% at 50% -10%, rgba(255, 27, 126, 0.16) 0%, transparent 60%),
+    radial-gradient(circle at 90% 30%, rgba(0, 242, 254, 0.08) 0%, transparent 45%),
+    radial-gradient(circle at 10% 70%, rgba(255, 106, 0, 0.09) 0%, transparent 45%),
+    linear-gradient(to bottom, transparent 0%, rgba(6, 5, 10, 0.98) 100%);
   background-attachment: fixed;
   display: flex;
   flex-direction: column;
@@ -55,236 +58,254 @@ body {
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 9px;
 }
 ::-webkit-scrollbar-track {
-  background: #08070d;
+  background: #06050a;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 42, 133, 0.25);
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(255, 27, 126, 0.3);
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--gta-pink);
 }
 
-/* Typography Classes */
-.font-serif-title {
-  font-family: 'Playfair Display', Georgia, serif;
-  letter-spacing: -0.01em;
+/* Big Bold Headline Typography */
+.font-gta-title {
+  font-family: var(--font-display);
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  text-transform: uppercase;
 }
 
-.font-gta-display {
-  font-family: 'Outfit', sans-serif;
+.font-gta-heading {
+  font-family: var(--font-display);
   font-weight: 800;
   letter-spacing: -0.02em;
 }
 
-/* GTA 6 Gradient Texts */
-.gta-text-gradient {
-  background: var(--gta-gradient);
+.font-mono-tag {
+  font-family: var(--font-mono);
+  letter-spacing: -0.02em;
+}
+
+/* Text Gradients */
+.gta-text-sunset {
+  background: var(--gta-gradient-sunset);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  display: inline-block;
 }
 
 .gta-text-vice {
   background: var(--gta-gradient-vice);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  display: inline-block;
 }
 
-/* Glassmorphism Containers */
+/* Glass Panels */
 .gta-glass-panel {
-  background: rgba(15, 13, 22, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(14, 12, 21, 0.85);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* XenntSquad Announcement Pill */
+/* Announcement Banner */
 .gta-announcement {
-  background: linear-gradient(90deg, rgba(25, 20, 36, 0.95) 0%, rgba(18, 15, 28, 0.9) 100%);
-  border: 1px solid rgba(255, 42, 133, 0.3);
-  box-shadow: 0 0 35px -8px rgba(255, 42, 133, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  background: linear-gradient(90deg, rgba(22, 17, 33, 0.95) 0%, rgba(16, 13, 26, 0.92) 100%);
+  border: 1px solid rgba(255, 27, 126, 0.35);
+  box-shadow: 0 0 35px -8px rgba(255, 27, 126, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.12);
   border-radius: 9999px;
   transition: all 0.25s ease;
 }
 
 .gta-announcement:hover {
-  border-color: rgba(255, 42, 133, 0.55);
-  box-shadow: 0 0 45px -5px rgba(255, 42, 133, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 27, 126, 0.6);
+  box-shadow: 0 0 45px -4px rgba(255, 27, 126, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-/* Card Styling inspired by xenntsquad.party */
+/* Crack Card */
 .gta-crack-card {
-  background: rgba(16, 14, 24, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 18px;
+  background: var(--gta-card);
+  border: 1px solid var(--gta-border);
+  border-radius: 20px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
+  box-shadow: 0 10px 25px -10px rgba(0, 0, 0, 0.7);
 }
 
 .gta-crack-card:hover {
-  background: rgba(23, 20, 34, 0.9);
-  border-color: rgba(255, 42, 133, 0.4);
-  transform: translateY(-3px);
-  box-shadow: 0 18px 36px -10px rgba(0, 0, 0, 0.7), 0 0 30px -5px rgba(255, 42, 133, 0.22);
+  background: var(--gta-card-hover);
+  border-color: var(--gta-border-hover);
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.8), 0 0 30px -6px rgba(255, 27, 126, 0.3);
 }
 
 .gta-crack-card.is-hot {
-  border-color: rgba(255, 122, 0, 0.45);
-  box-shadow: 0 0 25px -8px rgba(255, 122, 0, 0.25);
+  border-color: rgba(255, 106, 0, 0.4);
+  box-shadow: 0 0 25px -8px rgba(255, 106, 0, 0.25);
 }
 
 .gta-crack-card.is-hot:hover {
-  border-color: rgba(255, 122, 0, 0.7);
-  box-shadow: 0 18px 36px -10px rgba(0, 0, 0, 0.7), 0 0 35px -5px rgba(255, 122, 0, 0.35);
+  border-color: rgba(255, 106, 0, 0.75);
+  box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.8), 0 0 35px -5px rgba(255, 106, 0, 0.4);
 }
 
 /* Pill Buttons */
 .gta-pill-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 18px;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 20px;
   border-radius: 9999px;
-  font-size: 0.86rem;
-  font-weight: 600;
+  font-size: 0.88rem;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   text-decoration: none;
   border: 1px solid transparent;
+  white-space: nowrap;
 }
 
 .gta-pill-btn-primary {
-  background: linear-gradient(135deg, #ff2a85 0%, #ff7a00 100%);
+  background: var(--gta-gradient-btn);
   color: #ffffff;
-  box-shadow: 0 4px 18px rgba(255, 42, 133, 0.35);
+  box-shadow: 0 4px 20px rgba(255, 27, 126, 0.4);
 }
 
 .gta-pill-btn-primary:hover {
-  background: linear-gradient(135deg, #ff3f94 0%, #ff8c1a 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(255, 42, 133, 0.5);
+  background: linear-gradient(135deg, #ff3393 0%, #ff851a 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 28px rgba(255, 27, 126, 0.6);
 }
 
 .gta-pill-btn-secondary {
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f4f4f5;
 }
 
 .gta-pill-btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
   color: #ffffff;
+  transform: translateY(-1px);
 }
 
 .gta-pill-btn-gold {
-  background: linear-gradient(135deg, #ff7a00 0%, #f59e0b 100%);
-  color: #000000;
-  font-weight: 700;
-  box-shadow: 0 4px 18px rgba(245, 158, 11, 0.35);
+  background: var(--gta-gradient-gold);
+  color: #09090b;
+  font-weight: 800;
+  box-shadow: 0 4px 20px rgba(255, 183, 3, 0.4);
 }
 
 .gta-pill-btn-gold:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(245, 158, 11, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 28px rgba(255, 183, 3, 0.6);
 }
 
-/* Category Filter Pills (Tier 1) */
+/* Category Filter Tabs (Tier 1) */
 .gta-cat-pill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 18px;
+  padding: 9px 20px;
   border-radius: 9999px;
-  font-size: 0.86rem;
-  font-weight: 600;
+  font-size: 0.88rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.2s ease;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid rgba(255, 255, 255, 0.09);
   background: rgba(255, 255, 255, 0.03);
-  color: #9ca3af;
+  color: #a1a1aa;
 }
 
 .gta-cat-pill:hover {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
   color: #ffffff;
+  transform: translateY(-1px);
 }
 
 .gta-cat-pill.active {
-  background: linear-gradient(135deg, #ff2a85 0%, #ff7a00 100%);
+  background: var(--gta-gradient-btn);
   border-color: transparent;
   color: #ffffff;
-  box-shadow: 0 4px 20px rgba(255, 42, 133, 0.4);
+  box-shadow: 0 4px 22px rgba(255, 27, 126, 0.45);
 }
 
 .gta-cat-pill.active .pill-count {
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.35);
   color: #ffffff;
 }
 
 .pill-count {
   font-size: 0.74rem;
-  padding: 1px 7px;
+  padding: 2px 8px;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #9ca3af;
-  font-weight: 700;
+  background: rgba(255, 255, 255, 0.1);
+  color: #e4e4e7;
+  font-weight: 800;
 }
 
-/* Overlaid Thumbnail Badges */
+/* Badges */
 .badge-hot {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   background: linear-gradient(135deg, #ff4500 0%, #ff8c00 100%);
   color: #ffffff;
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   font-weight: 800;
-  padding: 4px 10px;
+  padding: 4px 11px;
   border-radius: 9999px;
-  box-shadow: 0 2px 10px rgba(255, 69, 0, 0.4);
+  box-shadow: 0 2px 12px rgba(255, 69, 0, 0.45);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .badge-verified {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  background: rgba(16, 185, 129, 0.16);
-  border: 1px solid rgba(16, 185, 129, 0.35);
+  gap: 5px;
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid rgba(16, 185, 129, 0.4);
   color: #34d399;
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 4px 10px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  padding: 4px 11px;
   border-radius: 9999px;
   backdrop-filter: blur(8px);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .badge-tag-dark {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #e5e7eb;
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 4px 10px;
+  gap: 7px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #f4f4f5;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 4px 12px;
   border-radius: 9999px;
 }
 
 .dot-indicator {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: #ff2a85;
-  box-shadow: 0 0 8px #ff2a85;
+  background: #ff1b7e;
+  box-shadow: 0 0 10px #ff1b7e;
 }

@@ -170,39 +170,39 @@ export default function Home() {
         {/* Hero / Page Title Section */}
         <div style={{ maxWidth: '1000px', margin: '0 auto 40px auto' }}>
           <h1
-            className="font-serif-title"
+            className="font-gta-title"
             style={{
-              fontSize: 'clamp(2.6rem, 5.5vw, 4.2rem)',
-              fontWeight: '700',
+              fontSize: 'clamp(2.8rem, 6vw, 4.6rem)',
               color: '#ffffff',
-              lineHeight: '1.1',
-              marginBottom: '12px',
+              lineHeight: '1.05',
+              marginBottom: '14px',
             }}
           >
-            Cracks & Releases
+            Cracks &amp; <span className="gta-text-sunset">Releases</span>
           </h1>
 
-          {/* 45px Neon Sunset Accent Bar */}
+          {/* 64px Neon Sunset Accent Bar */}
           <div
             style={{
-              width: '56px',
-              height: '4px',
-              borderRadius: '2px',
-              background: 'linear-gradient(90deg, #ff2a85 0%, #ff7a00 100%)',
-              boxShadow: '0 0 16px rgba(255, 42, 133, 0.6)',
-              marginBottom: '16px',
+              width: '64px',
+              height: '5px',
+              borderRadius: '3px',
+              background: 'linear-gradient(90deg, #ff1b7e 0%, #ff6a00 100%)',
+              boxShadow: '0 0 22px rgba(255, 27, 126, 0.85)',
+              marginBottom: '18px',
             }}
           />
 
           <p
             style={{
-              fontSize: '1.05rem',
-              color: '#9ca3af',
-              maxWidth: '680px',
-              lineHeight: '1.5',
+              fontSize: '1.1rem',
+              fontWeight: '500',
+              color: '#a1a1aa',
+              maxWidth: '700px',
+              lineHeight: '1.55',
             }}
           >
-            Every verified client, source code, native C++ injector & macro in the syndicate. Filter by category, search or sort.
+            Every verified client, source code, native C++ injector &amp; macro in the syndicate. Filter by category, search or sort.
           </p>
         </div>
 

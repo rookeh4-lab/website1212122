@@ -119,17 +119,18 @@ export default function ResourceCard({ resource }) {
         }}
       >
         {/* Version & Loader Sub-tags */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
           <span
             style={{
-              fontSize: '0.72rem',
-              fontWeight: '700',
-              padding: '2px 8px',
+              fontSize: '0.74rem',
+              fontWeight: '800',
+              padding: '3px 9px',
               borderRadius: '6px',
-              backgroundColor: 'rgba(0, 240, 255, 0.1)',
-              color: '#00f0ff',
-              border: '1px solid rgba(0, 240, 255, 0.25)',
+              backgroundColor: 'rgba(0, 242, 254, 0.12)',
+              color: '#00f2fe',
+              border: '1px solid rgba(0, 242, 254, 0.3)',
               fontFamily: "'JetBrains Mono', monospace",
+              letterSpacing: '0.02em',
             }}
           >
             {resource.version || '1.21.11'}
@@ -137,13 +138,13 @@ export default function ResourceCard({ resource }) {
 
           <span
             style={{
-              fontSize: '0.72rem',
-              fontWeight: '600',
-              padding: '2px 8px',
+              fontSize: '0.74rem',
+              fontWeight: '700',
+              padding: '3px 9px',
               borderRadius: '6px',
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              color: '#cbd5e1',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
+              backgroundColor: 'rgba(255, 255, 255, 0.06)',
+              color: '#e4e4e7',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
             }}
           >
             {resource.loader || 'Fabric'}
@@ -154,15 +155,17 @@ export default function ResourceCard({ resource }) {
         <Link
           to={`/resource/${resource.slug || resource.id}`}
           style={{
+            fontFamily: "var(--font-display)",
             color: '#ffffff',
             textDecoration: 'none',
-            fontSize: '1.12rem',
-            fontWeight: '700',
-            lineHeight: '1.35',
-            marginBottom: '8px',
+            fontSize: '1.22rem',
+            fontWeight: '800',
+            lineHeight: '1.3',
+            marginBottom: '10px',
+            letterSpacing: '-0.02em',
             transition: 'color 0.18s ease',
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = '#ff2a85')}
+          onMouseEnter={(e) => (e.currentTarget.style.color = '#ff1b7e')}
           onMouseLeave={(e) => (e.currentTarget.style.color = '#ffffff')}
         >
           {resource.title}
@@ -171,9 +174,9 @@ export default function ResourceCard({ resource }) {
         {/* Description Excerpt */}
         <p
           style={{
-            fontSize: '0.85rem',
-            color: '#9ca3af',
-            lineHeight: '1.5',
+            fontSize: '0.88rem',
+            color: '#a1a1aa',
+            lineHeight: '1.55',
             marginBottom: '16px',
             display: '-webkit-box',
             WebkitLineClamp: 2,

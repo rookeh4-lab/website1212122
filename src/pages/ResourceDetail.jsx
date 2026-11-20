@@ -322,15 +322,16 @@ export default function ResourceDetail() {
           </div>
         </div>
 
-        {/* Large Elegant Display Title */}
+        {/* Large Bold Display Title */}
         <h1
-          className="font-serif-title"
+          className="font-gta-heading"
           style={{
-            fontSize: 'clamp(2.4rem, 5vw, 3.6rem)',
-            fontWeight: '700',
+            fontSize: 'clamp(2.4rem, 5vw, 3.8rem)',
+            fontWeight: '900',
             color: '#ffffff',
-            lineHeight: '1.18',
-            marginBottom: '18px',
+            lineHeight: '1.15',
+            marginBottom: '20px',
+            letterSpacing: '-0.025em',
           }}
         >
           {resource.title}
