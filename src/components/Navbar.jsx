@@ -10,7 +10,8 @@ import {
   ShieldCheck,
   Menu,
   X,
-  ExternalLink
+  ExternalLink,
+  MessageSquare
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -39,87 +40,72 @@ export default function Navbar() {
     <header
       style={{
         position: 'sticky',
-        top: '16px',
+        top: '12px',
         zIndex: 100,
-        maxWidth: '1240px',
+        maxWidth: '1180px',
         margin: '0 auto',
         padding: '0 20px',
       }}
     >
       <div
-        className="gta-glass-panel"
         style={{
+          background: 'rgba(15, 19, 28, 0.92)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
           borderRadius: '9999px',
-          padding: '8px 16px 8px 20px',
+          padding: '8px 16px 8px 18px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          boxShadow: '0 12px 32px -8px rgba(0, 0, 0, 0.8), 0 0 20px -5px rgba(255, 42, 133, 0.15)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: '0 8px 24px -4px rgba(0, 0, 0, 0.6)',
         }}
       >
-        {/* Brand Logo & Name */}
+        {/* Brand Logo & Name (Clean & Normal) */}
         <Link
           to="/"
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '10px',
+            gap: '9px',
             textDecoration: 'none',
           }}
         >
-          {/* GTA 6 Style Emblem */}
           <div
             style={{
-              width: '36px',
-              height: '36px',
+              width: '32px',
+              height: '32px',
               borderRadius: '50%',
-              background: 'linear-gradient(135deg, #ff2a85 0%, #ff7a00 100%)',
+              background: 'linear-gradient(135deg, #ff6a2b 0%, #ff8a3d 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 0 16px rgba(255, 42, 133, 0.5)',
               color: '#ffffff',
-              fontWeight: '900',
-              fontSize: '1rem',
-              letterSpacing: '-0.02em',
+              boxShadow: '0 2px 10px rgba(255, 106, 43, 0.35)',
             }}
           >
-            VI
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+            </svg>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-            <span
-              style={{
-                fontFamily: "'Outfit', sans-serif",
-                fontWeight: '900',
-                fontSize: '1.25rem',
-                color: '#ffffff',
-                letterSpacing: '-0.01em',
-              }}
-            >
-              Syndicate
-            </span>
-            <span
-              style={{
-                fontFamily: "'Outfit', sans-serif",
-                fontWeight: '900',
-                fontSize: '0.85rem',
-                background: 'linear-gradient(135deg, #ff2a85, #ff7a00)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                letterSpacing: '0.04em',
-              }}
-            >
-              VI
-            </span>
-          </div>
+          <span
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontWeight: '700',
+              fontSize: '1.15rem',
+              color: '#ffffff',
+              letterSpacing: '-0.01em',
+            }}
+          >
+            Syndicate
+          </span>
         </Link>
 
-        {/* Center Desktop Navigation Links */}
+        {/* Center Navigation Links (Clean small text matching Image 2) */}
         <nav
           style={{
-            display: 'none',
+            display: 'flex',
             alignItems: 'center',
             gap: '4px',
           }}
@@ -132,15 +118,15 @@ export default function Navbar() {
                 key={item.path}
                 to={item.path}
                 style={{
-                  padding: '7px 16px',
+                  padding: '6px 14px',
                   borderRadius: '9999px',
-                  fontSize: '0.86rem',
-                  fontWeight: active ? '700' : '500',
-                  color: active ? '#ffffff' : '#9ca3af',
-                  backgroundColor: active ? 'rgba(255, 42, 133, 0.15)' : 'transparent',
-                  border: active ? '1px solid rgba(255, 42, 133, 0.35)' : '1px solid transparent',
+                  fontSize: '0.84rem',
+                  fontWeight: active ? '600' : '400',
+                  color: active ? '#ffffff' : '#8b949e',
+                  backgroundColor: active ? 'rgba(255, 106, 43, 0.15)' : 'transparent',
+                  border: active ? '1px solid rgba(255, 106, 43, 0.35)' : '1px solid transparent',
                   textDecoration: 'none',
-                  transition: 'all 0.2s ease',
+                  transition: 'all 0.15s ease',
                 }}
                 onMouseEnter={(e) => {
                   if (!active) {
@@ -150,7 +136,7 @@ export default function Navbar() {
                 }}
                 onMouseLeave={(e) => {
                   if (!active) {
-                    e.currentTarget.style.color = '#9ca3af';
+                    e.currentTarget.style.color = '#8b949e';
                     e.currentTarget.style.backgroundColor = 'transparent';
                   }
                 }}
@@ -161,82 +147,113 @@ export default function Navbar() {
           })}
         </nav>
 
-        {/* Right Action Buttons */}
-        <div
-          style={{
-            display: 'none',
-            alignItems: 'center',
-            gap: '10px',
-          }}
-          className="desktop-nav-actions"
-        >
-          {/* Publish Button */}
-          <Link
-            to="/upload"
-            className="gta-pill-btn gta-pill-btn-primary"
-            style={{ padding: '7px 16px', fontSize: '0.82rem' }}
-          >
-            <Plus size={15} />
-            <span>Publish</span>
-          </Link>
-
-          {/* Admin link */}
-          <Link
-            to="/admin"
-            className="gta-pill-btn gta-pill-btn-secondary"
-            style={{ padding: '7px 14px', fontSize: '0.82rem' }}
-            title="Admin Dashboard"
-          >
-            <ShieldCheck size={14} style={{ color: '#00f0ff' }} />
-            <span>Admin</span>
-          </Link>
-
-          {/* Discord Pill */}
+        {/* Right Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <a
             href="https://discord.gg/syndicate"
             target="_blank"
-            rel="noopener noreferrer"
-            className="gta-pill-btn gta-pill-btn-secondary"
-            style={{ padding: '7px 14px', fontSize: '0.82rem' }}
+            rel="noreferrer"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '9999px',
+              fontSize: '0.82rem',
+              fontWeight: '500',
+              color: '#e2e8f0',
+              backgroundColor: 'rgba(255, 255, 255, 0.06)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              textDecoration: 'none',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'rgba(255, 106, 43, 0.4)';
+              e.currentTarget.style.color = '#ff8a3d';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+              e.currentTarget.style.color = '#e2e8f0';
+            }}
           >
+            <MessageSquare size={13} />
             <span>Discord</span>
-            <ExternalLink size={12} style={{ color: '#9ca3af' }} />
           </a>
-        </div>
 
-        {/* Mobile Hamburger */}
-        <button
-          onClick={() => setMobileOpen(!mobileOpen)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '36px',
-            height: '36px',
-            borderRadius: '50%',
-            background: 'rgba(255, 255, 255, 0.06)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            color: '#fff',
-            cursor: 'pointer',
-          }}
-          className="mobile-nav-toggle"
-          aria-label="Toggle Navigation"
-        >
-          {mobileOpen ? <X size={18} /> : <Menu size={18} />}
-        </button>
+          <Link
+            to="/upload"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '6px 14px',
+              borderRadius: '9999px',
+              fontSize: '0.82rem',
+              fontWeight: '600',
+              color: '#ffffff',
+              background: 'linear-gradient(135deg, #ff5e2b 0%, #ff8a3d 100%)',
+              border: 'none',
+              textDecoration: 'none',
+              boxShadow: '0 2px 8px rgba(255, 94, 43, 0.3)',
+              transition: 'opacity 0.15s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.9')}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+          >
+            <Plus size={14} />
+            <span>Upload</span>
+          </Link>
+
+          <Link
+            to="/admin"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '6px 10px',
+              borderRadius: '9999px',
+              fontSize: '0.80rem',
+              fontWeight: '500',
+              color: '#8b949e',
+              textDecoration: 'none',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#ffffff')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#8b949e')}
+          >
+            Admin
+          </Link>
+
+          {/* Mobile Menu Hamburger */}
+          <button
+            onClick={() => setMobileOpen(!mobileOpen)}
+            aria-label="Toggle mobile menu"
+            className="mobile-nav-toggle"
+            style={{
+              display: 'none',
+              background: 'none',
+              border: 'none',
+              color: '#ffffff',
+              padding: '6px',
+              cursor: 'pointer',
+            }}
+          >
+            {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Drawer */}
       {mobileOpen && (
         <div
-          className="gta-glass-panel"
           style={{
-            marginTop: '10px',
-            borderRadius: '20px',
-            padding: '16px 20px',
+            marginTop: '8px',
+            background: 'rgba(15, 19, 28, 0.98)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '16px',
+            padding: '12px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '8px',
+            gap: '6px',
+            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.8)',
           }}
         >
           {navLinks.map((item) => (
@@ -244,35 +261,20 @@ export default function Navbar() {
               key={item.path}
               to={item.path}
               style={{
-                padding: '10px 16px',
-                borderRadius: '12px',
-                color: isActive(item.path) ? '#fff' : '#9ca3af',
-                backgroundColor: isActive(item.path) ? 'rgba(255, 42, 133, 0.18)' : 'transparent',
+                padding: '10px 14px',
+                borderRadius: '8px',
+                fontSize: '0.88rem',
+                color: isActive(item.path) ? '#ff8a3d' : '#d1d5db',
+                fontWeight: isActive(item.path) ? '600' : '400',
                 textDecoration: 'none',
-                fontWeight: '600',
-                fontSize: '0.9rem',
+                backgroundColor: isActive(item.path) ? 'rgba(255, 106, 43, 0.1)' : 'transparent',
               }}
             >
               {item.name}
             </Link>
           ))}
-          <div style={{ height: '1px', backgroundColor: 'rgba(255, 255, 255, 0.08)', margin: '6px 0' }} />
-          <Link to="/upload" className="gta-pill-btn gta-pill-btn-primary" style={{ justifyContent: 'center' }}>
-            <Plus size={16} /> Publish Resource
-          </Link>
-          <Link to="/admin" className="gta-pill-btn gta-pill-btn-secondary" style={{ justifyContent: 'center' }}>
-            <ShieldCheck size={16} style={{ color: '#00f0ff' }} /> Admin Dashboard
-          </Link>
         </div>
       )}
-
-      <style>{`
-        @media (min-width: 900px) {
-          .desktop-nav-menu { display: flex !important; }
-          .desktop-nav-actions { display: flex !important; }
-          .mobile-nav-toggle { display: none !important; }
-        }
-      `}</style>
     </header>
   );
 }

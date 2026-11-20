@@ -32,21 +32,21 @@ export default function Footer() {
               width: '24px',
               height: '24px',
               borderRadius: '50%',
-              background: 'linear-gradient(135deg, #ff2a85, #ff7a00)',
+              background: 'linear-gradient(135deg, #ff5e2b, #ff8a3d)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#fff',
               fontSize: '0.72rem',
-              fontWeight: '900',
+              fontWeight: '700',
             }}
           >
-            VI
+            S
           </div>
-          <span style={{ color: '#ffffff', fontWeight: '700' }}>
-            Syndicate <span style={{ color: '#ff2a85' }}>VI</span>
+          <span style={{ color: '#ffffff', fontWeight: '600' }}>
+            Syndicate
           </span>
-          <span style={{ color: '#6b7280' }}>© 2026 • Vice City Archive</span>
+          <span style={{ color: '#6b7280' }}>© 2026 • Community Client Archive</span>
         </div>
 
         {/* Right: Quick Links */}

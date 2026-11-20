@@ -13,7 +13,11 @@ import {
   ArrowRight,
   Flame,
   ChevronDown,
-  X
+  X,
+  SlidersHorizontal,
+  Package,
+  Download,
+  Users
 } from 'lucide-react';
 import ResourceCard from '../components/ResourceCard';
 import { supabase } from '../lib/supabaseClient';
@@ -21,18 +25,53 @@ import { supabase } from '../lib/supabaseClient';
 export default function Home() {
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Filter state
   const [activeCategory, setActiveCategory] = useState('All');
+  const [selectedVersion, setSelectedVersion] = useState('All versions');
   const [search, setSearch] = useState('');
-  const [filterVerified, setFilterVerified] = useState(false);
-  const [filterSourceOnly, setFilterSourceOnly] = useState(false);
-  const [filter12111, setFilter12111] = useState(false);
-  const [filterNative, setFilterNative] = useState(false);
-  const [sortBy, setSortBy] = useState('newest'); // 'newest' | 'downloads' | 'upvotes' | 'views'
+  const [sortBy, setSortBy] = useState('top_rated'); // 'top_rated' | 'downloads' | 'newest' | 'views'
+  const [showDiscordBanner, setShowDiscordBanner] = useState(true);
 
+  // Dropdown menus state
+  const [catMenuOpen, setCatMenuOpen] = useState(false);
+  const [verMenuOpen, setVerMenuOpen] = useState(false);
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+
+  // Resources state
   const [resources, setResources] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Load resources from Supabase
+  // Category options
+  const categoryOptions = [
+    'All',
+    'Clients',
+    'Source Codes',
+    'Tools',
+    'Macros',
+    'Launchers',
+  ];
+
+  // Version options
+  const versionOptions = [
+    'All versions',
+    '1.21.11',
+    '1.21',
+    '1.20.4',
+    '1.19.4',
+    '1.16.5',
+    '1.8.9',
+    'All Versions',
+  ];
+
+  // Sort options
+  const sortOptions = [
+    { id: 'top_rated', label: 'Top rated' },
+    { id: 'downloads', label: 'Most downloaded' },
+    { id: 'newest', label: 'Newest releases' },
+    { id: 'views', label: 'Most viewed' },
+  ];
+
+  // Fetch resources from Supabase
   useEffect(() => {
     async function fetchResources() {
       try {
@@ -43,16 +82,8 @@ export default function Home() {
           query = query.eq('category', activeCategory);
         }
 
-        if (filterSourceOnly) {
-          query = query.eq('category', 'Source Codes');
-        }
-
-        if (filter12111) {
-          query = query.eq('version', '1.21.11');
-        }
-
-        if (filterNative) {
-          query = query.eq('loader', 'C++ / Native');
+        if (selectedVersion !== 'All versions') {
+          query = query.eq('version', selectedVersion);
         }
 
         if (search.trim()) {
@@ -61,10 +92,10 @@ export default function Home() {
         }
 
         // Sorting
-        if (sortBy === 'downloads') {
-          query = query.order('downloads_count', { ascending: false });
-        } else if (sortBy === 'upvotes') {
+        if (sortBy === 'top_rated') {
           query = query.order('likes_count', { ascending: false });
+        } else if (sortBy === 'downloads') {
+          query = query.order('downloads_count', { ascending: false });
         } else if (sortBy === 'views') {
           query = query.order('views_count', { ascending: false });
         } else {
@@ -83,405 +114,462 @@ export default function Home() {
     }
 
     fetchResources();
-  }, [activeCategory, search, filterVerified, filterSourceOnly, filter12111, filterNative, sortBy]);
+  }, [activeCategory, selectedVersion, search, sortBy]);
 
-  // Categories config with icons
-  const categoryTabs = [
-    { name: 'All', icon: Layers, count: 8 },
-    { name: 'Clients', icon: Zap, count: 3 },
-    { name: 'Source Codes', icon: Code2, count: 2 },
-    { name: 'Tools', icon: Wrench, count: 2 },
-    { name: 'Macros', icon: Sparkles, count: 1 },
-    { name: 'Launchers', icon: Box, count: 1 },
-  ];
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.dropdown-container')) {
+        setCatMenuOpen(false);
+        setVerMenuOpen(false);
+        setSortMenuOpen(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
 
-  const resetAllFilters = () => {
-    setActiveCategory('All');
-    setSearch('');
-    setFilterVerified(false);
-    setFilterSourceOnly(false);
-    setFilter12111(false);
-    setFilterNative(false);
-    setSortBy('newest');
-  };
-
-  const hasAnyFilter =
-    activeCategory !== 'All' ||
-    search.trim().length > 0 ||
-    filterVerified ||
-    filterSourceOnly ||
-    filter12111 ||
-    filterNative;
+  const totalUploads = resources.length || 303;
 
   return (
-    <div style={{ minHeight: '100vh', padding: '24px 20px 80px 20px' }}>
-      <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
-        {/* Ambient XenntSquad Announcement Banner with GTA 6 Styling */}
+    <div style={{ minHeight: '100vh', paddingBottom: '80px' }}>
+      {/* ------------------------------------------------------------------
+          1. Top Announcement Bar (Image 2 Style: Join our new Discord server!)
+          ------------------------------------------------------------------ */}
+      {showDiscordBanner && (
+        <div className="top-announcement-bar">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span>Join our new Discord server!</span>
+            <a
+              href="https://discord.gg/syndicate"
+              target="_blank"
+              rel="noreferrer"
+              className="top-announcement-pill"
+            >
+              discord.gg/syndicate
+            </a>
+          </div>
+
+          <button
+            onClick={() => setShowDiscordBanner(false)}
+            aria-label="Dismiss banner"
+            style={{
+              position: 'absolute',
+              right: '16px',
+              background: 'none',
+              border: 'none',
+              color: '#8b949e',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              padding: '4px',
+            }}
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
+
+      <div style={{ maxWidth: '1180px', margin: '0 auto', padding: '36px 20px 0 20px' }}>
+        {/* ------------------------------------------------------------------
+            2. Hero Branding Section (Image 2 Trillium Solutions style)
+            ------------------------------------------------------------------ */}
         <div
-          className="gta-announcement"
           style={{
-            maxWidth: '1000px',
-            margin: '0 auto 48px auto',
-            padding: '10px 14px 10px 22px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '24px',
+            marginBottom: '32px',
+            flexWrap: 'wrap',
+          }}
+        >
+          {/* Logo Icon */}
+          <div
+            style={{
+              width: '68px',
+              height: '68px',
+              borderRadius: '16px',
+              background: 'linear-gradient(135deg, #161c28 0%, #10141d 100%)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              boxShadow: '0 8px 20px rgba(0, 0, 0, 0.4)',
+            }}
+          >
+            {/* Clean Crescent Moon / Syndicate Emblem */}
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#ff8533" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+            </svg>
+          </div>
+
+          {/* Title, Subtitle & Stats */}
+          <div style={{ flex: 1, minWidth: '280px' }}>
+            <h1
+              className="font-clean-title"
+              style={{
+                fontSize: '2rem',
+                color: '#ffffff',
+                lineHeight: '1.15',
+                marginBottom: '4px',
+              }}
+            >
+              Syndicate Solutions
+            </h1>
+
+            <p
+              className="font-clean-body"
+              style={{
+                fontSize: '0.92rem',
+                color: '#8b949e',
+                marginBottom: '14px',
+              }}
+            >
+              Everything is just free.
+            </p>
+
+            {/* Stats Pill Row (Image 2 style) */}
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <div className="stat-pill-item">
+                <Package size={13} style={{ color: '#8b949e' }} />
+                <span><strong>{totalUploads}</strong> uploads</span>
+              </div>
+
+              <div className="stat-pill-item">
+                <span style={{ color: '#ffc107', fontWeight: '700' }}>$1,893,768.72</span>
+                <span>saved</span>
+              </div>
+
+              <div className="stat-pill-item">
+                <Download size={13} style={{ color: '#38bdf8' }} />
+                <span><strong>151.2k</strong> downloads</span>
+              </div>
+
+              <div className="stat-pill-item">
+                <Users size={13} style={{ color: '#8b949e' }} />
+                <span><strong>15,645</strong> members</span>
+              </div>
+
+              <div className="stat-pill-item">
+                <span
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    backgroundColor: '#4ade80',
+                    boxShadow: '0 0 6px #4ade80',
+                    display: 'inline-block',
+                  }}
+                />
+                <span style={{ color: '#4ade80', fontWeight: '600' }}>24 online</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ------------------------------------------------------------------
+            3. Filter Bar (Image 2 style: Search | All ⌄ | All versions ⌄ | Top rated ⌄ | Quick pills)
+            ------------------------------------------------------------------ */}
+        <div
+          style={{
             display: 'flex',
             flexWrap: 'wrap',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '14px',
+            gap: '12px',
+            marginBottom: '28px',
+            paddingBottom: '20px',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-            <span
-              style={{
-                background: 'linear-gradient(135deg, #ff2a85 0%, #ff7a00 100%)',
-                color: '#ffffff',
-                fontSize: '0.74rem',
-                fontWeight: '900',
-                padding: '3px 10px',
-                borderRadius: '9999px',
-                letterSpacing: '0.04em',
-                boxShadow: '0 0 12px rgba(255, 42, 133, 0.5)',
-              }}
-            >
-              VICE CITY
-            </span>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#e5e7eb', fontSize: '0.9rem' }}>
-              <MessageSquare size={17} style={{ color: '#00f0ff' }} />
-              <span>
-                Join our official Discord community:{' '}
-                <strong style={{ color: '#ff7a00' }}>discord.gg/syndicate</strong>
-              </span>
-            </div>
-          </div>
-
-          <a
-            href="https://discord.gg/syndicate"
-            target="_blank"
-            rel="noreferrer"
-            className="gta-pill-btn gta-pill-btn-gold"
-            style={{ padding: '7px 18px', fontSize: '0.84rem' }}
-          >
-            <span>Join now</span>
-            <ArrowRight size={14} />
-          </a>
-        </div>
-
-        {/* Hero / Page Title Section */}
-        <div style={{ maxWidth: '1000px', margin: '0 auto 40px auto' }}>
-          <h1
-            className="font-gta-title"
-            style={{
-              fontSize: 'clamp(2.8rem, 6vw, 4.6rem)',
-              color: '#ffffff',
-              lineHeight: '1.05',
-              marginBottom: '14px',
-            }}
-          >
-            Cracks &amp; <span className="gta-text-sunset">Releases</span>
-          </h1>
-
-          {/* 64px Neon Sunset Accent Bar */}
-          <div
-            style={{
-              width: '64px',
-              height: '5px',
-              borderRadius: '3px',
-              background: 'linear-gradient(90deg, #ff1b7e 0%, #ff6a00 100%)',
-              boxShadow: '0 0 22px rgba(255, 27, 126, 0.85)',
-              marginBottom: '18px',
-            }}
-          />
-
-          <p
-            style={{
-              fontSize: '1.1rem',
-              fontWeight: '500',
-              color: '#a1a1aa',
-              maxWidth: '700px',
-              lineHeight: '1.55',
-            }}
-          >
-            Every verified client, source code, native C++ injector &amp; macro in the syndicate. Filter by category, search or sort.
-          </p>
-        </div>
-
-        {/* Two-Tier Filter & Category Bar */}
-        <div style={{ maxWidth: '1000px', margin: '0 auto 40px auto' }}>
-          {/* Tier 1: Horizontal Category Pill Tabs */}
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '10px',
-              marginBottom: '18px',
-            }}
-          >
-            {categoryTabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeCategory === tab.name;
-              return (
-                <button
-                  key={tab.name}
-                  onClick={() => setActiveCategory(tab.name)}
-                  className={`gta-cat-pill ${isActive ? 'active' : ''}`}
-                >
-                  <Icon size={15} />
-                  <span>{tab.name}</span>
-                  <span className="pill-count">{tab.count}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Tier 2: Search Input + Toggle Pills + Sort Dropdown */}
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              gap: '12px',
-            }}
-          >
+          {/* Left: Search & Dropdowns */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             {/* Search Pill Input */}
-            <div
-              style={{
-                position: 'relative',
-                flex: 1,
-                minWidth: '280px',
-              }}
-            >
+            <div style={{ position: 'relative' }}>
               <Search
-                size={17}
+                size={14}
                 style={{
                   position: 'absolute',
-                  left: '16px',
+                  left: '13px',
                   top: '50%',
                   transform: 'translateY(-50%)',
-                  color: '#6b7280',
+                  color: '#8b949e',
                 }}
               />
               <input
                 type="text"
-                placeholder="Search title, tag, version or author..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '11px 40px 11px 44px',
-                  borderRadius: '9999px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  color: '#ffffff',
-                  fontSize: '0.88rem',
-                  outline: 'none',
-                  transition: 'all 0.2s ease',
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#ff2a85';
-                  e.currentTarget.style.boxShadow = '0 0 20px -3px rgba(255, 42, 133, 0.35)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
+                placeholder="Search"
+                className="filter-pill-input"
+                style={{ width: '220px' }}
               />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
+            </div>
+
+            {/* Category Dropdown */}
+            <div className="dropdown-container" style={{ position: 'relative' }}>
+              <div
+                className={`filter-dropdown-pill ${activeCategory !== 'All' ? 'active' : ''}`}
+                onClick={() => {
+                  setCatMenuOpen(!catMenuOpen);
+                  setVerMenuOpen(false);
+                  setSortMenuOpen(false);
+                }}
+              >
+                <span>{activeCategory === 'All' ? 'All' : activeCategory}</span>
+                <ChevronDown size={13} />
+              </div>
+
+              {catMenuOpen && (
+                <div
                   style={{
                     position: 'absolute',
-                    right: '14px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none',
-                    border: 'none',
-                    color: '#9ca3af',
-                    cursor: 'pointer',
+                    top: '110%',
+                    left: 0,
+                    zIndex: 50,
+                    minWidth: '150px',
+                    background: '#111622',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: '10px',
+                    padding: '6px',
+                    boxShadow: '0 12px 28px rgba(0, 0, 0, 0.6)',
                   }}
                 >
-                  <X size={15} />
-                </button>
+                  {categoryOptions.map((cat) => (
+                    <div
+                      key={cat}
+                      onClick={() => {
+                        setActiveCategory(cat);
+                        setCatMenuOpen(false);
+                      }}
+                      style={{
+                        padding: '7px 12px',
+                        fontSize: '0.82rem',
+                        color: activeCategory === cat ? '#ff8533' : '#d1d5db',
+                        fontWeight: activeCategory === cat ? '600' : '400',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        backgroundColor: activeCategory === cat ? 'rgba(255, 106, 43, 0.12)' : 'transparent',
+                        transition: 'background 0.1s ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.06)')}
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.backgroundColor =
+                          activeCategory === cat ? 'rgba(255, 106, 43, 0.12)' : 'transparent')
+                      }
+                    >
+                      {cat}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 
-            {/* Filter Toggle: Verified Only */}
-            <button
-              onClick={() => setFilterVerified(!filterVerified)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '9px 16px',
-                borderRadius: '9999px',
-                border: '1px solid',
-                borderColor: filterVerified ? 'rgba(16, 185, 129, 0.5)' : 'rgba(255, 255, 255, 0.08)',
-                backgroundColor: filterVerified ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                color: filterVerified ? '#34d399' : '#9ca3af',
-                fontSize: '0.84rem',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <CheckCircle size={14} />
-              <span>Verified only</span>
-            </button>
-
-            {/* Filter Toggle: Source Code */}
-            <button
-              onClick={() => setFilterSourceOnly(!filterSourceOnly)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '9px 16px',
-                borderRadius: '9999px',
-                border: '1px solid',
-                borderColor: filterSourceOnly ? 'rgba(56, 189, 248, 0.5)' : 'rgba(255, 255, 255, 0.08)',
-                backgroundColor: filterSourceOnly ? 'rgba(56, 189, 248, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                color: filterSourceOnly ? '#38bdf8' : '#9ca3af',
-                fontSize: '0.84rem',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <Code2 size={14} />
-              <span>Source Code</span>
-            </button>
-
-            {/* Filter Toggle: 1.21.11 Only */}
-            <button
-              onClick={() => setFilter12111(!filter12111)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '9px 16px',
-                borderRadius: '9999px',
-                border: '1px solid',
-                borderColor: filter12111 ? 'rgba(255, 42, 133, 0.5)' : 'rgba(255, 255, 255, 0.08)',
-                backgroundColor: filter12111 ? 'rgba(255, 42, 133, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                color: filter12111 ? '#ff2a85' : '#9ca3af',
-                fontSize: '0.84rem',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <span>1.21.11 Only</span>
-            </button>
-
-            {/* Filter Toggle: Native C++ */}
-            <button
-              onClick={() => setFilterNative(!filterNative)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '9px 16px',
-                borderRadius: '9999px',
-                border: '1px solid',
-                borderColor: filterNative ? 'rgba(255, 122, 0, 0.5)' : 'rgba(255, 255, 255, 0.08)',
-                backgroundColor: filterNative ? 'rgba(255, 122, 0, 0.15)' : 'rgba(255, 255, 255, 0.03)',
-                color: filterNative ? '#ff7a00' : '#9ca3af',
-                fontSize: '0.84rem',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <span>Native C++</span>
-            </button>
-
-            {/* Sort Selector Pill */}
-            <div style={{ position: 'relative' }}>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                style={{
-                  padding: '9px 34px 9px 16px',
-                  borderRadius: '9999px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.04)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  color: '#ffffff',
-                  fontSize: '0.84rem',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  appearance: 'none',
-                  outline: 'none',
+            {/* Version Dropdown */}
+            <div className="dropdown-container" style={{ position: 'relative' }}>
+              <div
+                className={`filter-dropdown-pill ${selectedVersion !== 'All versions' ? 'active' : ''}`}
+                onClick={() => {
+                  setVerMenuOpen(!verMenuOpen);
+                  setCatMenuOpen(false);
+                  setSortMenuOpen(false);
                 }}
               >
-                <option value="newest" style={{ backgroundColor: '#0e0c16' }}>Newest</option>
-                <option value="downloads" style={{ backgroundColor: '#0e0c16' }}>Most Downloaded</option>
-                <option value="upvotes" style={{ backgroundColor: '#0e0c16' }}>Top Upvoted</option>
-                <option value="views" style={{ backgroundColor: '#0e0c16' }}>Most Viewed</option>
-              </select>
-              <ChevronDown
-                size={14}
-                style={{
-                  position: 'absolute',
-                  right: '14px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  pointerEvents: 'none',
-                  color: '#9ca3af',
-                }}
-              />
+                <span>{selectedVersion}</span>
+                <ChevronDown size={13} />
+              </div>
+
+              {verMenuOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '110%',
+                    left: 0,
+                    zIndex: 50,
+                    minWidth: '150px',
+                    background: '#111622',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: '10px',
+                    padding: '6px',
+                    boxShadow: '0 12px 28px rgba(0, 0, 0, 0.6)',
+                  }}
+                >
+                  {versionOptions.map((ver) => (
+                    <div
+                      key={ver}
+                      onClick={() => {
+                        setSelectedVersion(ver);
+                        setVerMenuOpen(false);
+                      }}
+                      style={{
+                        padding: '7px 12px',
+                        fontSize: '0.82rem',
+                        color: selectedVersion === ver ? '#ff8533' : '#d1d5db',
+                        fontWeight: selectedVersion === ver ? '600' : '400',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        backgroundColor: selectedVersion === ver ? 'rgba(255, 106, 43, 0.12)' : 'transparent',
+                        transition: 'background 0.1s ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.06)')}
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.backgroundColor =
+                          selectedVersion === ver ? 'rgba(255, 106, 43, 0.12)' : 'transparent')
+                      }
+                    >
+                      {ver}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
+
+            {/* Sort Dropdown */}
+            <div className="dropdown-container" style={{ position: 'relative' }}>
+              <div
+                className="filter-dropdown-pill"
+                onClick={() => {
+                  setSortMenuOpen(!sortMenuOpen);
+                  setCatMenuOpen(false);
+                  setVerMenuOpen(false);
+                }}
+              >
+                <SlidersHorizontal size={13} />
+                <span>{sortOptions.find((s) => s.id === sortBy)?.label || 'Top rated'}</span>
+                <ChevronDown size={13} />
+              </div>
+
+              {sortMenuOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '110%',
+                    left: 0,
+                    zIndex: 50,
+                    minWidth: '160px',
+                    background: '#111622',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: '10px',
+                    padding: '6px',
+                    boxShadow: '0 12px 28px rgba(0, 0, 0, 0.6)',
+                  }}
+                >
+                  {sortOptions.map((s) => (
+                    <div
+                      key={s.id}
+                      onClick={() => {
+                        setSortBy(s.id);
+                        setSortMenuOpen(false);
+                      }}
+                      style={{
+                        padding: '7px 12px',
+                        fontSize: '0.82rem',
+                        color: sortBy === s.id ? '#ff8533' : '#d1d5db',
+                        fontWeight: sortBy === s.id ? '600' : '400',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        backgroundColor: sortBy === s.id ? 'rgba(255, 106, 43, 0.12)' : 'transparent',
+                        transition: 'background 0.1s ease',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.06)')}
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.backgroundColor =
+                          sortBy === s.id ? 'rgba(255, 106, 43, 0.12)' : 'transparent')
+                      }
+                    >
+                      {s.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Quick Filter Pills (Image 2 style: Clients | All posts) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={() => setActiveCategory(activeCategory === 'Clients' ? 'All' : 'Clients')}
+              className={`filter-dropdown-pill ${activeCategory === 'Clients' ? 'active' : ''}`}
+              style={{ padding: '6px 14px', borderRadius: '9999px' }}
+            >
+              Clients
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveCategory('All');
+                setSelectedVersion('All versions');
+                setSearch('');
+              }}
+              className={`filter-dropdown-pill ${activeCategory === 'All' && !search ? 'active' : ''}`}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '9999px',
+                background: activeCategory === 'All' && !search ? 'rgba(255, 106, 43, 0.15)' : 'rgba(17, 22, 32, 0.9)',
+                borderColor: activeCategory === 'All' && !search ? 'rgba(255, 106, 43, 0.45)' : 'rgba(255, 255, 255, 0.1)',
+                color: activeCategory === 'All' && !search ? '#ff9d66' : '#d1d5db',
+              }}
+            >
+              All posts
+            </button>
           </div>
         </div>
 
-        {/* Content Section: 3-Column Responsive Grid */}
-        <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-          {loading ? (
-            <div
-              style={{
-                textAlign: 'center',
-                padding: '80px 0',
-                color: '#9ca3af',
-                fontSize: '1rem',
+        {/* ------------------------------------------------------------------
+            4. 3-Column Resource Cards Grid (Image 1 Format)
+            ------------------------------------------------------------------ */}
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '80px 0', color: '#8b949e', fontSize: '0.9rem' }}>
+            Loading releases...
+          </div>
+        ) : resources.length === 0 ? (
+          <div
+            style={{
+              textAlign: 'center',
+              padding: '80px 20px',
+              backgroundColor: 'rgba(16, 21, 31, 0.5)',
+              border: '1px solid rgba(255, 255, 255, 0.06)',
+              borderRadius: '14px',
+            }}
+          >
+            <p style={{ color: '#e5e7eb', fontSize: '1rem', fontWeight: '500', marginBottom: '8px' }}>
+              No resources found
+            </p>
+            <p style={{ color: '#8b949e', fontSize: '0.85rem', marginBottom: '16px' }}>
+              Try clearing filters or search terms to see all available releases.
+            </p>
+            <button
+              onClick={() => {
+                setActiveCategory('All');
+                setSelectedVersion('All versions');
+                setSearch('');
               }}
+              className="filter-dropdown-pill active"
             >
-              Loading verified Syndicate releases...
-            </div>
-          ) : resources.length > 0 ? (
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-                gap: '24px',
-              }}
-            >
-              {resources.map((res) => (
-                <ResourceCard key={res.id} resource={res} />
-              ))}
-            </div>
-          ) : (
-            <div
-              style={{
-                backgroundColor: 'rgba(18, 16, 26, 0.7)',
-                borderRadius: '20px',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                padding: '60px 24px',
-                textAlign: 'center',
-                maxWidth: '460px',
-                margin: '40px auto',
-              }}
-            >
-              <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#fff', marginBottom: '8px' }}>
-                No Releases Found
-              </h3>
-              <p style={{ color: '#9ca3af', fontSize: '0.9rem', marginBottom: '20px' }}>
-                Try adjusting your search keywords or active category filters.
-              </p>
-              <button onClick={resetAllFilters} className="gta-pill-btn gta-pill-btn-secondary">
-                Reset All Filters
-              </button>
-            </div>
-          )}
-        </div>
+              Reset filters
+            </button>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+              gap: '20px',
+            }}
+          >
+            {resources.map((res) => (
+              <ResourceCard key={res.id} resource={res} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
