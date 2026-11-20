@@ -3,16 +3,16 @@
      Lighter, High-Contrast & Sleek Slate Theme
      ========================================================================== */
   /* Backgrounds: Lighter, clean slate-charcoal (no pitch-black or murky yellow) */
-  --bg: #0e131d;
-  --bg-surface: #141b27;
-  --bg-card: #17202f;
-  --bg-card-hover: #1e283b;
-  --bg-dropdown: #17202f;
+  --bg: #0f172a;
+  --bg-surface: #1e293b;
+  --bg-card: #1e293b;
+  --bg-card-hover: #25334a;
+  --bg-dropdown: #1e293b;
 
   /* Typography: Crisp, High-Contrast & Highly Readable */
   --text: #ffffff;
   --text-main: #ffffff;
-  --text-body: #e2e8f0;
+  --text-body: #f1f5f9;
   --text-muted: #94a3b8;
   --text-dim: #64748b;
 
@@ -29,20 +29,20 @@
   --red-alert: #ef4444;
 
   /* Borders & Rims */
-  --edge: rgba(255, 255, 255, 0.1);
-  --edge-hover: rgba(56, 189, 248, 0.45);
-  --edge-subtle: rgba(255, 255, 255, 0.06);
+  --edge: rgba(255, 255, 255, 0.12);
+  --edge-hover: rgba(56, 189, 248, 0.5);
+  --edge-subtle: rgba(255, 255, 255, 0.08);
 
   /* Gradients */
   --grad-primary: linear-gradient(135deg, #38bdf8 0%, #6366f1 100%);
   --grad-primary-hover: linear-gradient(135deg, #0ea5e9 0%, #4f46e5 100%);
   --grad-hot: linear-gradient(135deg, #ff5e36 0%, #f59e0b 100%);
-  --grad-card-overlay: linear-gradient(180deg, rgba(14, 19, 29, 0) 40%, rgba(14, 19, 29, 0.85) 100%);
+  --grad-card-overlay: linear-gradient(180deg, rgba(15, 23, 42, 0) 40%, rgba(15, 23, 42, 0.85) 100%);
 
   /* Shadows */
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
-  --shadow-card: 0 8px 24px -4px rgba(0, 0, 0, 0.4), 0 0 1px 1px rgba(255, 255, 255, 0.07);
-  --shadow-card-hover: 0 16px 36px -6px rgba(0, 0, 0, 0.6), 0 0 20px -2px rgba(56, 189, 248, 0.3);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-card: 0 8px 24px -4px rgba(0, 0, 0, 0.35), 0 0 1px 1px rgba(255, 255, 255, 0.08);
+  --shadow-card-hover: 0 16px 36px -6px rgba(0, 0, 0, 0.5), 0 0 20px -2px rgba(56, 189, 248, 0.3);
 
   /* Dimensions & Timing */
   --radius: 14px;
