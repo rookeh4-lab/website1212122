@@ -237,8 +237,11 @@ export default function AdminPage() {
       }
 
       // 3. Prepare Payload
+      const generatedSlug = uploadForm.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '') + '-' + Date.now().toString(36);
+
       const newResource = {
         title: uploadForm.title.trim(),
+        slug: generatedSlug,
         category: uploadForm.category,
         version: uploadForm.version,
         loader: uploadForm.loader,
@@ -272,6 +275,7 @@ export default function AdminPage() {
         // Fallback with only guaranteed schema columns
         const coreResource = {
           title: newResource.title,
+          slug: generatedSlug,
           category: newResource.category,
           version: newResource.version,
           loader: newResource.loader,
