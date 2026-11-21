@@ -90,7 +90,7 @@ export default function ResourceDetail() {
 
     if (targetUrl) {
       try {
-        const res = await fetch(targetUrl);
+        const res = await fetch(targetUrl, { mode: 'cors' });
         if (res.ok) {
           const blob = await res.blob();
           const blobUrl = URL.createObjectURL(blob);
@@ -101,15 +101,17 @@ export default function ResourceDetail() {
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(blobUrl);
-          setTimeout(() => setDownloading(false), 500);
+          setTimeout(() => setDownloading(false), 800);
           return;
         }
       } catch (_e) {}
 
-      // Direct anchor trigger
+      // Direct download trigger (with target=_blank to prevent tab navigation)
       const a = document.createElement('a');
       a.href = targetUrl;
       a.download = fileName;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -126,7 +128,7 @@ export default function ResourceDetail() {
       URL.revokeObjectURL(url);
     }
 
-    setTimeout(() => setDownloading(false), 500);
+    setTimeout(() => setDownloading(false), 800);
   };
 
   if (loading) {
@@ -258,41 +260,38 @@ export default function ResourceDetail() {
                 {resource.author_name || 'sub5larp'}
               </span>
 
-              {/* CLEAN / Role Badge */}
+              {/* Type & Clean Tags (Exact Match Image 8) */}
               <span
                 style={{
-                  fontSize: '0.74rem',
-                  fontWeight: '600',
-                  padding: '2px 8px',
-                  borderRadius: '999px',
-                  background: 'rgba(56, 189, 248, 0.1)',
-                  color: '#38bdf8',
-                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  fontSize: '0.78rem',
+                  fontWeight: '700',
+                  padding: '3px 10px',
+                  borderRadius: '6px',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  color: '#f87171',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '4px',
                 }}
               >
-                <span>&lt;/&gt;</span>
-                <span>Reverse Engineer</span>
+                {resource.type || (resource.category === 'Source Codes' ? 'Source Code' : resource.category === 'Tools' ? 'Tool' : 'Client')}
               </span>
 
               <span
                 style={{
-                  fontSize: '0.72rem',
-                  fontWeight: '700',
-                  padding: '2px 8px',
-                  borderRadius: '999px',
-                  background: 'rgba(16, 185, 129, 0.12)',
-                  color: '#10b981',
-                  border: '1px solid rgba(16, 185, 129, 0.35)',
+                  fontSize: '0.78rem',
+                  fontWeight: '800',
+                  padding: '3px 10px',
+                  borderRadius: '6px',
+                  background: resource.is_clean !== false ? 'rgba(16, 185, 129, 0.12)' : 'rgba(234, 179, 8, 0.12)',
+                  color: resource.is_clean !== false ? '#10b981' : '#eab308',
+                  border: resource.is_clean !== false ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(234, 179, 8, 0.4)',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '3px',
+                  letterSpacing: '0.02em',
                 }}
               >
-                <ShieldCheck size={11} />
-                <span>CLEAN</span>
+                {resource.is_clean !== false ? 'CLEAN' : 'UNVERIFIED'}
               </span>
             </div>
 

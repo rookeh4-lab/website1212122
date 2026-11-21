@@ -47,6 +47,37 @@ export default function ResourceCard({ resource }) {
           background: '#0e1526',
         }}
       >
+        {/* Tags Row: Type & Clean Badge (Exact Image 8 style) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+          <span
+            style={{
+              fontSize: '0.72rem',
+              fontWeight: '700',
+              padding: '2px 8px',
+              borderRadius: '6px',
+              background: 'rgba(239, 68, 68, 0.1)',
+              color: '#f87171',
+              border: '1px solid rgba(239, 68, 68, 0.35)',
+            }}
+          >
+            {resource.type || (resource.category === 'Source Codes' ? 'Source Code' : resource.category === 'Tools' ? 'Tool' : 'Client')}
+          </span>
+          <span
+            style={{
+              fontSize: '0.72rem',
+              fontWeight: '800',
+              padding: '2px 8px',
+              borderRadius: '6px',
+              background: isClean ? 'rgba(16, 185, 129, 0.12)' : 'rgba(234, 179, 8, 0.12)',
+              color: isClean ? '#10b981' : '#eab308',
+              border: isClean ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(234, 179, 8, 0.4)',
+              letterSpacing: '0.02em',
+            }}
+          >
+            {isClean ? 'CLEAN' : 'UNVERIFIED'}
+          </span>
+        </div>
+
         {/* Title: Clean bold white text with blue hover */}
         <Link
           to={`/resource/${resource.slug || resource.id}`}

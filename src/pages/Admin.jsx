@@ -172,11 +172,14 @@ export default function AdminPage() {
     try {
       const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
       const filePath = `${Date.now()}_${safeName}`;
+
       const { data, error: uploadErr } = await supabase.storage
         .from(bucket)
         .upload(filePath, file, { cacheControl: '3600', upsert: true });
 
-      if (uploadErr) throw uploadErr;
+      if (uploadErr) {
+        console.warn('Storage upload error:', uploadErr.message);
+      }
 
       const { data: publicData } = supabase.storage
         .from(bucket)
@@ -271,29 +274,13 @@ export default function AdminPage() {
       if (insertError) {
         console.warn('Initial insert threw, retrying with core columns:', insertError.message);
         // Fallback with only guaranteed schema columns
-        const coreResource = {
-          title: newResource.title,
-          slug: generatedSlug,
-          category: newResource.category,
-          version: newResource.version,
-          loader: newResource.loader,
-          type: newResource.type,
-          description: newResource.description,
-          credits: customCredits,
-          author_name: authorName,
-          author_avatar: authorAvatar,
-          client_file_name: newResource.client_file_name,
-          client_file_size: newResource.client_file_size,
-          client_download_url: newResource.client_download_url,
-          download_url: newResource.download_url,
-          is_clean: newResource.is_clean,
-          is_approved: true,
-          thumbnail_url: newResource.thumbnail_url,
-          screenshots: newResource.screenshots,
-          tags: newResource.tags,
-          downloads_count: newResource.downloads_count,
-          likes_count: newResource.likes_count,
-        };
+        const coreResource = { ...newResource };
+        if (insertError.message && insertError.message.includes('schema cache')) {
+          const colMatch = insertError.message.match(/'([^']+)' column/);
+          if (colMatch && colMatch[1]) {
+            delete coreResource[colMatch[1]];
+          }
+        }
         const { error: fallbackErr } = await supabase.from('resources').insert([coreResource]);
         if (fallbackErr) throw fallbackErr;
       }
