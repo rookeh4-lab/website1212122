@@ -410,15 +410,19 @@ export default function Home() {
                 backgroundColor: 'rgba(13, 21, 39, 0.85)',
                 border: '1px solid #1e2f4a',
                 textDecoration: 'none',
-                transition: 'all 0.16s ease',
+                transition: 'all 0.22s var(--ease-out)',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.borderColor = '#38bdf8';
                 e.currentTarget.style.color = '#ffffff';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = '0 6px 18px -2px rgba(56, 189, 248, 0.35)';
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.borderColor = '#1e2f4a';
                 e.currentTarget.style.color = '#cbd5e1';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
               }}
             >
               <span className="pulse-beacon" />
@@ -733,7 +737,7 @@ export default function Home() {
             </button>
           </div>
         ) : (
-          <div className="resource-grid">
+          <div className="resource-grid" key={activeCategory}>
             {filteredResources.map((resource) => (
               <ResourceCard key={resource.id} resource={resource} />
             ))}

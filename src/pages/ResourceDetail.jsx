@@ -204,16 +204,7 @@ export default function ResourceDetail() {
         {/* ------------------------------------------------------------------
             CARD 1: Title Header Card (Exact Attachment 3 Layout)
             ------------------------------------------------------------------ */}
-        <div
-          style={{
-            background: '#0d1527',
-            border: '1px solid #1a2744',
-            borderRadius: '14px',
-            padding: '22px 26px',
-            marginBottom: '16px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
-          }}
-        >
+        <div className="detail-card-glass">
           {/* Category Top Breadcrumb */}
           <div style={{ fontSize: '0.82rem', fontWeight: '600', color: '#818cf8', marginBottom: '8px' }}>
             {categoryName}
@@ -356,16 +347,7 @@ export default function ResourceDetail() {
         {/* ------------------------------------------------------------------
             CARD 2: Description Card (Exact Attachment 3 Layout)
             ------------------------------------------------------------------ */}
-        <div
-          style={{
-            background: '#0d1527',
-            border: '1px solid #1a2744',
-            borderRadius: '14px',
-            padding: '24px 26px',
-            marginBottom: '16px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
-          }}
-        >
+        <div className="detail-card-glass">
           <div style={{ fontSize: '1.05rem', fontWeight: '700', color: '#ffffff', marginBottom: '14px' }}>
             Description
           </div>
@@ -422,32 +404,13 @@ export default function ResourceDetail() {
         {/* ------------------------------------------------------------------
             CARD 3: Downloads Card (Direct File Download - No Shit Links)
             ------------------------------------------------------------------ */}
-        <div
-          style={{
-            background: '#0d1527',
-            border: '1px solid #1a2744',
-            borderRadius: '14px',
-            padding: '24px 26px',
-            marginBottom: '16px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
-          }}
-        >
+        <div className="detail-card-glass">
           <div style={{ fontSize: '1.05rem', fontWeight: '700', color: '#ffffff', marginBottom: '16px' }}>
             Downloads
           </div>
 
           {/* Direct File Download Box */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '14px 18px',
-              borderRadius: '10px',
-              background: '#090e1a',
-              border: '1px solid #1b2944',
-            }}
-          >
+          <div className="direct-download-box">
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
               <div
                 style={{
@@ -510,18 +473,14 @@ export default function ResourceDetail() {
             {actualScreenshots.map((imgUrl, i) => (
               <div
                 key={i}
-                style={{
-                  aspectRatio: '16/10',
-                  borderRadius: '12px',
-                  overflow: 'hidden',
-                  background: '#0d1527',
-                  border: '1px solid #1a2744',
-                }}
+                className="screenshot-preview-card"
               >
                 <img
                   src={imgUrl}
                   alt={`Client Screenshot ${i + 1}`}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.35s var(--ease-out)' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.04)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
                 />
               </div>
             ))}
