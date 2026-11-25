@@ -5,6 +5,7 @@ const AuthContext = createContext(null);
 
 const AUTHORIZED_ADMIN_EMAIL = 'rookeh4@gmail.com';
 const ADMIN_PASSWORD = 'rabin1122';
+const ADMIN_SESSION_KEY = 'syndicate_admin_session_v3';
 
 const DEFAULT_AVATAR = 'https://ooxshxykdujgxcyezofo.supabase.co/storage/v1/object/public/client-images/rain-avatar.jpg';
 
@@ -83,20 +84,35 @@ export function AuthProvider({ children }) {
   };
 
   useEffect(() => {
+    // Force logout everyone from legacy sessions
+    try {
+      localStorage.removeItem('admin_user');
+      localStorage.removeItem('plutora_token');
+      localStorage.removeItem('plutora_user');
+      localStorage.removeItem('555_admin_token');
+    } catch {}
+
     // 1. Get initial session
     async function initSession() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          setUser(session.user);
-          if (session.user.email?.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL) {
-            localStorage.setItem('admin_user', AUTHORIZED_ADMIN_EMAIL);
+        if (session?.user && session.user.email?.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL) {
+          // Verify admin has valid current session key
+          const currentToken = localStorage.getItem(ADMIN_SESSION_KEY);
+          if (currentToken === 'rabin1122_authenticated') {
+            setUser(session.user);
+            await syncProfile(session.user);
+          } else {
+            // Not authenticated with rabin1122 -> force logout
+            setUser(null);
           }
+        } else if (session?.user) {
+          setUser(session.user);
           await syncProfile(session.user);
         } else {
-          // Check if local admin session exists for quick admin access
-          const localAdmin = localStorage.getItem('admin_user');
-          if (localAdmin === AUTHORIZED_ADMIN_EMAIL) {
+          // Check if verified admin session exists with valid rabin1122 key
+          const currentToken = localStorage.getItem(ADMIN_SESSION_KEY);
+          if (currentToken === 'rabin1122_authenticated') {
             let saved = { username: 'rain', avatar_url: DEFAULT_AVATAR };
             try {
               const raw = localStorage.getItem('syndicate_user_profile');
@@ -128,17 +144,20 @@ export function AuthProvider({ children }) {
 
     // 2. Listen for auth state changes
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        setUser(session.user);
-        if (session.user.email?.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL) {
-          localStorage.setItem('admin_user', AUTHORIZED_ADMIN_EMAIL);
+      if (session?.user && session.user.email?.toLowerCase().trim() === AUTHORIZED_ADMIN_EMAIL) {
+        const currentToken = localStorage.getItem(ADMIN_SESSION_KEY);
+        if (currentToken === 'rabin1122_authenticated') {
+          setUser(session.user);
+          await syncProfile(session.user);
         } else {
-          localStorage.removeItem('admin_user');
+          setUser(null);
         }
+      } else if (session?.user) {
+        setUser(session.user);
         await syncProfile(session.user);
       } else {
-        const localAdmin = localStorage.getItem('admin_user');
-        if (localAdmin === AUTHORIZED_ADMIN_EMAIL) {
+        const currentToken = localStorage.getItem(ADMIN_SESSION_KEY);
+        if (currentToken === 'rabin1122_authenticated') {
           let saved = { username: 'rain', avatar_url: DEFAULT_AVATAR };
           try {
             const raw = localStorage.getItem('syndicate_user_profile');
@@ -245,7 +264,8 @@ export function AuthProvider({ children }) {
           avatar_url: saved.avatar_url || DEFAULT_AVATAR,
         },
       };
-      localStorage.setItem('admin_user', AUTHORIZED_ADMIN_EMAIL);
+      localStorage.setItem(ADMIN_SESSION_KEY, 'rabin1122_authenticated');
+      localStorage.removeItem('admin_user');
       setUser(adminUser);
       await syncProfile(adminUser);
       return { user: adminUser };
@@ -287,22 +307,23 @@ export function AuthProvider({ children }) {
 
     if (data?.user) {
       setUser(data.user);
-      if (cleanEmail === AUTHORIZED_ADMIN_EMAIL) {
-        localStorage.setItem('admin_user', AUTHORIZED_ADMIN_EMAIL);
-      }
       await syncProfile(data.user);
     }
     return data;
   };
 
-  // Sign Out
+  // Sign Out (clears all admin tokens and sessions)
   const signOut = async () => {
     try {
       await supabase.auth.signOut();
     } catch (_e) {}
-    localStorage.removeItem('admin_user');
-    localStorage.removeItem('plutora_token');
-    localStorage.removeItem('plutora_user');
+    try {
+      localStorage.removeItem(ADMIN_SESSION_KEY);
+      localStorage.removeItem('admin_user');
+      localStorage.removeItem('plutora_token');
+      localStorage.removeItem('plutora_user');
+      localStorage.removeItem('555_admin_token');
+    } catch {}
     setUser(null);
   };
 

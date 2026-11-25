@@ -13,12 +13,65 @@ import {
   Sparkles,
   X,
   Check,
-  AlertCircle
+  AlertCircle,
+  Bell,
+  Send
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 
 const AUTHORIZED_ADMIN_EMAIL = 'rookeh4@gmail.com';
+const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1575153678103617576/MgvyY65lJpz7uLLdC-udALpoRxdN_C7hNjvCf3X2YvK4DZyodDNl9LFOsso9uxvwn95J';
+
+export const sendDiscordClientNotification = async (resource) => {
+  if (!DISCORD_WEBHOOK_URL) return false;
+  try {
+    const origin = window.location.origin || 'https://rookeh4-lab.github.io/website1212122';
+    const clientPageUrl = `${origin}/#/resource/${resource.slug || resource.id}`;
+    
+    let imageUrl = resource.thumbnail_url;
+    if (!imageUrl && resource.screenshots && resource.screenshots.length > 0) {
+      imageUrl = resource.screenshots[0];
+    }
+    if (!imageUrl) {
+      imageUrl = 'https://ooxshxykdujgxcyezofo.supabase.co/storage/v1/object/public/client-images/rain-avatar.jpg';
+    }
+
+    const payload = {
+      content: `@here 🚀 **New Client Release Published to Client Syndicate!**\nDirect Link: ${clientPageUrl}`,
+      embeds: [{
+        title: `⚡ ${resource.title}`,
+        url: clientPageUrl,
+        description: resource.description || `Verified release of **${resource.title}** is now available for direct download.`,
+        color: resource.is_featured ? 0xff5500 : 0x00f0ff,
+        fields: [
+          { name: '📦 Category', value: resource.category || 'Clients', inline: true },
+          { name: '🎮 Version', value: resource.version || '1.21.11', inline: true },
+          { name: '⚙️ Loader', value: resource.loader || 'Fabric', inline: true },
+          { name: '🛡️ Integrity', value: resource.is_clean ? '✅ Clean & Verified' : '⚠️ Community Test', inline: true },
+          { name: '💾 File', value: `\`${resource.client_file_name || 'release.jar'}\` (${resource.client_file_size || 'N/A'})`, inline: true },
+          { name: '👑 Publisher', value: resource.author_name || 'rain', inline: true }
+        ],
+        image: { url: imageUrl },
+        footer: {
+          text: 'Client Syndicate • Direct Downloads Only • No Ads • No Linkvertise',
+          icon_url: resource.author_avatar || 'https://ooxshxykdujgxcyezofo.supabase.co/storage/v1/object/public/client-images/rain-avatar.jpg'
+        },
+        timestamp: new Date().toISOString()
+      }]
+    };
+
+    const res = await fetch(DISCORD_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    return res.ok || res.status === 204;
+  } catch (err) {
+    console.warn('Discord webhook failed:', err);
+    return false;
+  }
+};
 
 const PRESET_IMAGES = [
   {
@@ -51,6 +104,7 @@ export default function AdminPage() {
   const [passwordInput, setPasswordInput] = useState('');
   const [gateLoading, setGateLoading] = useState(false);
   const [gateError, setGateError] = useState('');
+  const [broadcastingId, setBroadcastingId] = useState(null);
 
   // Direct File Upload Form State
   const [uploadForm, setUploadForm] = useState({
@@ -59,11 +113,12 @@ export default function AdminPage() {
     version: '1.21.11',
     loader: 'Fabric',
     description: '',
-    author_name: 'Rookeh',
+    author_name: 'rain',
     is_clean: true,
     is_featured: false,
     gui_bind: 'right shift',
-    credits: '• Rookeh\n• Client Syndicate Archive',
+    credits: '• rain\n• Client Syndicate Archive',
+    custom_download_url: '',
   });
 
   // Client Binary File State
@@ -224,11 +279,17 @@ export default function AdminPage() {
       const finalScreenshots = finalThumbnailUrl ? [finalThumbnailUrl] : [];
 
       // 2. Process Binary Release File (Direct storage or release path)
-      let directDownloadUrl = `https://github.com/rookeh4-lab/website1212122/releases/download/v1.0.0/${encodeURIComponent(clientFileName)}`;
-      if (selectedFile) {
-        const storageReleaseUrl = await uploadBinaryToStorage(selectedFile);
-        if (storageReleaseUrl) {
-          directDownloadUrl = storageReleaseUrl;
+      let directDownloadUrl = uploadForm.custom_download_url?.trim() || '';
+      if (!directDownloadUrl) {
+        if (selectedFile) {
+          const storageReleaseUrl = await uploadBinaryToStorage(selectedFile);
+          if (storageReleaseUrl) {
+            directDownloadUrl = storageReleaseUrl;
+          } else {
+            throw new Error(`File "${selectedFile.name}" could not be uploaded to browser storage. If it is >50MB, please provide a direct download URL.`);
+          }
+        } else {
+          directDownloadUrl = `https://github.com/rookeh4-lab/website1212122/releases/download/v1.0.0/${encodeURIComponent(clientFileName)}`;
         }
       }
 
@@ -286,7 +347,19 @@ export default function AdminPage() {
         if (fallbackErr) throw fallbackErr;
       }
 
-      setMessage(`Successfully published "${uploadForm.title}" directly to Client Syndicate!`);
+      // Post to Discord Webhook with @here, image preview, direct link, and release specs
+      let discordAnnounced = false;
+      try {
+        discordAnnounced = await sendDiscordClientNotification(newResource);
+      } catch (err) {
+        console.warn('Discord webhook notification error:', err);
+      }
+
+      setMessage(
+        discordAnnounced
+          ? `Successfully published "${uploadForm.title}" directly to Client Syndicate & broadcasted to Discord!`
+          : `Successfully published "${uploadForm.title}" directly to Client Syndicate!`
+      );
 
       // Update local cache immediately so it shows instantly everywhere
       try {
@@ -308,6 +381,7 @@ export default function AdminPage() {
         is_featured: false,
         gui_bind: 'right shift',
         credits: `• ${authorName}\n• Client Syndicate Archive`,
+        custom_download_url: '',
       });
       setSelectedFile(null);
       setFileDetails({ name: '', size: '', type: '' });
@@ -320,6 +394,24 @@ export default function AdminPage() {
       setError(err.message || 'Failed to submit client upload');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleBroadcastToDiscord = async (resItem) => {
+    setBroadcastingId(resItem.id);
+    setMessage('');
+    setError('');
+    try {
+      const ok = await sendDiscordClientNotification(resItem);
+      if (ok) {
+        setMessage(`📢 Sent Discord release announcement with @here & link for "${resItem.title}"!`);
+      } else {
+        setError(`Failed to send Discord announcement for "${resItem.title}".`);
+      }
+    } catch (e) {
+      setError('Discord notification error: ' + (e.message || 'Network error'));
+    } finally {
+      setTimeout(() => setBroadcastingId(null), 1000);
     }
   };
 
@@ -763,6 +855,25 @@ export default function AdminPage() {
                       {fileDetails.size ? `${fileDetails.type} • ${fileDetails.size}` : 'Direct file upload (no external links)'}
                     </div>
                   </div>
+                </div>
+
+                <div style={{ marginTop: '8px' }}>
+                  <input
+                    type="url"
+                    value={uploadForm.custom_download_url}
+                    onChange={(e) => setUploadForm({ ...uploadForm, custom_download_url: e.target.value })}
+                    placeholder="Or paste Direct Download URL (optional - e.g. GitHub release, Catbox, direct CDN)"
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      background: '#070b14',
+                      border: '1px solid #1a2744',
+                      color: '#cbd5e1',
+                      fontSize: '0.80rem',
+                      outline: 'none',
+                    }}
+                  />
                 </div>
               </div>
 
@@ -1211,6 +1322,29 @@ export default function AdminPage() {
                         }}
                       >
                         {res.is_clean ? 'VERIFIED' : 'UNVERIFIED'}
+                      </button>
+
+                      {/* Ping Discord Announcement */}
+                      <button
+                        onClick={() => handleBroadcastToDiscord(res)}
+                        disabled={broadcastingId === res.id}
+                        style={{
+                          padding: '5px 12px',
+                          borderRadius: '6px',
+                          background: broadcastingId === res.id ? '#1e293b' : '#1e1b4b',
+                          border: '1px solid #6366f1',
+                          color: '#a5b4fc',
+                          fontSize: '0.78rem',
+                          fontWeight: '700',
+                          cursor: broadcastingId === res.id ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                        }}
+                        title="Broadcast @here ping & image preview to Discord #Uploads"
+                      >
+                        <Bell size={13} />
+                        {broadcastingId === res.id ? 'Pinging...' : 'Ping Discord'}
                       </button>
 
                       {/* View Link */}
