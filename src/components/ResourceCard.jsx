@@ -1,15 +1,24 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Flame, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Flame, CheckCircle2, ShieldCheck, AlertCircle } from 'lucide-react';
 
 export default function ResourceCard({ resource }) {
   if (!resource) return null;
 
-  const isHot = resource.is_featured || (resource.downloads_count && resource.downloads_count > 1000);
+  const isHot = Boolean(
+    resource.is_featured ||
+    resource.is_hot ||
+    (Array.isArray(resource.tags) && (
+      resource.tags.includes('hot') ||
+      resource.tags.includes('Hot topic') ||
+      resource.tags.includes('Hot')
+    )) ||
+    (resource.downloads_count && resource.downloads_count > 1000)
+  );
   const isClean = resource.is_clean !== false && resource.status !== 'unverified';
 
   return (
-    <div className="resource-card-clean">
+    <div className={`resource-card-clean ${isHot ? 'card-hot-flame' : ''}`}>
       {/* 16:9 Thumbnail Area */}
       <Link
         to={`/resource/${resource.slug || resource.id}`}
@@ -47,37 +56,6 @@ export default function ResourceCard({ resource }) {
           background: '#0e1526',
         }}
       >
-        {/* Tags Row: Type & Clean Badge (Exact Image 8 style) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-          <span
-            style={{
-              fontSize: '0.72rem',
-              fontWeight: '700',
-              padding: '2px 8px',
-              borderRadius: '6px',
-              background: 'rgba(239, 68, 68, 0.1)',
-              color: '#f87171',
-              border: '1px solid rgba(239, 68, 68, 0.35)',
-            }}
-          >
-            {resource.type || (resource.category === 'Source Codes' ? 'Source Code' : resource.category === 'Tools' ? 'Tool' : 'Client')}
-          </span>
-          <span
-            style={{
-              fontSize: '0.72rem',
-              fontWeight: '800',
-              padding: '2px 8px',
-              borderRadius: '6px',
-              background: isClean ? 'rgba(16, 185, 129, 0.12)' : 'rgba(234, 179, 8, 0.12)',
-              color: isClean ? '#10b981' : '#eab308',
-              border: isClean ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(234, 179, 8, 0.4)',
-              letterSpacing: '0.02em',
-            }}
-          >
-            {isClean ? 'CLEAN' : 'UNVERIFIED'}
-          </span>
-        </div>
-
         {/* Title: Clean bold white text with blue hover */}
         <Link
           to={`/resource/${resource.slug || resource.id}`}
@@ -103,7 +81,7 @@ export default function ResourceCard({ resource }) {
             fontSize: '0.84rem',
             color: '#94a3b8',
             lineHeight: '1.45',
-            marginBottom: '14px',
+            marginBottom: '12px',
             display: '-webkit-box',
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
@@ -113,7 +91,48 @@ export default function ResourceCard({ resource }) {
           {resource.short_description || resource.description || 'Verified Minecraft resource release.'}
         </p>
 
-        {/* Card Footer: Clean Author only (Comments/Views removed per user request) */}
+        {/* Badges Row: Hot topic, Verified & Type (Exact Match Reference Image) */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '14px',
+            flexWrap: 'wrap',
+          }}
+        >
+          {/* Type Badge */}
+          <span
+            style={{
+              fontSize: '0.70rem',
+              fontWeight: '700',
+              padding: '2.5px 8px',
+              borderRadius: '6px',
+              background: 'rgba(239, 68, 68, 0.1)',
+              color: '#f87171',
+              border: '1px solid rgba(239, 68, 68, 0.35)',
+              letterSpacing: '0.02em',
+            }}
+          >
+            {resource.type || (resource.category === 'Source Codes' ? 'Source Code' : resource.category === 'Tools' ? 'Tool' : 'Client')}
+          </span>
+
+          {/* Glowing Animated Hot Topic Badge with Shining Light Beam */}
+          {isHot && (
+            <span className="badge-hot-topic-shine">
+              <Flame size={12} className="flame-icon-animated" />
+              Hot topic
+            </span>
+          )}
+
+          {/* Shining Emerald Verified Badge */}
+          <span className="badge-verified-shine">
+            <CheckCircle2 size={12} />
+            {isClean ? 'VERIFIED' : 'UNVERIFIED'}
+          </span>
+        </div>
+
+        {/* Card Footer: Clean Author only */}
         <div
           style={{
             marginTop: 'auto',

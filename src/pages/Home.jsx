@@ -20,6 +20,31 @@ import { useAuth } from '../context/AuthContext';
 
 const FALLBACK_RESOURCES = [
   {
+    id: "185563c1-2c9f-457c-a7a0-d19a571b3a98",
+    title: "Ventura 2.1 | Latest Build",
+    slug: "ventura-2-1-mwvze1e2",
+    category: "Clients",
+    version: "1.21.11",
+    loader: "Fabric",
+    type: "Client",
+    author_name: "rain",
+    author_avatar: "https://ooxshxykdujgxcyezofo.supabase.co/storage/v1/object/public/client-images/rain-avatar.jpg",
+    thumbnail_url: "https://ooxshxykdujgxcyezofo.supabase.co/storage/v1/object/public/client-images/1795602524242-kf8s2.jpg",
+    client_file_name: "vnt2.jar",
+    client_file_size: "50.2 MB",
+    client_download_url: "https://ooxshxykdujgxcyezofo.supabase.co/storage/v1/object/public/client-releases/1795602525333_vnt2.jar",
+    download_url: "https://ooxshxykdujgxcyezofo.supabase.co/storage/v1/object/public/client-releases/1795602525333_vnt2.jar",
+    downloads_count: 201,
+    likes_count: 6,
+    description: "Why? rockstar paste 🙄 How To Use Download the client.jar and fabric loader 0.20.1+ Extract it into .minecraft/mods folder Launch Click Rshift to...",
+    credits: "• @rosetkaqqe\n• @movefix\n• @tru3club",
+    is_clean: true,
+    is_featured: true,
+    is_approved: true,
+    tags: ["Clients", "Hot topic"],
+    created_at: "2026-11-25T10:29:02.241Z"
+  },
+  {
     id: "4818f0cf-3753-4935-8540-346f4765e690",
     title: "Corz ( Source code )",
     slug: "corz-source-code-mwpcggpp",

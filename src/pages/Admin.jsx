@@ -336,6 +336,37 @@ export default function AdminPage() {
     }
   };
 
+  // Toggle Hot Topic tag & glowing aura
+  const handleToggleHot = async (resItem) => {
+    try {
+      const nextHot = !resItem.is_featured;
+      const nextTags = Array.isArray(resItem.tags) ? [...resItem.tags] : [resItem.category || 'Clients'];
+      if (nextHot && !nextTags.includes('Hot topic')) {
+        nextTags.push('Hot topic');
+      } else if (!nextHot) {
+        const idx = nextTags.indexOf('Hot topic');
+        if (idx !== -1) nextTags.splice(idx, 1);
+      }
+      await supabase.from('resources').update({ is_featured: nextHot, tags: nextTags }).eq('id', resItem.id);
+      setResources((prev) =>
+        prev.map((r) => (r.id === resItem.id ? { ...r, is_featured: nextHot, tags: nextTags } : r))
+      );
+      setMessage(`Updated "${resItem.title}" hot status to ${nextHot ? 'HOT TOPIC 🔥' : 'NORMAL'}.`);
+      try {
+        const cached = localStorage.getItem('cached_syndicate_resources');
+        if (cached) {
+          const list = JSON.parse(cached);
+          const updatedCache = list.map((r) =>
+            r.id === resItem.id ? { ...r, is_featured: nextHot, tags: nextTags } : r
+          );
+          localStorage.setItem('cached_syndicate_resources', JSON.stringify(updatedCache));
+        }
+      } catch (_e) {}
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   // Delete Resource
   const handleDeleteResource = async (id, title) => {
     if (!window.confirm(`Delete client "${title}"?`)) return;
@@ -1004,8 +1035,8 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* 5. Status Tags: CLEAN or UNVERIFIED */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+              {/* 5. Status Tags: CLEAN / VERIFIED and HOT TOPIC */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#ffffff', fontSize: '0.86rem' }}>
                   <input
                     type="checkbox"
@@ -1013,7 +1044,7 @@ export default function AdminPage() {
                     onChange={(e) => setUploadForm({ ...uploadForm, is_clean: e.target.checked })}
                     style={{ width: '16px', height: '16px', accentColor: '#10b981' }}
                   />
-                  <span>Mark Tag as <strong>CLEAN</strong> (Verified Safe)</span>
+                  <span>Mark as <strong style={{ color: '#10b981' }}>CLEAN / VERIFIED</strong> ✔</span>
                 </label>
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#ffffff', fontSize: '0.86rem' }}>
@@ -1023,7 +1054,7 @@ export default function AdminPage() {
                     onChange={(e) => setUploadForm({ ...uploadForm, is_featured: e.target.checked })}
                     style={{ width: '16px', height: '16px', accentColor: '#ea580c' }}
                   />
-                  <span>Mark as <strong>HOT</strong> 🔥</span>
+                  <span>Mark as <strong style={{ color: '#ff7700' }}>Hot topic</strong> 🔥 (Hot corners, glowing outline &amp; animated shine)</span>
                 </label>
               </div>
 
@@ -1156,7 +1187,26 @@ export default function AdminPage() {
                     </div>
 
                     {/* Actions */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      {/* Toggle Hot topic badge & outline */}
+                      <button
+                        onClick={() => handleToggleHot(res)}
+                        style={{
+                          padding: '5px 12px',
+                          borderRadius: '999px',
+                          cursor: 'pointer',
+                          fontSize: '0.76rem',
+                          fontWeight: '800',
+                          background: res.is_featured ? 'linear-gradient(135deg, #ff1a00, #ff8c00)' : 'rgba(255, 255, 255, 0.05)',
+                          color: res.is_featured ? '#ffffff' : '#94a3b8',
+                          border: res.is_featured ? '1px solid #ffa000' : '1px solid rgba(255, 255, 255, 0.12)',
+                          boxShadow: res.is_featured ? '0 0 12px rgba(255, 107, 0, 0.55)' : 'none',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        {res.is_featured ? '🔥 Hot topic' : 'Normal'}
+                      </button>
+
                       {/* Toggle CLEAN badge */}
                       <button
                         onClick={() => handleToggleClean(res)}
@@ -1174,7 +1224,7 @@ export default function AdminPage() {
                           borderColor: res.is_clean ? 'rgba(16, 185, 129, 0.4)' : 'rgba(245, 158, 11, 0.4)',
                         }}
                       >
-                        {res.is_clean ? 'CLEAN' : 'UNVERIFIED'}
+                        {res.is_clean ? 'VERIFIED' : 'UNVERIFIED'}
                       </button>
 
                       {/* View Link */}

@@ -7,7 +7,9 @@ import {
   ChevronDown,
   FileCode,
   ShieldCheck,
-  Check
+  Check,
+  Flame,
+  CheckCircle2
 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
@@ -175,6 +177,17 @@ export default function ResourceDetail() {
     });
   }
 
+  const isHot = Boolean(
+    resource.is_featured ||
+    resource.is_hot ||
+    (Array.isArray(resource.tags) && (
+      resource.tags.includes('hot') ||
+      resource.tags.includes('Hot topic') ||
+      resource.tags.includes('Hot')
+    )) ||
+    (resource.downloads_count && resource.downloads_count > 1000)
+  );
+
   return (
     <div style={{ minHeight: '100vh', padding: '24px 20px 80px 20px' }}>
       <div style={{ maxWidth: '820px', margin: '0 auto' }}>
@@ -251,12 +264,12 @@ export default function ResourceDetail() {
                 {resource.author_name || 'sub5larp'}
               </span>
 
-              {/* Type & Clean Tags (Exact Match Image 8) */}
+              {/* Type Badge */}
               <span
                 style={{
-                  fontSize: '0.78rem',
+                  fontSize: '0.72rem',
                   fontWeight: '700',
-                  padding: '3px 10px',
+                  padding: '2.5px 8px',
                   borderRadius: '6px',
                   background: 'rgba(239, 68, 68, 0.1)',
                   color: '#f87171',
@@ -268,21 +281,18 @@ export default function ResourceDetail() {
                 {resource.type || (resource.category === 'Source Codes' ? 'Source Code' : resource.category === 'Tools' ? 'Tool' : 'Client')}
               </span>
 
-              <span
-                style={{
-                  fontSize: '0.78rem',
-                  fontWeight: '800',
-                  padding: '3px 10px',
-                  borderRadius: '6px',
-                  background: resource.is_clean !== false ? 'rgba(16, 185, 129, 0.12)' : 'rgba(234, 179, 8, 0.12)',
-                  color: resource.is_clean !== false ? '#10b981' : '#eab308',
-                  border: resource.is_clean !== false ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(234, 179, 8, 0.4)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  letterSpacing: '0.02em',
-                }}
-              >
-                {resource.is_clean !== false ? 'CLEAN' : 'UNVERIFIED'}
+              {/* Glowing Animated Hot Topic Badge with Specular Shine */}
+              {isHot && (
+                <span className="badge-hot-topic-shine">
+                  <Flame size={12} className="flame-icon-animated" />
+                  Hot topic
+                </span>
+              )}
+
+              {/* Shining Emerald Verified Badge */}
+              <span className="badge-verified-shine">
+                <CheckCircle2 size={12} />
+                {resource.is_clean !== false ? 'VERIFIED' : 'UNVERIFIED'}
               </span>
             </div>
 
