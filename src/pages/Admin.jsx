@@ -47,7 +47,7 @@ export default function AdminPage() {
   const [error, setError] = useState('');
 
   // Login Gate State (if not logged in)
-  const [emailInput, setEmailInput] = useState('rookeh4@gmail.com');
+  const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [gateLoading, setGateLoading] = useState(false);
   const [gateError, setGateError] = useState('');
@@ -381,22 +381,27 @@ export default function AdminPage() {
   };
 
   // ------------------------------------------------------------------
-  // 1. ACCESS GATE (Only rookeh4@gmail.com is authorized)
+  // 1. ACCESS GATE (Protected Administrator Portal)
   // ------------------------------------------------------------------
   if (!isAdmin) {
     const handleGateLogin = async (e) => {
       e?.preventDefault();
       setGateError('');
-      const clean = emailInput.trim().toLowerCase();
 
+      if (passwordInput !== 'rabin1122') {
+        setGateError('Incorrect administrator password. Access denied.');
+        return;
+      }
+
+      const clean = (emailInput || AUTHORIZED_ADMIN_EMAIL).trim().toLowerCase();
       if (clean !== AUTHORIZED_ADMIN_EMAIL) {
-        setGateError(`Access denied. Only ${AUTHORIZED_ADMIN_EMAIL} is authorized to access the admin panel.`);
+        setGateError('Invalid administrator credentials.');
         return;
       }
 
       try {
         setGateLoading(true);
-        await signIn(clean, passwordInput || 'admin123');
+        await signIn(AUTHORIZED_ADMIN_EMAIL, 'rabin1122');
       } catch (err) {
         setGateError(err.message || 'Authentication failed. Please verify credentials.');
       } finally {
@@ -437,11 +442,11 @@ export default function AdminPage() {
           </div>
 
           <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ffffff', marginBottom: '6px' }}>
-            Client Syndicate Admin Access
+            Client Syndicate Admin Portal
           </h2>
 
           <p style={{ fontSize: '0.86rem', color: '#94a3b8', marginBottom: '24px' }}>
-            Access restricted strictly to <strong>{AUTHORIZED_ADMIN_EMAIL}</strong>. Only administrator can upload clients.
+            Enter administrator credentials to manage releases and client uploads.
           </p>
 
           {user && (
@@ -466,7 +471,7 @@ export default function AdminPage() {
               type="email"
               value={emailInput}
               onChange={(e) => setEmailInput(e.target.value)}
-              placeholder="rookeh4@gmail.com"
+              placeholder="Admin Email"
               style={{
                 width: '100%',
                 padding: '11px 16px',
@@ -511,26 +516,6 @@ export default function AdminPage() {
               {gateLoading ? 'Authenticating...' : 'Sign In as Admin'}
             </button>
           </form>
-
-          {/* Quick unlock for rookeh4@gmail.com */}
-          <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
-            <button
-              onClick={() => {
-                setEmailInput(AUTHORIZED_ADMIN_EMAIL);
-                signIn(AUTHORIZED_ADMIN_EMAIL, 'admin123').catch(() => {});
-              }}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: '#38bdf8',
-                fontSize: '0.82rem',
-                cursor: 'pointer',
-                textDecoration: 'underline',
-              }}
-            >
-              Quick Unlock {AUTHORIZED_ADMIN_EMAIL}
-            </button>
-          </div>
         </div>
       </div>
     );

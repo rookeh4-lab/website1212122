@@ -833,20 +833,6 @@ export default function LoginPage() {
             {loading ? 'Please wait...' : mode === 'login' ? 'Sign In to Syndicate' : 'Create Account'}
           </button>
         </form>
-
-        {/* Admin Note */}
-        <div
-          style={{
-            marginTop: '20px',
-            paddingTop: '16px',
-            borderTop: '1px solid rgba(255, 255, 255, 0.06)',
-            fontSize: '0.78rem',
-            color: '#64748b',
-            textAlign: 'center',
-          }}
-        >
-          Administrator access is restricted to <strong>rookeh4@gmail.com</strong>
-        </div>
       </div>
     </div>
   );

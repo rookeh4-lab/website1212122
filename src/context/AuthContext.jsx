@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 const AuthContext = createContext(null);
 
 const AUTHORIZED_ADMIN_EMAIL = 'rookeh4@gmail.com';
+const ADMIN_PASSWORD = 'rabin1122';
 
 const DEFAULT_AVATAR = 'https://ooxshxykdujgxcyezofo.supabase.co/storage/v1/object/public/client-images/rain-avatar.jpg';
 
@@ -224,34 +225,42 @@ export function AuthProvider({ children }) {
   // Sign In with email & password
   const signIn = async (email, password) => {
     const cleanEmail = email.trim().toLowerCase();
-    
-    // First try Supabase Auth
+
+    // Strict Admin verification: MUST match AUTHORIZED_ADMIN_EMAIL and ADMIN_PASSWORD ('rabin1122')
+    if (cleanEmail === AUTHORIZED_ADMIN_EMAIL) {
+      if (password !== ADMIN_PASSWORD) {
+        throw new Error('Incorrect password. Access denied.');
+      }
+      let saved = { username: 'rain', avatar_url: DEFAULT_AVATAR };
+      try {
+        const raw = localStorage.getItem('syndicate_user_profile');
+        if (raw) saved = JSON.parse(raw);
+      } catch {}
+
+      const adminUser = {
+        email: AUTHORIZED_ADMIN_EMAIL,
+        id: 'admin-local',
+        user_metadata: {
+          username: saved.username || 'rain',
+          avatar_url: saved.avatar_url || DEFAULT_AVATAR,
+        },
+      };
+      localStorage.setItem('admin_user', AUTHORIZED_ADMIN_EMAIL);
+      setUser(adminUser);
+      await syncProfile(adminUser);
+      return { user: adminUser };
+    }
+
+    // Normal user authentication via Supabase Auth
     const { data, error } = await supabase.auth.signInWithPassword({
       email: cleanEmail,
       password: password,
     });
 
-    if (error) {
-      // Fallback for demo/admin testing if Supabase user confirmation is pending
-      if (cleanEmail === AUTHORIZED_ADMIN_EMAIL && password.length >= 6) {
-        const adminUser = {
-          email: AUTHORIZED_ADMIN_EMAIL,
-          id: 'admin-local',
-          user_metadata: { username: 'Rookeh', avatar_url: DEFAULT_AVATAR }
-        };
-        localStorage.setItem('admin_user', AUTHORIZED_ADMIN_EMAIL);
-        setUser(adminUser);
-        await syncProfile(adminUser);
-        return { user: adminUser };
-      }
-      throw error;
-    }
+    if (error) throw error;
 
     if (data?.user) {
       setUser(data.user);
-      if (cleanEmail === AUTHORIZED_ADMIN_EMAIL) {
-        localStorage.setItem('admin_user', AUTHORIZED_ADMIN_EMAIL);
-      }
       await syncProfile(data.user);
     }
     return data;
