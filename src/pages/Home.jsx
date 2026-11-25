@@ -199,6 +199,7 @@ export default function Home() {
         const { data, error } = await supabase
           .from('resources')
           .select('*')
+          .order('is_featured', { ascending: false, nullsFirst: false })
           .order('created_at', { ascending: false });
 
         if (!error && Array.isArray(data) && data.length > 0) {
@@ -211,7 +212,7 @@ export default function Home() {
       // 2. Secondary: Direct REST fetch (in case SDK or websockets fail)
       if (!fetched) {
         try {
-          const res = await fetch('https://ooxshxykdujgxcyezofo.supabase.co/rest/v1/resources?select=*&order=created_at.desc', {
+          const res = await fetch('https://ooxshxykdujgxcyezofo.supabase.co/rest/v1/resources?select=*&order=is_featured.desc.nullslast,created_at.desc', {
             headers: {
               'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9veHNoeHlrZHVqZ3hjeWV6b2ZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQzODQ2MjksImV4cCI6MjEwOTk2MDYyOX0.sHcd4AHqEiCKsMMMM2L8muhpZ_gwPhQJ1-qhHtcKyvo',
               'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9veHNoeHlrZHVqZ3hjeWV6b2ZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQzODQ2MjksImV4cCI6MjEwOTk2MDYyOX0.sHcd4AHqEiCKsMMMM2L8muhpZ_gwPhQJ1-qhHtcKyvo'
@@ -317,7 +318,36 @@ export default function Home() {
       );
     }
 
-    return list;
+    // Always show hot in top and normal in down
+    return [...list].sort((a, b) => {
+      const aHot = Boolean(
+        a.is_featured ||
+        a.is_hot ||
+        (Array.isArray(a.tags) && (
+          a.tags.includes('hot') ||
+          a.tags.includes('Hot topic') ||
+          a.tags.includes('Hot')
+        ))
+      );
+      const bHot = Boolean(
+        b.is_featured ||
+        b.is_hot ||
+        (Array.isArray(b.tags) && (
+          b.tags.includes('hot') ||
+          b.tags.includes('Hot topic') ||
+          b.tags.includes('Hot')
+        ))
+      );
+
+      // Hot items always appear first (at top)
+      if (aHot && !bHot) return -1;
+      if (!aHot && bHot) return 1;
+
+      // Newest first within each group
+      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return bTime - aTime;
+    });
   }, [allResources, activeCategory, search]);
 
   // Keyboard shortcut (Ctrl+K or / to focus search)

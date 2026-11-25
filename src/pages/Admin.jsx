@@ -139,10 +139,18 @@ export default function AdminPage() {
       const { data, error: err } = await supabase
         .from('resources')
         .select('*')
+        .order('is_featured', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false });
 
       if (err) throw err;
-      setResources(data || []);
+      const sorted = (data || []).sort((a, b) => {
+        const aHot = Boolean(a.is_featured || a.is_hot || (Array.isArray(a.tags) && a.tags.includes('Hot topic')));
+        const bHot = Boolean(b.is_featured || b.is_hot || (Array.isArray(b.tags) && b.tags.includes('Hot topic')));
+        if (aHot && !bHot) return -1;
+        if (!aHot && bHot) return 1;
+        return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+      });
+      setResources(sorted);
     } catch (err) {
       setError(err.message || 'Failed to load resources');
     } finally {
@@ -441,9 +449,16 @@ export default function AdminPage() {
         if (idx !== -1) nextTags.splice(idx, 1);
       }
       await supabase.from('resources').update({ is_featured: nextHot, tags: nextTags }).eq('id', resItem.id);
-      setResources((prev) =>
-        prev.map((r) => (r.id === resItem.id ? { ...r, is_featured: nextHot, tags: nextTags } : r))
-      );
+      setResources((prev) => {
+        const updated = prev.map((r) => (r.id === resItem.id ? { ...r, is_featured: nextHot, tags: nextTags } : r));
+        return [...updated].sort((a, b) => {
+          const aHot = Boolean(a.is_featured || a.is_hot || (Array.isArray(a.tags) && a.tags.includes('Hot topic')));
+          const bHot = Boolean(b.is_featured || b.is_hot || (Array.isArray(b.tags) && b.tags.includes('Hot topic')));
+          if (aHot && !bHot) return -1;
+          if (!aHot && bHot) return 1;
+          return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+        });
+      });
       setMessage(`Updated "${resItem.title}" hot status to ${nextHot ? 'HOT TOPIC 🔥' : 'NORMAL'}.`);
       try {
         const cached = localStorage.getItem('cached_syndicate_resources');
