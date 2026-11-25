@@ -179,6 +179,7 @@ export default function AdminPage() {
 
       if (uploadErr) {
         console.warn('Storage upload error:', uploadErr.message);
+        return null;
       }
 
       const { data: publicData } = supabase.storage

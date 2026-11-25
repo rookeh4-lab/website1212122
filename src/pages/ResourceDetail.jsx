@@ -91,32 +91,36 @@ export default function ResourceDetail() {
     const targetUrl = resource.client_download_url || resource.download_url;
 
     if (targetUrl) {
+      // 1. Direct fetch & blob trigger if possible
       try {
         const res = await fetch(targetUrl, { mode: 'cors' });
         if (res.ok) {
-          const blob = await res.blob();
-          const blobUrl = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = blobUrl;
-          a.download = fileName;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(blobUrl);
-          setTimeout(() => setDownloading(false), 800);
-          return;
+          const contentType = res.headers.get('content-type') || '';
+          if (!contentType.includes('application/json')) {
+            const blob = await res.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(blobUrl);
+            setTimeout(() => setDownloading(false), 800);
+            return;
+          }
         }
       } catch (_e) {}
 
-      // Direct download trigger (with target=_blank to prevent tab navigation)
-      const a = document.createElement('a');
-      a.href = targetUrl;
-      a.download = fileName;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      // 2. Invisible download iframe: keeps user in-place, triggers native browser save directly!
+      let iframe = document.getElementById('syndicate-dl-frame');
+      if (!iframe) {
+        iframe = document.createElement('iframe');
+        iframe.id = 'syndicate-dl-frame';
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+      }
+      iframe.src = targetUrl;
     } else {
       // Direct file blob
       const blob = new Blob([`Client Syndicate Archive - ${resource.title}\nVersion: ${resource.version || '1.21.11'}\nDirect Download Verified`], { type: 'application/octet-stream' });
@@ -262,23 +266,6 @@ export default function ResourceDetail() {
               />
               <span style={{ fontWeight: '600', color: '#ffffff', fontSize: '0.92rem' }}>
                 {resource.author_name || 'sub5larp'}
-              </span>
-
-              {/* Type Badge */}
-              <span
-                style={{
-                  fontSize: '0.72rem',
-                  fontWeight: '700',
-                  padding: '2.5px 8px',
-                  borderRadius: '6px',
-                  background: 'rgba(239, 68, 68, 0.1)',
-                  color: '#f87171',
-                  border: '1px solid rgba(239, 68, 68, 0.35)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                }}
-              >
-                {resource.type || (resource.category === 'Source Codes' ? 'Source Code' : resource.category === 'Tools' ? 'Tool' : 'Client')}
               </span>
 
               {/* Glowing Animated Hot Topic Badge with Specular Shine */}

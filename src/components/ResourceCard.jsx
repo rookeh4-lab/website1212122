@@ -19,9 +19,8 @@ export default function ResourceCard({ resource }) {
 
   return (
     <div className={`resource-card-clean ${isHot ? 'card-hot-flame' : ''}`}>
-      {/* 16:9 Thumbnail Area */}
-      <Link
-        to={`/resource/${resource.slug || resource.id}`}
+      {/* 16:9 Thumbnail Area with Floating Badges */}
+      <div
         style={{
           position: 'relative',
           aspectRatio: '16/9',
@@ -32,19 +31,53 @@ export default function ResourceCard({ resource }) {
           borderBottom: '1px solid #1a2438',
         }}
       >
-        <img
-          src={resource.thumbnail_url || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800'}
-          alt={resource.title}
+        <Link
+          to={`/resource/${resource.slug || resource.id}`}
+          style={{ display: 'block', width: '100%', height: '100%' }}
+        >
+          <img
+            src={resource.thumbnail_url || 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800'}
+            alt={resource.title}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              transition: 'transform 0.25s var(--ease-out)',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.04)')}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          />
+        </Link>
+
+        {/* Floating Badges Overlay (Clean Placement on Thumbnail) */}
+        <div
           style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            transition: 'transform 0.25s var(--ease-out)',
+            position: 'absolute',
+            top: '10px',
+            left: '10px',
+            right: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            pointerEvents: 'none',
+            zIndex: 4,
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.04)')}
-          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-        />
-      </Link>
+        >
+          {isHot ? (
+            <span className="badge-hot-topic-shine">
+              <Flame size={12} className="flame-icon-animated" />
+              Hot topic
+            </span>
+          ) : (
+            <div />
+          )}
+
+          <span className="badge-verified-shine">
+            <CheckCircle2 size={12} />
+            {isClean ? 'VERIFIED' : 'UNVERIFIED'}
+          </span>
+        </div>
+      </div>
 
       {/* Card Body */}
       <div
@@ -66,7 +99,7 @@ export default function ResourceCard({ resource }) {
             fontSize: '1.05rem',
             fontWeight: '700',
             lineHeight: '1.3',
-            marginBottom: '6px',
+            marginBottom: '8px',
             transition: 'color 0.15s ease',
           }}
           onMouseEnter={(e) => (e.currentTarget.style.color = '#38bdf8')}
@@ -81,7 +114,7 @@ export default function ResourceCard({ resource }) {
             fontSize: '0.84rem',
             color: '#94a3b8',
             lineHeight: '1.45',
-            marginBottom: '12px',
+            marginBottom: '16px',
             display: '-webkit-box',
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
@@ -90,47 +123,6 @@ export default function ResourceCard({ resource }) {
         >
           {resource.short_description || resource.description || 'Verified Minecraft resource release.'}
         </p>
-
-        {/* Badges Row: Hot topic, Verified & Type (Exact Match Reference Image) */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: '14px',
-            flexWrap: 'wrap',
-          }}
-        >
-          {/* Type Badge */}
-          <span
-            style={{
-              fontSize: '0.70rem',
-              fontWeight: '700',
-              padding: '2.5px 8px',
-              borderRadius: '6px',
-              background: 'rgba(239, 68, 68, 0.1)',
-              color: '#f87171',
-              border: '1px solid rgba(239, 68, 68, 0.35)',
-              letterSpacing: '0.02em',
-            }}
-          >
-            {resource.type || (resource.category === 'Source Codes' ? 'Source Code' : resource.category === 'Tools' ? 'Tool' : 'Client')}
-          </span>
-
-          {/* Glowing Animated Hot Topic Badge with Shining Light Beam */}
-          {isHot && (
-            <span className="badge-hot-topic-shine">
-              <Flame size={12} className="flame-icon-animated" />
-              Hot topic
-            </span>
-          )}
-
-          {/* Shining Emerald Verified Badge */}
-          <span className="badge-verified-shine">
-            <CheckCircle2 size={12} />
-            {isClean ? 'VERIFIED' : 'UNVERIFIED'}
-          </span>
-        </div>
 
         {/* Card Footer: Clean Author only */}
         <div
